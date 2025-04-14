@@ -5,7 +5,7 @@
 namespace crisp_controllers {
 
 inline Eigen::MatrixXd pseudoInverse(const Eigen::MatrixXd &matrix,
-                                     double epsilon = 0.1) {
+                                     double epsilon = 1e-4) {
   Eigen::JacobiSVD<Eigen::MatrixXd> svd(matrix, Eigen::ComputeFullU |
                                                     Eigen::ComputeFullV);
   Eigen::VectorXd singularValues = svd.singularValues();

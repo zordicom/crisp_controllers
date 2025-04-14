@@ -10,6 +10,7 @@
 #include <rclcpp/rclcpp.hpp>
 
 #include <cartesian_impedance_controller_parameters.hpp>
+#include <sensor_msgs/msg/joint_state.hpp>
 
 using CallbackReturn =
     rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn;
@@ -37,8 +38,20 @@ public:
 
 private:
   rclcpp::Subscription<geometry_msgs::msg::PoseStamped>::SharedPtr pose_sub_;
+  rclcpp::Subscription<sensor_msgs::msg::JointState>::SharedPtr joint_sub_;
+
+  /**
+   * @brief Callback for target joint state messages
+   *
+   * Updates the target joint configuration for the posture task
+   * @param msg Target joint state message containing joint positions
+   */
+  void
+  target_joint_callback_(const sensor_msgs::msg::JointState::SharedPtr msg);
+
   void
   target_pose_callback_(const geometry_msgs::msg::PoseStamped::SharedPtr msg);
+
   void setStiffnessAndDamping();
 
   Eigen::Vector3d target_position_;
@@ -49,11 +62,7 @@ private:
       params_listener_;
   cartesian_impedance_controller::Params params_;
 
-  std::vector<std::string> joint_names_;
-  int num_joints_;
-  std::string end_effector_frame_;
   int end_effector_frame_id;
-  bool use_fake_hardware_;
 
   pinocchio::Model model_;
   pinocchio::Data data_;
@@ -61,23 +70,25 @@ private:
   // Compliance and kinematic parameters
   double translational_stiffness;
   double rotational_stiffness;
-  double nullspace_stiffness_;
-  double nullspace_damping_;
-  double pi = 3.14159265358979323846;
-  Eigen::Matrix<double, 9, 1> q_d_nullspace_{
-      0.0, -pi / 4.0, 0.0, -3.0 * pi / 4.0, 0.0, pi / 2.0, pi / 4.0, 0.0, 0.0};
+  double nullspace_stiffness;
+  double nullspace_damping;
+
+  /*double pi = 3.14159265358979323846;*/
+  /*Eigen::Matrix<double, 9, 1> q_d_nullspace_{*/
+  /*    0.0, -pi / 4.0, 0.0, -3.0 * pi / 4.0, 0.0, pi / 2.0, pi / 4.0, 0.0, 0.0};*/
 
   Eigen::MatrixXd stiffness = Eigen::MatrixXd::Zero(6, 6);
   Eigen::MatrixXd damping = Eigen::MatrixXd::Zero(6, 6);
-  bool limit_torques_ = false;
-  pinocchio::Data::Matrix6x J;
 
   // Robot state dynamically set
   Eigen::VectorXd q;
   Eigen::VectorXd dq;
+  Eigen::VectorXd q_ref;
+  Eigen::VectorXd dq_ref;
   Eigen::VectorXd tau;
-
   pinocchio::SE3 end_effector_pose;
+  pinocchio::Data::Matrix6x J;
+
 };
 
 } // namespace crisp_controllers

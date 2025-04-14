@@ -83,10 +83,9 @@
 
       end_effector_frame: fr3_hand_tcp
 
-      use_fake_hardware: false
-      translational_stiffness: 200.0
+      translational_stiffness: 100.0
       rotational_stiffness: 30.0
-      nullspace_stiffness: 0.0
+      nullspace_stiffness: 0.01
 
   # operational_space_controller:
   #   ros__parameters:
