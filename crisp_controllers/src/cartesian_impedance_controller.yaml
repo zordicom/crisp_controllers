@@ -1,0 +1,47 @@
+cartesian_impedance_controller:
+  use_fake_hardware:
+    type: bool
+    default_value: false
+    description: "Whether to use fake hardware"
+  translational_stiffness:
+    type: double
+    default_value: 500.0
+    description: "Stiffness of the translation controller"
+    validation:
+      bounds<>: [0.0, 2000.0]
+  rotational_stiffness:
+    type: double
+    default_value: 30.0
+    description: "Stiffness of the rotation controller"
+    validation:
+      bounds<>: [0.0, 100.0]
+  nullspace_stiffness:
+    type: double
+    default_value: 0.0
+    description: "Stiffness of the nullspace controller"
+    validation:
+      bounds<>: [0.0, 10.0]
+  use_coriolis_compensation:
+    type: bool
+    default_value: false
+    description: "Use coriolis compensation"
+  end_effector_frame:
+    type: string
+    default_value: ""
+    description: "Name of the end-effector frame"
+  joints:
+    type: string_array
+    default_value: []
+    description: "Names of the joints"
+  max_delta:
+    type: double_array
+    default_value: [0.1, 0.1, 0.1, 0.5, 0.5, 0.5]
+    description: "Max allowed displacement. This is used to clamp the (twist) error."
+  use_friction:
+    type: bool
+    default_value: false
+    description: "Use friction compensation"
+  limit_torques:
+    type: bool
+    default_value: false
+    description: "Limit torques"

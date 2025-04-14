@@ -1,0 +1,32 @@
+<library path="crisp_controllers">
+    <class name="crisp_controllers/CartesianImpedanceController"
+           type="crisp_controllers::CartesianImpedanceController" base_class_type="controller_interface::ControllerInterface">
+        <description>
+            Control the 3D pose of the end-effector using an impedance controller and only the pinocchio model.
+        </description>
+    </class>
+    <class name="crisp_controllers/OperationalSpaceController"
+           type="crisp_controllers::OperationalSpaceController" base_class_type="controller_interface::ControllerInterface">
+        <description>
+            Contorl the 3D pose of the end-effector using an operational space controller.
+        </description>
+    </class>
+    <class name="crisp_controllers/JointImpedanceController"
+           type="crisp_controllers::JointImpedanceController" base_class_type="controller_interface::ControllerInterface">
+        <description>
+            subscribe to a joint command topic and follow it the best that you can.
+        </description>
+    </class>
+    <class name="crisp_controllers/FrictionlessController"
+           type="crisp_controllers::FrictionlessController" base_class_type="controller_interface::ControllerInterface">
+        <description>
+            Like gravity compensation, but with friction compensation.
+        </description>
+    </class>
+    <class name="crisp_controllers/PoseBroadcaster"
+           type="crisp_controllers::PoseBroadcaster" base_class_type="controller_interface::ControllerInterface">
+        <description>
+            Simple broadcaster for the pose.
+        </description>
+    </class>
+</library>

@@ -1,5 +1,6 @@
 # echo "source /opt/ros/$ROS_DISTRO/setup.zsh" >> ~/.zshrc
 echo "source ~/ros2_ws/install/setup.bash" >> ~/.bashrc
+echo "source ~/ros2_ws/src/crisp_controllers/scripts/ros_aliases.sh" >> ~/.bashrc
 
 # --- If using UV ---
 # source /opt/ros/$ROS_DISTRO/setup.bah
