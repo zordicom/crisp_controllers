@@ -13,3 +13,17 @@ theme:
       scheme: slate
       primary: indigo
       accent: indigo
+
+plugins:
+  - search
+  - mkdoxy:
+      projects:
+        crisp_controllers: # name of project must be alphanumeric + numbers (without spaces)
+          src-dirs: crisp_controllers
+          full-doc: True # if you want to generate full documentation
+          doxy-cfg: # standard doxygen configuration (key: value)
+            FILE_PATTERNS: "*.cpp *.h*" # specify file patterns to filter out
+            RECURSIVE: True # recursive search in source directories
+
+nav:
+  - crisp_controllers: "crisp_controllers/links.md"
