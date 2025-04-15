@@ -1,11 +1,22 @@
 cmake_minimum_required(VERSION 3.5)
 project(crisp_controllers)
 
+find_program(CCACHE_PROGRAM ccache)
+if(CCACHE_PROGRAM)
+  message(STATUS "Using ccache")
+  set(CMAKE_C_COMPILER_LAUNCHER ${CCACHE_PROGRAM})
+  set(CMAKE_CXX_COMPILER_LAUNCHER ${CCACHE_PROGRAM})
+endif()
+
+
 # Default to C++17
 if(NOT CMAKE_CXX_STANDARD)
     set(CMAKE_CXX_STANDARD 17)
     set(CMAKE_CXX_STANDARD_REQUIRED ON)
 endif()
+
+# Enable precompiled headers
+option(USE_PRECOMPILED_HEADERS "Use precompiled headers" ON)
 
 if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
     add_compile_options(-Wall -Wextra -Wpedantic)
@@ -34,48 +45,43 @@ generate_parameter_library(
   src/joint_impedance_controller.yaml
 )
 
-generate_parameter_library(
-  operational_space_controller_parameters
-  src/operational_space_controller.yaml
-)
-
-generate_parameter_library(
-  pose_broadcaster_parameters
-  src/pose_broadcaster.yaml
-)
-
 add_library(
         ${PROJECT_NAME}
         SHARED
         src/cartesian_impedance_controller.cpp
         src/joint_impedance_controller.cpp
-        src/operational_space_controller.cpp
-        src/frictionless_controller.cpp
-        src/pose_broadcaster.cpp
 )
 
-
-include_directories(
-        include
-        ${Eigen3_INCLUDE_DIRS}
+target_include_directories(${PROJECT_NAME}
+    PUBLIC
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+        $<INSTALL_INTERFACE:include>
 )
+
+if(USE_PRECOMPILED_HEADERS)
+    target_precompile_headers(${PROJECT_NAME} 
+        PRIVATE
+        include/crisp_controllers/pch.hpp
+    )
+endif()
+
 # Link parameter libraries to the main library
 target_link_libraries(${PROJECT_NAME}
-  cartesian_impedance_controller_parameters
-  joint_impedance_controller_parameters
-  pose_broadcaster_parameters
+  PRIVATE
+    cartesian_impedance_controller_parameters
+    joint_impedance_controller_parameters
 )
 
 
-ament_target_dependencies(
-        ${PROJECT_NAME}
-        controller_interface
-        hardware_interface
-        pluginlib
-        rclcpp
-        rclcpp_lifecycle
-        pinocchio
-        generate_parameter_library
+ament_target_dependencies(${PROJECT_NAME}
+  PUBLIC
+controller_interface
+hardware_interface
+pluginlib
+rclcpp
+rclcpp_lifecycle
+pinocchio
+generate_parameter_library
 )
 
 pluginlib_export_plugin_description_file(
@@ -107,5 +113,19 @@ ament_export_dependencies(
         rclcpp_lifecycle
         hardware_interface
 )
+
+if(BUILD_TESTING)
+  find_package(ament_cmake_gtest REQUIRED)
+  
+  ament_add_gtest(test_pseudo_inverse
+    tests/test_pseudo_inverse.cpp
+  )
+  target_include_directories(test_pseudo_inverse PUBLIC
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+  )
+  target_link_libraries(test_pseudo_inverse
+    Eigen3::Eigen
+  )
+endif()
 
 ament_package()

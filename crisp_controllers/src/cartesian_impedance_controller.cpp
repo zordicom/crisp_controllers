@@ -1,23 +1,15 @@
-#include <crisp_controllers/friction_model.hpp>
-#include <crisp_controllers/joint_limits.hpp>
+#include <crisp_controllers/pch.hpp>
 #include <crisp_controllers/cartesian_impedance_controller.hpp>
-#include <crisp_controllers/pseudo_inverse.hpp>
+#include <crisp_controllers/utils/friction_model.hpp>
+#include <crisp_controllers/utils/joint_limits.hpp>
+#include <crisp_controllers/utils/pseudo_inverse.hpp>
 
-#include <pinocchio/algorithm/frames.hxx>
-#include <binders.h>
-#include <cassert>
-#include <cmath>
-#include <memory>
+#include <pinocchio/algorithm/aba.hpp>
 #include <pinocchio/algorithm/compute-all-terms.hpp>
+#include <pinocchio/algorithm/frames.hxx>
 #include <pinocchio/algorithm/rnea.hpp>
 #include <pinocchio/parsers/urdf.hpp>
 #include <rclcpp/logging.hpp>
-#include <sensor_msgs/msg/joint_state.hpp>
-#include <string>
-
-using namespace std::chrono_literals;
-
-typedef Eigen::Matrix<double, 6, 1> Vector6d;
 
 namespace crisp_controllers {
 
@@ -35,8 +27,7 @@ controller_interface::InterfaceConfiguration
 CartesianImpedanceController::state_interface_configuration() const {
   controller_interface::InterfaceConfiguration config;
   config.type = controller_interface::interface_configuration_type::INDIVIDUAL;
-  // The first num_joints_ are the joint positions, the next num_joints_ are the
-  // joint velocities, and the last num_joints_ are the joint torques
+
   for (const auto &joint_name : params_.joints) {
     config.names.push_back(joint_name + "/position");
   }
@@ -50,7 +41,7 @@ CartesianImpedanceController::state_interface_configuration() const {
 }
 
 controller_interface::return_type CartesianImpedanceController::update(
-    const rclcpp::Time & /*time*/, const rclcpp::Duration & /*period*/) {
+    const rclcpp::Time & time, const rclcpp::Duration & /*period*/) {
 
   size_t num_joints = params_.joints.size();
   for (size_t i = 0; i < num_joints; i++) {
@@ -66,43 +57,65 @@ controller_interface::return_type CartesianImpedanceController::update(
       pinocchio::SE3(target_orientation_.toRotationMatrix(), target_position_);
 
   end_effector_pose = data_.oMf[end_effector_frame_id];
-  pinocchio::SE3 diff_pose = end_effector_pose.inverse() * target_pose_;
+  pinocchio::SE3 diff_pose = params_.use_local_jacobian ? end_effector_pose.inverse() * target_pose_ 
+                                                        : target_pose_ * end_effector_pose.inverse();
 
   Eigen::VectorXd error(6);
-  error.head(3) << diff_pose.translation();
-  error.tail(3) << pinocchio::log3(diff_pose.rotation());
+  error = pinocchio::log6(diff_pose).toVector();
 
   auto max_delta_ =
-      Eigen::Map<Eigen::VectorXd>(params_.max_delta.data(), num_joints);
+      Eigen::Map<Eigen::VectorXd>(params_.max_delta.data(), 6);
+
+  if (error.size() != max_delta_.size()) {
+    RCLCPP_ERROR_ONCE(get_node()->get_logger(), "Size mismatch: error is %ld, max_delta_ is %ld", error.size(), max_delta_.size());
+    return controller_interface::return_type::ERROR;
+  }
   error.cwiseMin(max_delta_).cwiseMax(-max_delta_);
 
   J.setZero();
+  auto reference_frame = params_.use_local_jacobian ? pinocchio::ReferenceFrame::LOCAL
+                                                    : pinocchio::ReferenceFrame::WORLD;
   pinocchio::computeFrameJacobian(model_, data_, q, end_effector_frame_id,
-                                  pinocchio::ReferenceFrame::LOCAL, J);
+                                  reference_frame, J);
 
   Eigen::MatrixXd J_pinv(model_.nv, 6);
   Eigen::MatrixXd Id_nv(model_.nv, model_.nv);
 
-  J_pinv = pseudoInverse(J);
+  J_pinv = pseudoInverse(J, params_.nullspace.regularization);
   Eigen::MatrixXd nullspace_projection = Id_nv - J_pinv * J;
 
   // Now we compute all terms of the control law
   Eigen::VectorXd tau_task(model_.nv), tau_d(model_.nv),
       tau_secondary(model_.nv), tau_nullspace(model_.nv),
       tau_friction(model_.nv), tau_coriolis(model_.nv),
-      tau_joint_limits(model_.nv);
+      tau_joint_limits(model_.nv), tau_random_noise(model_.nv);
+
+  if (params_.use_operational_space) {
+
+    RCLCPP_INFO_STREAM_THROTTLE(get_node()->get_logger(), *get_node()->get_clock(),
+                               5000, "Using OSC");
+
+    pinocchio::computeMinverse(model_, data_, q);
+    auto Mx_inv = J * data_.Minv * J.transpose();
+    auto Mx = pseudoInverse(Mx_inv);
+    tau_task << J.transpose() * (stiffness * error - damping * (J * dq));
+  } else {
+    tau_task << J.transpose() * (stiffness * error - damping * (J * dq));
+  }
 
   tau_task << J.transpose() * (stiffness * error - damping * (J * dq));
 
-  tau_joint_limits = get_joint_limit_torque(q, model_.lowerPositionLimit,
-                                            model_.upperPositionLimit);
+  tau_joint_limits = get_joint_limit_torque(q, model_.lowerPositionLimit, model_.upperPositionLimit);
 
-  tau_secondary << params_.nullspace_stiffness * (q_ref - q) -
-                       2 * sqrt(params_.nullspace_stiffness) * dq;
+  tau_secondary << nullspace_stiffness * (q_ref - q) + nullspace_damping * (dq_ref - dq);
+
   tau_nullspace << nullspace_projection * tau_secondary;
 
   tau_friction = params_.use_friction ? get_friction(dq)
                                       : Eigen::VectorXd::Zero(model_.nv);
+
+  tau_random_noise = params_.noise.add_random_noise ? (Eigen::VectorXd::Random(model_.nv) * params_.noise.amplitude).eval()
+                                                    : Eigen::VectorXd::Zero(model_.nv);
 
   if (params_.use_coriolis_compensation) {
     pinocchio::computeAllTerms(model_, data_, q, dq);
@@ -112,14 +125,33 @@ controller_interface::return_type CartesianImpedanceController::update(
   }
 
   tau_d << tau_task + tau_nullspace + tau_friction + tau_coriolis +
-               tau_joint_limits;
+               tau_joint_limits + tau_random_noise;
 
   for (size_t i = 0; i < num_joints; ++i) {
     command_interfaces_[i].set_value(tau_d[i]);
   }
+  
+  // Update parameters
+  params_listener_->refresh_dynamic_parameters();
+  params_ = params_listener_->get_params();
+  setStiffnessAndDamping();
 
-  // TODO: Updat parameters online
-  /*setStiffnessAndDamping();*/
+  /*RCLCPP_INFO_STREAM_THROTTLE(get_node()->get_logger(), *get_node()->get_clock(),*/
+  /*                             1000, "tau_d: " << tau_d.transpose());*/
+  /*RCLCPP_INFO_STREAM_THROTTLE(get_node()->get_logger(), *get_node()->get_clock(),*/
+  /*                             1000, "tau_nullspace: " << tau_nullspace.transpose());*/
+  /*RCLCPP_INFO_STREAM_THROTTLE(get_node()->get_logger(), *get_node()->get_clock(),*/
+  /*                             1000, "q_ref: " << q_ref.transpose());*/
+
+  /*if (params_.log_timing) {*/
+  /**/
+  /*  auto t_end = get_node()->get_clock()->now();*/
+  /*  RCLCPP_INFO_STREAM_THROTTLE(*/
+  /*      get_node()->get_logger(), *get_node()->get_clock(), 2000,*/
+  /*      "Control loop needed: " << (t_end.nanoseconds() - time.nanoseconds())*1e-6*/
+  /*                              << " ms");*/
+  /*}*/
+
 
   return controller_interface::return_type::OK;
 }
@@ -134,6 +166,11 @@ CallbackReturn CartesianImpedanceController::on_init() {
   pose_sub_ = get_node()->create_subscription<geometry_msgs::msg::PoseStamped>(
       "target_pose", rclcpp::QoS(1),
       std::bind(&CartesianImpedanceController::target_pose_callback_,
+                this, std::placeholders::_1));
+
+  joint_sub_ = get_node()->create_subscription<sensor_msgs::msg::JointState>(
+      "target_joint", rclcpp::QoS(1),
+      std::bind(&CartesianImpedanceController::target_joint_callback_,
                 this, std::placeholders::_1));
 
   target_position_ = Eigen::Vector3d::Zero();
@@ -172,6 +209,9 @@ CallbackReturn CartesianImpedanceController::on_configure(
   tau = Eigen::VectorXd::Zero(model_.nv);
   J = Eigen::MatrixXd::Zero(6, model_.nv);
 
+  nullspace_stiffness = Eigen::MatrixXd::Zero(model_.nv, model_.nv);
+  nullspace_damping = Eigen::MatrixXd::Zero(model_.nv, model_.nv);
+
   setStiffnessAndDamping();
 
   RCLCPP_INFO(get_node()->get_logger(), "State interfaces set up.");
@@ -180,16 +220,28 @@ CallbackReturn CartesianImpedanceController::on_configure(
 }
 
 void CartesianImpedanceController::setStiffnessAndDamping() {
+
   stiffness.setZero();
-  stiffness.topLeftCorner(3, 3)
-      << params_.translational_stiffness * Eigen::MatrixXd::Identity(3, 3);
-  stiffness.bottomRightCorner(3, 3)
-      << params_.rotational_stiffness * Eigen::MatrixXd::Identity(3, 3);
+  stiffness.diagonal() << params_.task.k_pos_x, params_.task.k_pos_y, params_.task.k_pos_z,
+      params_.task.k_rot_x, params_.task.k_rot_y, params_.task.k_rot_z;
+
   damping.setZero();
-  damping.topLeftCorner(3, 3)
-      << 2.0 * sqrt(params_.translational_stiffness) * Eigen::MatrixXd::Identity(3, 3);
-  damping.bottomRightCorner(3, 3)
-      << 2.0 * sqrt(params_.rotational_stiffness) * Eigen::MatrixXd::Identity(3, 3);
+  damping.diagonal() << 2.0 * stiffness.diagonal().cwiseSqrt();
+
+  nullspace_stiffness.setZero();
+  nullspace_damping.setZero();
+
+  if (params_.nullspace.weights.size() != params_.joints.size()) {
+    RCLCPP_WARN_STREAM_ONCE(get_node()->get_logger(),
+                 "Nullspace weights size does not match number of joints: weights.size(): "
+                            << params_.nullspace.weights.size() << " joints.size(): " << params_.joints.size() 
+                            << ", using default value of 1.0 for each joint.");
+    nullspace_stiffness.diagonal() << params_.nullspace.stiffness * Eigen::VectorXd::Ones(params_.joints.size());
+  } else {
+    auto weights = Eigen::Map<Eigen::VectorXd>(params_.nullspace.weights.data(), model_.nv);
+    nullspace_stiffness.diagonal() << params_.nullspace.stiffness * weights;
+  }
+  nullspace_damping.diagonal() << 2.0 * nullspace_stiffness.diagonal().cwiseSqrt();
 }
 
 CallbackReturn CartesianImpedanceController::on_activate(

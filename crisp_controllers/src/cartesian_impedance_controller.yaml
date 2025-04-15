@@ -1,46 +1,115 @@
 cartesian_impedance_controller:
-  use_fake_hardware:
-    type: bool
-    default_value: false
-    description: "Whether to use fake hardware"
-  translational_stiffness:
-    type: double
-    default_value: 500.0
-    description: "Stiffness of the translation controller"
-    validation:
-      bounds<>: [0.0, 2000.0]
-  rotational_stiffness:
-    type: double
-    default_value: 30.0
-    description: "Stiffness of the rotation controller"
-    validation:
-      bounds<>: [0.0, 100.0]
-  nullspace_stiffness:
-    type: double
-    default_value: 0.0
-    description: "Stiffness of the nullspace controller"
-    validation:
-      bounds<>: [0.0, 10.0]
-  use_coriolis_compensation:
-    type: bool
-    default_value: false
-    description: "Use coriolis compensation"
+  joints:
+    type: string_array
+    description: "Names of the joints"
+
   end_effector_frame:
+    type: string
+    description: "Name of the end-effector frame"
+
+  base_frame:
     type: string
     default_value: ""
     description: "Name of the end-effector frame"
-  joints:
-    type: string_array
-    default_value: []
-    description: "Names of the joints"
+
+  use_operational_space:
+    type: bool
+    default_value: True
+    description: "Whether we use operational space control or cartesian impedance control"
+
+  task:
+    k_pos_x:
+      type: double
+      default_value: 500.0
+      description: "Stiffness in the x direction for the translation"
+      validation:
+        bounds<>: [0.0, 2000.0]
+    k_pos_y:
+      type: double
+      default_value: 500.0
+      description: "Stiffness in the y direction for the translation"
+      validation:
+        bounds<>: [0.0, 2000.0]
+    k_pos_z:
+      type: double
+      default_value: 500.0
+      description: "Stiffness in the z direction for the translation"
+      validation:
+        bounds<>: [0.0, 2000.0]
+    k_rot_x:
+      type: double
+      default_value: 30.0
+      description: "Stiffness in the x direction for the orientation"
+      validation:
+        bounds<>: [0.0, 2000.0]
+    k_rot_y:
+      type: double
+      default_value: 30.0
+      description: "Stiffness in the y direction for the orientation"
+      validation:
+        bounds<>: [0.0, 2000.0]
+    k_rot_z:
+      type: double
+      default_value: 30.0
+      description: "Stiffness in the z direction for the orientation"
+      validation:
+        bounds<>: [0.0, 2000.0]
+
+  nullspace:
+    stiffness:
+      type: double
+      default_value: 1.0
+      description: "Stiffness of the nullspace controller."
+      validation:
+        bounds<>: [0.0, 5.0]
+    weights:
+      type: double_array
+      default_value: []
+      description: "Weights for each joint for the nullspace parameters."
+    regularization:
+      type: double
+      default_value: 0.000001
+      description: "Regularization value for the pseudo-inverse."
+      validation:
+        bounds<>: [0.000001, 0.0001]
+
+  noise:
+    add_random_noise:
+      type: bool
+      default_value: false
+      description: "Whether or not we add random noise to the torques. This is just to test for stability."
+    amplitude:
+      type: double
+      default_value: 0.0
+      description: "Magnitude of the added noise, if added."
+      validation:
+        bounds<>: [0.0, 10.0]
+
   max_delta:
     type: double_array
     default_value: [0.1, 0.1, 0.1, 0.5, 0.5, 0.5]
     description: "Max allowed displacement. This is used to clamp the (twist) error."
+
   use_friction:
     type: bool
     default_value: false
     description: "Use friction compensation"
+
+  use_coriolis_compensation:
+    type: bool
+    default_value: false
+    description: "Use coriolis compensation"
+
+  use_local_jacobian:
+    type: bool
+    default_value: false
+    description: "If true, we use the local jacobian for computations, otherwise we use the world jacobian."
+
+  log_timing:
+    type: bool
+    default_value: true
+    description: "If true, the time required by the loop will be displayed."
+
   limit_torques:
     type: bool
     default_value: false

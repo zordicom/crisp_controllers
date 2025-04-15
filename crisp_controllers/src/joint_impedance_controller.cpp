@@ -1,7 +1,7 @@
-#include <crisp_controllers/friction_model.hpp>
+#include <crisp_controllers/utils/friction_model.hpp>
 #include <crisp_controllers/joint_impedance_controller.hpp>
-#include <crisp_controllers/pseudo_inverse.hpp>
-#include <crisp_controllers/torque_rate_saturation.hpp>
+#include <crisp_controllers/utils/pseudo_inverse.hpp>
+#include <crisp_controllers/utils/torque_rate_saturation.hpp>
 
 #include <ament_index_cpp/get_package_share_directory.hpp>
 #include <binders.h>

@@ -20,4 +20,18 @@ inline Eigen::MatrixXd pseudoInverse(const Eigen::MatrixXd &matrix,
          svd.matrixU().transpose();
 }
 
+inline Eigen::MatrixXd pseudoInverseMoorePenrose(const Eigen::MatrixXd &matrix,
+                                                 double epsilon = 1e-6) {
+  Eigen::JacobiSVD<Eigen::MatrixXd> svd(matrix, Eigen::ComputeFullU |
+                                                    Eigen::ComputeFullV);
+  Eigen::VectorXd singularValues = svd.singularValues();
+  Eigen::VectorXd singularValuesInv(singularValues.size());
+  for (int i = 0; i < singularValues.size(); ++i) {
+    singularValuesInv[i] = 1.0 / (singularValues[i] + epsilon);
+  }
+
+  return svd.matrixV() * singularValuesInv.asDiagonal() *
+         svd.matrixU().transpose();
+}
+
 } // namespace crisp_controllers
