@@ -9,15 +9,14 @@ inline Eigen::MatrixXd pseudoInverse(const Eigen::MatrixXd &matrix,
   Eigen::JacobiSVD<Eigen::MatrixXd> svd(matrix, Eigen::ComputeFullU |
                                                     Eigen::ComputeFullV);
   Eigen::VectorXd singularValues = svd.singularValues();
-  Eigen::VectorXd singularValuesInv(singularValues.size());
+  Eigen::MatrixXd S = Eigen::MatrixXd::Zero(svd.matrixV().cols(), svd.matrixU().rows());
   for (int i = 0; i < singularValues.size(); ++i) {
-    singularValuesInv[i] =
+    S(i, i) =
         singularValues[i] /
         (singularValues[i] * singularValues[i] + epsilon * epsilon);
   }
 
-  return svd.matrixV() * singularValuesInv.asDiagonal() *
-         svd.matrixU().transpose();
+  return svd.matrixV() * S * svd.matrixU().transpose();
 }
 
 inline Eigen::MatrixXd pseudoInverseMoorePenrose(const Eigen::MatrixXd &matrix,

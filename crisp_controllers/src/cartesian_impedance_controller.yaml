@@ -14,7 +14,7 @@ cartesian_impedance_controller:
 
   use_operational_space:
     type: bool
-    default_value: True
+    default_value: False
     description: "Whether we use operational space control or cartesian impedance control"
 
   task:

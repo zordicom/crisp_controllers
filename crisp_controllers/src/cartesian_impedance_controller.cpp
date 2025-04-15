@@ -92,8 +92,8 @@ controller_interface::return_type CartesianImpedanceController::update(
 
   if (params_.use_operational_space) {
 
-    RCLCPP_INFO_STREAM_THROTTLE(get_node()->get_logger(), *get_node()->get_clock(),
-                               5000, "Using OSC");
+    /*RCLCPP_INFO_STREAM_THROTTLE(get_node()->get_logger(), *get_node()->get_clock(),*/
+    /*                           5000, "Using OSC");*/
 
     pinocchio::computeMinverse(model_, data_, q);
     auto Mx_inv = J * data_.Minv * J.transpose();
@@ -143,14 +143,14 @@ controller_interface::return_type CartesianImpedanceController::update(
   /*RCLCPP_INFO_STREAM_THROTTLE(get_node()->get_logger(), *get_node()->get_clock(),*/
   /*                             1000, "q_ref: " << q_ref.transpose());*/
 
-  /*if (params_.log_timing) {*/
-  /**/
-  /*  auto t_end = get_node()->get_clock()->now();*/
-  /*  RCLCPP_INFO_STREAM_THROTTLE(*/
-  /*      get_node()->get_logger(), *get_node()->get_clock(), 2000,*/
-  /*      "Control loop needed: " << (t_end.nanoseconds() - time.nanoseconds())*1e-6*/
-  /*                              << " ms");*/
-  /*}*/
+  if (params_.log_timing) {
+
+    auto t_end = get_node()->get_clock()->now();
+    RCLCPP_INFO_STREAM_THROTTLE(
+        get_node()->get_logger(), *get_node()->get_clock(), 2000,
+        "Control loop needed: " << (t_end.nanoseconds() - time.nanoseconds())*1e-6
+                                << " ms");
+  }
 
 
   return controller_interface::return_type::OK;
