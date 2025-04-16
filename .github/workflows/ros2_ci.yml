@@ -19,7 +19,7 @@ jobs:
         run: |
           sudo apt update
           rosdep update
-          rosdep install --from-paths . --ignore-src -y
+          rosdep install --from-paths . --ignore-src -y --ros-distro humble
 
       - name: Build
         run: |
