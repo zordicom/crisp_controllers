@@ -3,7 +3,7 @@
     "privileged": true,
     "remoteUser": "ros",
     "dockerComposeFile": "../docker-compose.yaml",
-    "workspaceFolder": "/home/ros/ros2_ws/src/crisp_controllers",
+    "workspaceFolder": "/home/ros/ros2_ws",
     "service": "crisp_controllers",
     "features": {
         "ghcr.io/duduribeiro/devcontainer-features/neovim:1": {
@@ -17,8 +17,8 @@
         }
     },
     "mounts": [
-        "source=${localWorkspaceFolder},target=/home/ros/ros2_ws/src/crisp_controllers,type=bind,consistency=cached",
+        "source=${localWorkspaceFolder},target=/home/ros/ros2_ws,type=bind,consistency=cached",
         "source=${localEnv:HOME}/.env,target=/home/ros/.env,type=bind,consistency=cached"
     ],
-    "postStartCommand": "/bin/bash /home/ros/ros2_ws/src/crisp_controllers/.devcontainer/post_create.sh"
+    "postStartCommand": "/bin/bash /home/ros/ros2_ws/.devcontainer/post_create.sh"
 }

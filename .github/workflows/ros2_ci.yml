@@ -1,38 +1,32 @@
-name: ROS2 CI
+name: ROS 2 CI
 
-on: [pull_request, push]
+on:
+  push:
+    branches: [main]
+  pull_request:
 
 jobs:
-  test_environment:
-    runs-on: [ubuntu-latest]
-    strategy:
-      fail-fast: false
-      matrix:
-        ros_distribution:
-          - humble
-          - rolling
-        include:
-          # Humble Hawksbill (May 2022 - May 2027)
-          - docker_image: rostooling/setup-ros-docker:ubuntu-jammy-ros-humble-ros-base-latest
-            ros_distribution: humble
-            ros_version: 2
-          # Rolling Ridley  (June 2020 - Present)
-          - docker_image: rostooling/setup-ros-docker:ubuntu-jammy-ros-rolling-ros-base-latest
-            ros_distribution: rolling
-            ros_version: 2
-    container:
-      image: ${{ matrix.docker_image }}
+  build-and-test:
+    runs-on: ubuntu-latest
     steps:
-      - name: setup directories
-        run: mkdir -p ros2_ws/src
-      - name: checkout
-        uses: actions/checkout@v2
+      - uses: actions/checkout@v3
+
+      - uses: ros-tooling/setup-ros@v0.7
         with:
-          path: ros2_ws/src
-      - name: build and test
-        continue-on-error: true
-        uses: ros-tooling/action-ros-ci@0.2.2
-        with:
-          package-name: crisp_controllers
-          target-ros2-distro: ${{ matrix.ros_distribution }}
-          vcs-repo-file-url: ""
+          required-ros-distributions: humble
+
+      - name: Install dependencies
+        run: |
+          sudo apt update
+          rosdep update
+          rosdep install --from-paths . --ignore-src -y
+
+      - name: Build
+        run: |
+          colcon build --event-handlers console_direct+
+
+      - name: Run tests
+        run: |
+          colcon test
+          colcon test-result --verbose
+
