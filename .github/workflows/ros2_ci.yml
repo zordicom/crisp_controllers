@@ -24,10 +24,12 @@ jobs:
 
       - name: Build
         run: |
+          source /opt/ros/humble/setup.bash
           colcon build --event-handlers console_direct+
 
       - name: Run tests
         run: |
+          source /opt/ros/humble/setup.bash
           colcon test
           colcon test-result --verbose
 
