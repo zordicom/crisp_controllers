@@ -4,6 +4,7 @@
 #include <crisp_controllers/utils/joint_limits.hpp>
 #include <crisp_controllers/utils/pseudo_inverse.hpp>
 
+#include <execution>
 #include <pinocchio/algorithm/aba.hpp>
 #include <pinocchio/algorithm/compute-all-terms.hpp>
 #include <pinocchio/algorithm/frames.hxx>
@@ -81,8 +82,18 @@ controller_interface::return_type CartesianImpedanceController::update(
   Eigen::MatrixXd J_pinv(model_.nv, 6);
   Eigen::MatrixXd Id_nv(model_.nv, model_.nv);
 
+  pinocchio::computeMinverse(model_, data_, q);
+  auto Mx_inv = J * data_.Minv * J.transpose();
+  auto Mx = pseudoInverse(Mx_inv);
+
   J_pinv = pseudoInverse(J, params_.nullspace.regularization);
-  Eigen::MatrixXd nullspace_projection = Id_nv - J_pinv * J;
+
+  Eigen::MatrixXd nullspace_projection;
+  if (params_.nullspace.use_dynamic_projector) {
+    nullspace_projection = Id_nv - J.transpose() * Mx * J * data_.Minv;
+  } else {
+    nullspace_projection = Id_nv - J_pinv * J;
+  }
 
   // Now we compute all terms of the control law
   Eigen::VectorXd tau_task(model_.nv), tau_d(model_.nv),
@@ -95,15 +106,10 @@ controller_interface::return_type CartesianImpedanceController::update(
     /*RCLCPP_INFO_STREAM_THROTTLE(get_node()->get_logger(), *get_node()->get_clock(),*/
     /*                           5000, "Using OSC");*/
 
-    pinocchio::computeMinverse(model_, data_, q);
-    auto Mx_inv = J * data_.Minv * J.transpose();
-    auto Mx = pseudoInverse(Mx_inv);
-    tau_task << J.transpose() * (stiffness * error - damping * (J * dq));
+    tau_task << J.transpose() * Mx * (stiffness * error - damping * (J * dq));
   } else {
     tau_task << J.transpose() * (stiffness * error - damping * (J * dq));
   }
-
-  tau_task << J.transpose() * (stiffness * error - damping * (J * dq));
 
   tau_joint_limits = get_joint_limit_torque(q, model_.lowerPositionLimit, model_.upperPositionLimit);
 
@@ -136,12 +142,18 @@ controller_interface::return_type CartesianImpedanceController::update(
   params_ = params_listener_->get_params();
   setStiffnessAndDamping();
 
-  /*RCLCPP_INFO_STREAM_THROTTLE(get_node()->get_logger(), *get_node()->get_clock(),*/
-  /*                             1000, "tau_d: " << tau_d.transpose());*/
-  /*RCLCPP_INFO_STREAM_THROTTLE(get_node()->get_logger(), *get_node()->get_clock(),*/
-  /*                             1000, "tau_nullspace: " << tau_nullspace.transpose());*/
-  /*RCLCPP_INFO_STREAM_THROTTLE(get_node()->get_logger(), *get_node()->get_clock(),*/
-  /*                             1000, "q_ref: " << q_ref.transpose());*/
+  if (params_.log) {
+    RCLCPP_INFO_STREAM_THROTTLE(get_node()->get_logger(), *get_node()->get_clock(),
+                                1000, "Mx: " << Mx);
+    RCLCPP_INFO_STREAM_THROTTLE(get_node()->get_logger(), *get_node()->get_clock(),
+                                1000, "Minv: " << data_.Minv);
+    RCLCPP_INFO_STREAM_THROTTLE(get_node()->get_logger(), *get_node()->get_clock(),
+                                1000, "tau_d: " << tau_d.transpose());
+    RCLCPP_INFO_STREAM_THROTTLE(get_node()->get_logger(), *get_node()->get_clock(),
+                                1000, "tau_nullspace: " << tau_nullspace.transpose());
+    RCLCPP_INFO_STREAM_THROTTLE(get_node()->get_logger(), *get_node()->get_clock(),
+                                1000, "q_ref: " << q_ref.transpose());
+  }
 
   if (params_.log_timing) {
 
