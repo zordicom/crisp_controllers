@@ -20,7 +20,7 @@ jobs:
           sudo apt update
           source /opt/ros/humble/setup.bash
           rosdep update
-          rosdep install --from-paths . --ignore-src -y --ros-distro humble
+          rosdep install --from-paths . --ignore-src -y
 
       - name: Build
         run: |
