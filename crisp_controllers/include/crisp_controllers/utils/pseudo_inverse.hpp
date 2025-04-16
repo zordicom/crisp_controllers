@@ -26,7 +26,7 @@ inline Eigen::MatrixXd pseudoInverseMoorePenrose(const Eigen::MatrixXd &matrix,
   Eigen::VectorXd singularValues = svd.singularValues();
   Eigen::VectorXd singularValuesInv(singularValues.size());
   for (int i = 0; i < singularValues.size(); ++i) {
-    singularValuesInv[i] = 1.0 / (singularValues[i] + epsilon);
+    singularValuesInv[i] = singularValues[i] > epsilon ? 1.0 / singularValues[i] : 0.0;
   }
 
   return svd.matrixV() * singularValuesInv.asDiagonal() *
