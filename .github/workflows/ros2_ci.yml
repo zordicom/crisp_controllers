@@ -1,35 +1,17 @@
-name: ROS 2 CI
+name: ROS2 - CI
 
-on:
-  push:
-    branches: [main]
-  pull_request:
+on: [push, pull_request]
 
 jobs:
-  build-and-test:
-    runs-on: ubuntu-22.04
+  industrial_ci:
+    strategy:
+      matrix:
+        env:
+          - {ROS_DISTRO: humble}
+          - {ROS_DISTRO: jazzy}
+          - {ROS_DISTRO: rolling}
+    runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
-
-      - uses: ros-tooling/setup-ros@v0.7
-        with:
-          required-ros-distributions: humble
-
-      - name: Install dependencies
-        run: |
-          sudo apt update
-          source /opt/ros/humble/setup.bash
-          rosdep update
-          rosdep install --from-paths . --ignore-src -y
-
-      - name: Build
-        run: |
-          source /opt/ros/humble/setup.bash
-          colcon build --event-handlers console_direct+
-
-      - name: Run tests
-        run: |
-          source /opt/ros/humble/setup.bash
-          colcon test
-          colcon test-result --verbose
-
+      - uses: actions/checkout@v4
+      - uses: 'ros-industrial/industrial_ci@master'
+        env: ${{matrix.env}}
