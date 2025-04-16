@@ -18,6 +18,7 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt update
+          source /opt/ros/humble/setup.bash
           rosdep update
           rosdep install --from-paths . --ignore-src -y --ros-distro humble
 
