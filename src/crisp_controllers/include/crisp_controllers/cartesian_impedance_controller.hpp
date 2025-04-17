@@ -146,12 +146,16 @@ private:
   Eigen::VectorXd q;
   /** @brief Current joint velocities */
   Eigen::VectorXd dq;
+  /** @brief Current measured torque */
+  Eigen::VectorXd tau;
   /** @brief Reference joint positions for posture task */
   Eigen::VectorXd q_ref;
   /** @brief Reference joint velocities */
   Eigen::VectorXd dq_ref;
-  /** @brief Computed joint torques */
-  Eigen::VectorXd tau;
+
+  /** @brief Previously computed torque */
+  Eigen::VectorXd tau_previous;
+
   /** @brief Current end effector pose */
   pinocchio::SE3 end_effector_pose;
   /** @brief End effector Jacobian matrix */

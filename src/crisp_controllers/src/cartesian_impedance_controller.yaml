@@ -139,8 +139,32 @@ cartesian_impedance_controller:
       default_value: false
       description: "If true, the time required by the loop will be displayed."
 
+  filter:
+    target_pose:
+      type: double
+      default_value: 0.1
+      description: "Amount of smoothing for the target pose when using the EMA."
+      validation:
+        bounds<>: [0.00001, 0.99999]
+    q:
+      type: double
+      default_value: 0.1
+      description: "Amount of smoothing for the target pose when using the EMA."
+      validation:
+        bounds<>: [0.00001, 0.99999]
+    dq:
+      type: double
+      default_value: 0.1
+      description: "Amount of smoothing for the target pose when using the EMA."
+      validation:
+        bounds<>: [0.00001, 0.99999]
 
   limit_torques:
     type: bool
-    default_value: false
+    default_value: true
     description: "Limit torques"
+
+  max_delta_tau:
+    type: double
+    default_value: 0.5
+    description: "Max allowed change in torque per joint per control loop."
