@@ -20,3 +20,4 @@ template <typename T>
     return (1.0 - alpha) * current + alpha * output;
   }
 
+

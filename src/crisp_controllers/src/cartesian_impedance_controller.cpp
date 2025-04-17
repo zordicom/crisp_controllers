@@ -4,7 +4,6 @@
 #include <crisp_controllers/utils/joint_limits.hpp>
 #include <crisp_controllers/utils/pseudo_inverse.hpp>
 
-#include <execution>
 #include <pinocchio/algorithm/aba.hpp>
 #include <pinocchio/algorithm/compute-all-terms.hpp>
 #include <pinocchio/algorithm/frames.hxx>
@@ -137,32 +136,85 @@ controller_interface::return_type CartesianImpedanceController::update(
     command_interfaces_[i].set_value(tau_d[i]);
   }
   
-  // Update parameters
   params_listener_->refresh_dynamic_parameters();
   params_ = params_listener_->get_params();
   setStiffnessAndDamping();
 
-  if (params_.log) {
-    RCLCPP_INFO_STREAM_THROTTLE(get_node()->get_logger(), *get_node()->get_clock(),
-                                1000, "Mx: " << Mx);
-    RCLCPP_INFO_STREAM_THROTTLE(get_node()->get_logger(), *get_node()->get_clock(),
-                                1000, "Minv: " << data_.Minv);
-    RCLCPP_INFO_STREAM_THROTTLE(get_node()->get_logger(), *get_node()->get_clock(),
-                                1000, "tau_d: " << tau_d.transpose());
-    RCLCPP_INFO_STREAM_THROTTLE(get_node()->get_logger(), *get_node()->get_clock(),
-                                1000, "tau_nullspace: " << tau_nullspace.transpose());
-    RCLCPP_INFO_STREAM_THROTTLE(get_node()->get_logger(), *get_node()->get_clock(),
-                                1000, "q_ref: " << q_ref.transpose());
+  if (params_.log.enabled) {
+    if (params_.log.robot_state) {
+      RCLCPP_INFO_STREAM_THROTTLE(get_node()->get_logger(), *get_node()->get_clock(),
+                                  1000, "nq: " << model_.nq << ", nv: " << model_.nv);
+      RCLCPP_INFO_STREAM_THROTTLE(get_node()->get_logger(), *get_node()->get_clock(),
+                                  1000, "end_effector_pos" << end_effector_pose.translation());
+      /*RCLCPP_INFO_STREAM_THROTTLE(get_node()->get_logger(), *get_node()->get_clock(),*/
+      /*                            1000, "end_effector_rot" << end_effector_pose.rotation());*/
+      RCLCPP_INFO_STREAM_THROTTLE(get_node()->get_logger(), *get_node()->get_clock(),
+                                  1000, "q: " << q.transpose());
+      RCLCPP_INFO_STREAM_THROTTLE(get_node()->get_logger(), *get_node()->get_clock(),
+                                  1000, "dq: " << dq.transpose());
+      RCLCPP_INFO_STREAM_THROTTLE(get_node()->get_logger(), *get_node()->get_clock(),
+                                  1000, "tau: " << tau.transpose());
+      RCLCPP_INFO_STREAM_THROTTLE(get_node()->get_logger(), *get_node()->get_clock(),
+                                  1000, "J: " << J);
+    }
+
+    if (params_.log.controller_parameters) {
+      RCLCPP_INFO_STREAM_THROTTLE(get_node()->get_logger(), *get_node()->get_clock(),
+                                  1000, "stiffness: " << stiffness);
+      RCLCPP_INFO_STREAM_THROTTLE(get_node()->get_logger(), *get_node()->get_clock(),
+                                  1000, "damping: " << damping);
+      RCLCPP_INFO_STREAM_THROTTLE(get_node()->get_logger(), *get_node()->get_clock(),
+                                  1000, "nullspace_stiffness: " << nullspace_stiffness);
+      RCLCPP_INFO_STREAM_THROTTLE(get_node()->get_logger(), *get_node()->get_clock(),
+                                  1000, "nullspace_damping: " << nullspace_damping);
+
+    }
+
+    if (params_.log.limits) {
+      RCLCPP_INFO_STREAM_THROTTLE(get_node()->get_logger(), *get_node()->get_clock(),
+                                  1000, "joint_limits: " << model_.lowerPositionLimit.transpose() << ", "
+                                  << model_.upperPositionLimit.transpose());
+      RCLCPP_INFO_STREAM_THROTTLE(get_node()->get_logger(), *get_node()->get_clock(),
+                                  1000, "velocity_limits: " << model_.velocityLimit);
+      RCLCPP_INFO_STREAM_THROTTLE(get_node()->get_logger(), *get_node()->get_clock(),
+                                  1000, "effort_limits: " << model_.effortLimit);
+    }
+
+    if (params_.log.computed_torques) {
+      RCLCPP_INFO_STREAM_THROTTLE(get_node()->get_logger(), *get_node()->get_clock(),
+                                  1000, "tau_task: " << tau_task.transpose());
+      RCLCPP_INFO_STREAM_THROTTLE(get_node()->get_logger(), *get_node()->get_clock(),
+                                  1000, "tau_nullspace: " << tau_nullspace.transpose());
+      RCLCPP_INFO_STREAM_THROTTLE(get_node()->get_logger(), *get_node()->get_clock(),
+                                  1000, "tau_joint_limits: " << tau_joint_limits.transpose());
+      RCLCPP_INFO_STREAM_THROTTLE(get_node()->get_logger(), *get_node()->get_clock(),
+                                  1000, "tau_nullspace: " << tau_nullspace.transpose());
+      RCLCPP_INFO_STREAM_THROTTLE(get_node()->get_logger(), *get_node()->get_clock(),
+                                  1000, "tau_friction: " << tau_friction.transpose());
+      RCLCPP_INFO_STREAM_THROTTLE(get_node()->get_logger(), *get_node()->get_clock(),
+                                  1000, "tau_coriolis: " << tau_friction.transpose());
+
+    }
+
+    if (params_.log.dynamic_params) {
+      RCLCPP_INFO_STREAM_THROTTLE(get_node()->get_logger(), *get_node()->get_clock(),
+                                  1000, "M: " << data_.M);
+      RCLCPP_INFO_STREAM_THROTTLE(get_node()->get_logger(), *get_node()->get_clock(),
+                                  1000, "Mx: " << Mx);
+      RCLCPP_INFO_STREAM_THROTTLE(get_node()->get_logger(), *get_node()->get_clock(),
+                                  1000, "Minv: " << data_.Minv);
+    }
+
+    if (params_.log.timing) {
+
+      auto t_end = get_node()->get_clock()->now();
+      RCLCPP_INFO_STREAM_THROTTLE(
+          get_node()->get_logger(), *get_node()->get_clock(), 2000,
+          "Control loop needed: " << (t_end.nanoseconds() - time.nanoseconds())*1e-6
+                                  << " ms");
+    }
   }
 
-  if (params_.log_timing) {
-
-    auto t_end = get_node()->get_clock()->now();
-    RCLCPP_INFO_STREAM_THROTTLE(
-        get_node()->get_logger(), *get_node()->get_clock(), 2000,
-        "Control loop needed: " << (t_end.nanoseconds() - time.nanoseconds())*1e-6
-                                << " ms");
-  }
 
 
   return controller_interface::return_type::OK;

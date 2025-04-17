@@ -110,14 +110,35 @@ cartesian_impedance_controller:
     description: "If true, we use the local jacobian for computations, otherwise we use the world jacobian."
 
   log:
-    type: bool
-    default_value: false
-    description: "If set so to true, log some debugging statements."
+    enabled:
+      type: bool
+      default_value: false
+      description: "If set so to true, log some debugging statements."
+    robot_state:
+      type: bool
+      default_value: false
+      description: "If set so to true, log the robot state like the joint state and end effector position."
+    limits:
+      type: bool
+      default_value: false
+      description: "If set so to true, log the limits of each joint."
+    controller_parameters:
+      type: bool
+      default_value: false
+      description: "If set so to true, log the controller parameters like the stiffness, damping..."
+    computed_torques:
+      type: bool
+      default_value: false
+      description: "If set so to true, log the individual computed torques."
+    dynamic_params:
+      type: bool
+      default_value: false
+      description: "If set so to true, log the dynamic_params like the mass matrix, operational mass matrix..."
+    timing:
+      type: bool
+      default_value: false
+      description: "If true, the time required by the loop will be displayed."
 
-  log_timing:
-    type: bool
-    default_value: true
-    description: "If true, the time required by the loop will be displayed."
 
   limit_torques:
     type: bool

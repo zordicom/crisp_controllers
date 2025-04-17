@@ -112,10 +112,21 @@ ament_export_dependencies(
         rclcpp
         rclcpp_lifecycle
         hardware_interface
+        Eigen3
 )
 
 if(BUILD_TESTING)
   find_package(ament_cmake_gtest REQUIRED)
+
+  ament_add_gtest(test_torque_rate_saturation
+    tests/test_torque_rate_saturation.cpp
+  )
+  target_include_directories(test_torque_rate_saturation PUBLIC
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+  )
+  target_link_libraries(test_torque_rate_saturation
+    Eigen3::Eigen
+  )
   
   ament_add_gtest(test_pseudo_inverse
     tests/test_pseudo_inverse.cpp
