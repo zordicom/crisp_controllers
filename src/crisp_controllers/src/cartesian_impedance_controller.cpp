@@ -61,23 +61,28 @@ controller_interface::return_type CartesianImpedanceController::update(
   pinocchio::SE3 new_target_pose = pinocchio::SE3(target_orientation_.toRotationMatrix(), target_position_);
   target_pose_ = pinocchio::exp6(exponential_moving_average(pinocchio::log6(target_pose_), pinocchio::log6(new_target_pose), params_.filter.target_pose));
   /*target_pose_ = pinocchio::SE3(target_orientation_.toRotationMatrix(), target_position_);*/
-
   end_effector_pose = data_.oMf[end_effector_frame_id];
-  pinocchio::SE3 diff_pose = params_.use_local_jacobian ? end_effector_pose.actInv(target_pose_)
-                                                        : target_pose_.act(end_effector_pose.inverse());
 
+  // We consider translation and rotation separately to avoid unatural screw motions
   Eigen::VectorXd error(6);
-  error = pinocchio::log6(diff_pose).toVector();
-
-  auto max_delta_ =
-      Eigen::Map<Eigen::VectorXd>(params_.max_delta.data(), 6);
-
-  if (error.size() != params_.max_delta.size()) {
-    RCLCPP_ERROR_ONCE(get_node()->get_logger(), "Size mismatch: error is %ld, max_delta_ is %ld", error.size(), max_delta_.size());
-    return controller_interface::return_type::ERROR;
+  if (params_.use_local_jacobian) {
+    error.head(3) = end_effector_pose.rotation().transpose() * (target_pose_.translation() - end_effector_pose.translation());
+    error.tail(3) = pinocchio::log3(end_effector_pose.rotation().transpose() * target_pose_.rotation());
+  } else {
+    error.head(3) = target_pose_.translation() - end_effector_pose.translation();
+    error.tail(3) = pinocchio::log3(target_pose_.rotation() * end_effector_pose.rotation().transpose());
   }
 
-  error = error.cwiseMax(-max_delta_).cwiseMin(max_delta_);
+  auto max_delta_ = Eigen::Map<Eigen::VectorXd>(params_.max_delta.data(), 6);
+  if (params_.limit_error) {
+
+    if ((size_t)error.size() != (size_t)params_.max_delta.size()) {
+      RCLCPP_ERROR_ONCE(get_node()->get_logger(), "Size mismatch: error is %ld, max_delta_ is %ld", error.size(), max_delta_.size());
+      return controller_interface::return_type::ERROR;
+    }
+
+    error = error.cwiseMax(-max_delta_).cwiseMin(max_delta_);
+  }
 
   J.setZero();
   auto reference_frame = params_.use_local_jacobian ? pinocchio::ReferenceFrame::LOCAL
@@ -144,9 +149,10 @@ controller_interface::return_type CartesianImpedanceController::update(
     tau_d = saturateTorqueRate(tau_d, tau_previous, params_.max_delta_tau);
   } 
 
-
-  for (size_t i = 0; i < num_joints; ++i) {
-    command_interfaces_[i].set_value(tau_d[i]);
+  if (not params_.stop_commands) {
+    for (size_t i = 0; i < num_joints; ++i) {
+      command_interfaces_[i].set_value(tau_d[i]);
+    }
   }
 
   tau_previous = tau_d;
@@ -173,6 +179,13 @@ controller_interface::return_type CartesianImpedanceController::update(
                                   1000, "J: " << J);
     }
 
+    if (params_.log.control_values) {
+      RCLCPP_INFO_STREAM_THROTTLE(get_node()->get_logger(), *get_node()->get_clock(),
+                                  1000, "error: " << error.transpose());
+      RCLCPP_INFO_STREAM_THROTTLE(get_node()->get_logger(), *get_node()->get_clock(),
+                                  1000, "max_delta: " << max_delta_.transpose());
+    }
+
     if (params_.log.controller_parameters) {
       RCLCPP_INFO_STREAM_THROTTLE(get_node()->get_logger(), *get_node()->get_clock(),
                                   1000, "stiffness: " << stiffness);
@@ -182,8 +195,6 @@ controller_interface::return_type CartesianImpedanceController::update(
                                   1000, "nullspace_stiffness: " << nullspace_stiffness);
       RCLCPP_INFO_STREAM_THROTTLE(get_node()->get_logger(), *get_node()->get_clock(),
                                   1000, "nullspace_damping: " << nullspace_damping);
-      RCLCPP_INFO_STREAM_THROTTLE(get_node()->get_logger(), *get_node()->get_clock(),
-                                  1000, "max_delta: " << max_delta_.transpose());
 
     }
 

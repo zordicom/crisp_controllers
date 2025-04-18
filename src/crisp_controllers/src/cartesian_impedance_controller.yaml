@@ -122,6 +122,10 @@ cartesian_impedance_controller:
       type: bool
       default_value: false
       description: "If set so to true, log the robot state like the joint state and end effector position."
+    control_values:
+      type: bool
+      default_value: false
+      description: "If set so to true, log the control values like error to target."
     limits:
       type: bool
       default_value: false
@@ -163,6 +167,11 @@ cartesian_impedance_controller:
       validation:
         bounds<>: [0.00001, 0.99999]
 
+  limit_error:
+    type: bool
+    default_value: true
+    description: "Limit\\clamp the error computed as the difference between the current pose and target pose."
+
   limit_torques:
     type: bool
     default_value: true
@@ -172,3 +181,8 @@ cartesian_impedance_controller:
     type: double
     default_value: 0.5
     description: "Max allowed change in torque per joint per control loop."
+
+  stop_commands:
+    type: bool
+    default_value: False
+    description: "If set to true, we will stop sending commands to the robot. This is mainly for debugging useful."
