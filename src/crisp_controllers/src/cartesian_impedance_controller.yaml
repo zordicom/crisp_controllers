@@ -61,7 +61,7 @@ cartesian_impedance_controller:
       default_value: 1.0
       description: "Stiffness of the nullspace controller."
       validation:
-        bounds<>: [0.0, 5.0]
+        bounds<>: [0.0, 500.0]
     weights:
       type: double_array
       default_value: []
@@ -76,6 +76,10 @@ cartesian_impedance_controller:
       type: bool
       default_value: true
       description: "Whether to the dynamic nullspace projector or not."
+    max_tau:
+      type: double
+      default_value: 5
+      description: "Maximal torque value that can be applied in the nullspace. This is used to be sure that we do not interfere with the main task."
 
   noise:
     add_random_noise:

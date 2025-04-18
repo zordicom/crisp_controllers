@@ -1,5 +1,6 @@
 #include "crisp_controllers/utils/fiters.hpp"
 #include "crisp_controllers/utils/torque_rate_saturation.hpp"
+#include <controller_interface/controller_interface_base.hpp>
 #include <crisp_controllers/pch.hpp>
 #include <crisp_controllers/cartesian_impedance_controller.hpp>
 #include <crisp_controllers/utils/friction_model.hpp>
@@ -62,8 +63,8 @@ controller_interface::return_type CartesianImpedanceController::update(
   /*target_pose_ = pinocchio::SE3(target_orientation_.toRotationMatrix(), target_position_);*/
 
   end_effector_pose = data_.oMf[end_effector_frame_id];
-  pinocchio::SE3 diff_pose = params_.use_local_jacobian ? end_effector_pose.inverse() * target_pose_ 
-                                                        : target_pose_ * end_effector_pose.inverse();
+  pinocchio::SE3 diff_pose = params_.use_local_jacobian ? end_effector_pose.actInv(target_pose_)
+                                                        : target_pose_.act(end_effector_pose.inverse());
 
   Eigen::VectorXd error(6);
   error = pinocchio::log6(diff_pose).toVector();
@@ -71,11 +72,12 @@ controller_interface::return_type CartesianImpedanceController::update(
   auto max_delta_ =
       Eigen::Map<Eigen::VectorXd>(params_.max_delta.data(), 6);
 
-  if (error.size() != max_delta_.size()) {
+  if (error.size() != params_.max_delta.size()) {
     RCLCPP_ERROR_ONCE(get_node()->get_logger(), "Size mismatch: error is %ld, max_delta_ is %ld", error.size(), max_delta_.size());
     return controller_interface::return_type::ERROR;
   }
-  error.cwiseMin(max_delta_).cwiseMax(-max_delta_);
+
+  error = error.cwiseMax(-max_delta_).cwiseMin(max_delta_);
 
   J.setZero();
   auto reference_frame = params_.use_local_jacobian ? pinocchio::ReferenceFrame::LOCAL
@@ -89,12 +91,13 @@ controller_interface::return_type CartesianImpedanceController::update(
   pinocchio::computeMinverse(model_, data_, q);
   auto Mx_inv = J * data_.Minv * J.transpose();
   auto Mx = pseudoInverse(Mx_inv);
+  auto J_bar = data_.Minv * J.transpose() * Mx;
 
   J_pinv = pseudoInverse(J, params_.nullspace.regularization);
 
   Eigen::MatrixXd nullspace_projection;
   if (params_.nullspace.use_dynamic_projector) {
-    nullspace_projection = Id_nv - J.transpose() * Mx * J * data_.Minv;
+    nullspace_projection = Id_nv - J.transpose() * J_bar.transpose();
   } else {
     nullspace_projection = Id_nv - J_pinv * J;
   }
@@ -138,7 +141,7 @@ controller_interface::return_type CartesianImpedanceController::update(
                tau_joint_limits + tau_random_noise;
 
   if (params_.limit_torques) {
-    tau_d = saturateTorqueRate(tau_d, tau_previous, params_.max_delta_tau);  // TODO: double check this
+    tau_d = saturateTorqueRate(tau_d, tau_previous, params_.max_delta_tau);
   } 
 
 
@@ -179,6 +182,8 @@ controller_interface::return_type CartesianImpedanceController::update(
                                   1000, "nullspace_stiffness: " << nullspace_stiffness);
       RCLCPP_INFO_STREAM_THROTTLE(get_node()->get_logger(), *get_node()->get_clock(),
                                   1000, "nullspace_damping: " << nullspace_damping);
+      RCLCPP_INFO_STREAM_THROTTLE(get_node()->get_logger(), *get_node()->get_clock(),
+                                  1000, "max_delta: " << max_delta_.transpose());
 
     }
 
