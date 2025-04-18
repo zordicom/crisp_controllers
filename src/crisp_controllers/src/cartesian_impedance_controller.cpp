@@ -1,3 +1,5 @@
+#include "crisp_controllers/utils/fiters.hpp"
+#include "crisp_controllers/utils/torque_rate_saturation.hpp"
 #include <crisp_controllers/pch.hpp>
 #include <crisp_controllers/cartesian_impedance_controller.hpp>
 #include <crisp_controllers/utils/friction_model.hpp>
@@ -9,6 +11,8 @@
 #include <pinocchio/algorithm/frames.hxx>
 #include <pinocchio/algorithm/rnea.hpp>
 #include <pinocchio/parsers/urdf.hpp>
+#include <pinocchio/spatial/explog.hpp>
+#include <pinocchio/spatial/fwd.hpp>
 #include <rclcpp/logging.hpp>
 
 namespace crisp_controllers {
@@ -45,16 +49,17 @@ controller_interface::return_type CartesianImpedanceController::update(
 
   size_t num_joints = params_.joints.size();
   for (size_t i = 0; i < num_joints; i++) {
-    q[i] = state_interfaces_[i].get_value();
-    dq[i] = state_interfaces_[num_joints + i].get_value();
+    q[i] = exponential_moving_average(q[i], state_interfaces_[i].get_value(), params_.filter.q);
+    dq[i] = exponential_moving_average(dq[i], state_interfaces_[num_joints + i].get_value(), params_.filter.dq);
     tau[i] = state_interfaces_[2 * num_joints + i].get_value();
   }
 
   pinocchio::forwardKinematics(model_, data_, q, dq);
   pinocchio::updateFramePlacements(model_, data_);
 
-  target_pose_ =
-      pinocchio::SE3(target_orientation_.toRotationMatrix(), target_position_);
+  pinocchio::SE3 new_target_pose = pinocchio::SE3(target_orientation_.toRotationMatrix(), target_position_);
+  target_pose_ = pinocchio::exp6(exponential_moving_average(pinocchio::log6(target_pose_), pinocchio::log6(new_target_pose), params_.filter.target_pose));
+  /*target_pose_ = pinocchio::SE3(target_orientation_.toRotationMatrix(), target_position_);*/
 
   end_effector_pose = data_.oMf[end_effector_frame_id];
   pinocchio::SE3 diff_pose = params_.use_local_jacobian ? end_effector_pose.inverse() * target_pose_ 
@@ -132,9 +137,16 @@ controller_interface::return_type CartesianImpedanceController::update(
   tau_d << tau_task + tau_nullspace + tau_friction + tau_coriolis +
                tau_joint_limits + tau_random_noise;
 
+  if (params_.limit_torques) {
+    tau_d = saturateTorqueRate(tau_d, tau_previous, params_.max_delta_tau);  // TODO: double check this
+  } 
+
+
   for (size_t i = 0; i < num_joints; ++i) {
     command_interfaces_[i].set_value(tau_d[i]);
   }
+
+  tau_previous = tau_d;
   
   params_listener_->refresh_dynamic_parameters();
   params_ = params_listener_->get_params();
@@ -271,6 +283,7 @@ CallbackReturn CartesianImpedanceController::on_configure(
   q_ref = Eigen::VectorXd::Zero(model_.nq);
   dq_ref = Eigen::VectorXd::Zero(model_.nv);
   tau = Eigen::VectorXd::Zero(model_.nv);
+  tau_previous = Eigen::VectorXd::Zero(model_.nv);
   J = Eigen::MatrixXd::Zero(6, model_.nv);
 
   nullspace_stiffness = Eigen::MatrixXd::Zero(model_.nv, model_.nv);

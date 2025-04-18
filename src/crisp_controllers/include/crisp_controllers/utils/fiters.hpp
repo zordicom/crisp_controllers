@@ -11,7 +11,7 @@
   * @return returns the filtered value
   */
 template <typename T>
-  inline T exponential_moving_average(T output, T current, double alpha)
+  inline T exponential_moving_average(const T output, const T current, const double alpha)
   {
   if (alpha <= 0.0 || alpha >= 1.0) {
       throw std::invalid_argument("alpha must be in (0, 1)");
