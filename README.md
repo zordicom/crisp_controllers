@@ -29,11 +29,12 @@ If you are trying it out on simulation, you should not worry about it. If using 
 Include it to your ros2 workspace and install dependencies
 ```bash
 cd ~/ros2_ws  # or wherever you ws is...
-git clone https://github.com/danielsanjosepro/crisp_controllers.git -b main
+git clone https://github.com/danielsanjosepro/crisp_controllers.git src/crisp_controllers
+source /opt/ros/$ROS_DISTRO/setup.sh
 rosdep update
-rosdep install -q --from-paths src --ignore-src -y  # Install missing dependencies (pinocchio...)
+rosdep install -q --from-paths src --ignore-src -y  # Install missing dependencies
 colcon build --packages-select crisp_controllers  # Build the package
-touch src/crips_controllers/COLCON_IGNORE  # Forget about it
+touch src/crisp_controllers/COLCON_IGNORE  # Forget about it
 ```
 
 ### Docker
