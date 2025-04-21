@@ -3,6 +3,7 @@ ARG ROS_DISTRO=humble
 FROM osrf/ros:${ROS_DISTRO}-desktop
 
 ENV ROS_DISTRO=${ROS_DISTRO}
+ARG MUJOCO_VERSION=3.2.6
 
 # Create a non-root user
 ARG USERNAME=ros
@@ -66,13 +67,3 @@ USER $USERNAME
 RUN mkdir -p /home/ros/ros2_ws
 
 WORKDIR /home/ros/ros2_ws
-
-# === FRANKA ROS2 ===
-RUN git clone https://github.com/frankaemika/franka_ros2.git src/franka_ros2 \
-    && source /opt/ros/humble/setup.bash \
-    && vcs import src < src/franka.repos --recursive --skip-existing \
-    && rosdep update \
-    && rosdep install --from-paths src --ignore-src --rosdistro $ROS_DISTRO -y \
-    && colcon build --symlink-install --cmake-args -DCMAKE_BUILD_TYPE=Release \
-    && touch src/franka_ros2/COLCON_IGNORE
-
