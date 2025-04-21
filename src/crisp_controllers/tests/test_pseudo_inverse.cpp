@@ -6,7 +6,7 @@ TEST(PseudoInverseTest, SquareMatrixTest) {
   A << 4, 7,
        2, 6;
   
-  Eigen::MatrixXd A_pinv = crisp_controllers::pseudoInverse(A);
+  Eigen::MatrixXd A_pinv = crisp_controllers::pseudo_inverse(A);
   
   // Test if A * A_pinv * A ≈ A
   Eigen::MatrixXd result = A * A_pinv * A;
@@ -25,7 +25,7 @@ TEST(PseudoInverseTest, RectangularMatrixTest) {
        3, 4,
        5, 6;
   
-  Eigen::MatrixXd B_pinv = crisp_controllers::pseudoInverse(B);
+  Eigen::MatrixXd B_pinv = crisp_controllers::pseudo_inverse(B);
   
   Eigen::MatrixXd result = B * B_pinv * B;
   EXPECT_TRUE(result.isApprox(B, 1e-5))
@@ -42,7 +42,7 @@ TEST(PseudoInverseTest, MoorePenroseTest) {
   C << 1, 2, 3,
        4, 5, 6;
   
-  Eigen::MatrixXd C_pinv = crisp_controllers::pseudoInverseMoorePenrose(C);
+  Eigen::MatrixXd C_pinv = crisp_controllers::pseudo_inverse_moore_penrose(C);
   
   // Test Moore-Penrose conditions
   // 1. C * C_pinv * C = C
@@ -86,8 +86,8 @@ TEST(PseudoInverseTest, ZeroMatrixTest) {
   // Test with near-zero matrix
   Eigen::MatrixXd D = Eigen::MatrixXd::Zero(2, 2);
   
-  Eigen::MatrixXd D_pinv1 = crisp_controllers::pseudoInverse(D);
-  Eigen::MatrixXd D_pinv2 = crisp_controllers::pseudoInverseMoorePenrose(D);
+  Eigen::MatrixXd D_pinv1 = crisp_controllers::pseudo_inverse(D);
+  Eigen::MatrixXd D_pinv2 = crisp_controllers::pseudo_inverse_moore_penrose(D);
   
   // Both should return zero matrix
   EXPECT_TRUE(D_pinv1.isApprox(Eigen::MatrixXd::Zero(2, 2), 1e-5))

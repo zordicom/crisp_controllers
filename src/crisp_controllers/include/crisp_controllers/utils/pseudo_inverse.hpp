@@ -4,7 +4,7 @@
 
 namespace crisp_controllers {
 
-inline Eigen::MatrixXd pseudoInverse(const Eigen::MatrixXd &matrix,
+inline Eigen::MatrixXd pseudo_inverse(const Eigen::MatrixXd &matrix,
                                      double epsilon = 1e-4) {
   Eigen::JacobiSVD<Eigen::MatrixXd> svd(matrix, Eigen::ComputeFullU |
                                                     Eigen::ComputeFullV);
@@ -19,7 +19,7 @@ inline Eigen::MatrixXd pseudoInverse(const Eigen::MatrixXd &matrix,
   return svd.matrixV() * S * svd.matrixU().transpose();
 }
 
-inline Eigen::MatrixXd pseudoInverseMoorePenrose(const Eigen::MatrixXd &matrix,
+inline Eigen::MatrixXd pseudo_inverse_moore_penrose(const Eigen::MatrixXd &matrix,
                                                  double epsilon = 1e-6) {
   Eigen::JacobiSVD<Eigen::MatrixXd> svd(matrix, Eigen::ComputeFullU |
                                                     Eigen::ComputeFullV);
@@ -31,5 +31,13 @@ inline Eigen::MatrixXd pseudoInverseMoorePenrose(const Eigen::MatrixXd &matrix,
 
   return svd.matrixV() * S * svd.matrixU().transpose();
 }
+
+inline bool is_near_singular(const Eigen::MatrixXd &matrix, double epsilon = 1e-6) {
+  Eigen::JacobiSVD<Eigen::MatrixXd> svd(matrix, Eigen::ComputeFullU |
+                                                    Eigen::ComputeFullV);
+  Eigen::VectorXd singularValues = svd.singularValues();
+  return (singularValues.array() < epsilon).any();
+}
+
 
 } // namespace crisp_controllers

@@ -61,6 +61,20 @@ TEST(ExponentialMovingAverageTest, DeathTest) {
   EXPECT_THROW(exponential_moving_average(output, current, 1.5), std::invalid_argument);
 }
 
+TEST(FilterJointValuesTest, BasicFiltering) {
+  std::vector<std::string> msg_names = {"joint1", "joint2", "joint3"};
+  Eigen::VectorXd msg_values(3);
+  msg_values << 1.0, 2.0, 3.0;
+  
+  std::vector<std::string> desired_joint_names = {"joint2", "joint3"};
+  Eigen::VectorXd result = Eigen::VectorXd::Zero(2);
+
+  filterJointValues(msg_names, msg_values, desired_joint_names, result);
+  
+  EXPECT_DOUBLE_EQ(result(0), 2.0);
+  EXPECT_DOUBLE_EQ(result(1), 3.0);
+}
+
 int main(int argc, char **argv) {
   testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();

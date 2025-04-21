@@ -72,10 +72,12 @@ cartesian_impedance_controller:
       description: "Regularization value for the pseudo-inverse."
       validation:
         bounds<>: [0.000001, 0.0001]
-    use_dynamic_projector:
-      type: bool
-      default_value: true
-      description: "Whether to the dynamic nullspace projector or not."
+    projector_type:
+      type: string
+      default_value: "kinematic"
+      description: "Which type of nullspace projector should be used: kinematic, dynamic or none."
+      validation:
+        one_of<>: [["kinematic", "dynamic", "none"]]
     max_tau:
       type: double
       default_value: 5
@@ -107,6 +109,11 @@ cartesian_impedance_controller:
     type: bool
     default_value: false
     description: "Use coriolis compensation"
+
+  use_gravity_compensation:
+    type: bool
+    default_value: false
+    description: "Add use_gravity_compensation. Double check that your robot is not already doing this behind the scenes (which is the case for Franka Robotics). In this case you should leave this parameter to false!"
 
   use_local_jacobian:
     type: bool
@@ -151,7 +158,7 @@ cartesian_impedance_controller:
     target_pose:
       type: double
       default_value: 0.1
-      description: "Amount of smoothing for the target pose when using the EMA."
+      description: "Amount of smoothing for the target pose when using the EMA. The EMA is applied at each step"
       validation:
         bounds<>: [0.00001, 0.99999]
     q:
@@ -164,6 +171,13 @@ cartesian_impedance_controller:
       type: double
       default_value: 0.1
       description: "Amount of smoothing for the target pose when using the EMA."
+      validation:
+        bounds<>: [0.00001, 0.99999]
+
+    output_torque:
+      type: double
+      default_value: 0.1
+      description: "Amount of smoothing for the output torque when using the EMA."
       validation:
         bounds<>: [0.00001, 0.99999]
 

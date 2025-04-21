@@ -91,26 +91,28 @@ controller_interface::return_type CartesianImpedanceController::update(
                                   reference_frame, J);
 
   Eigen::MatrixXd J_pinv(model_.nv, 6);
-  Eigen::MatrixXd Id_nv(model_.nv, model_.nv);
+  Eigen::MatrixXd Id_nv = Eigen::MatrixXd::Identity(model_.nv, model_.nv);
 
   pinocchio::computeMinverse(model_, data_, q);
   auto Mx_inv = J * data_.Minv * J.transpose();
-  auto Mx = pseudoInverse(Mx_inv);
+  auto Mx = pseudo_inverse(Mx_inv);
   auto J_bar = data_.Minv * J.transpose() * Mx;
 
-  J_pinv = pseudoInverse(J, params_.nullspace.regularization);
+  J_pinv = pseudo_inverse(J, params_.nullspace.regularization);
 
-  Eigen::MatrixXd nullspace_projection;
-  if (params_.nullspace.use_dynamic_projector) {
+  Eigen::MatrixXd nullspace_projection(model_.nv, model_.nv);
+  if (params_.nullspace.projector_type == "dynamic") {
     nullspace_projection = Id_nv - J.transpose() * J_bar.transpose();
-  } else {
+  } else if (params_.nullspace.projector_type == "kinematic") {
     nullspace_projection = Id_nv - J_pinv * J;
+  } else if (params_.nullspace.projector_type == "none") {
+    nullspace_projection = Eigen::MatrixXd::Identity(model_.nv, model_.nv);
   }
 
   // Now we compute all terms of the control law
   Eigen::VectorXd tau_task(model_.nv), tau_d(model_.nv),
       tau_secondary(model_.nv), tau_nullspace(model_.nv),
-      tau_friction(model_.nv), tau_coriolis(model_.nv),
+      tau_friction(model_.nv), tau_coriolis(model_.nv), tau_gravity(model_.nv),
       tau_joint_limits(model_.nv), tau_random_noise(model_.nv);
 
   if (params_.use_operational_space) {
@@ -128,6 +130,7 @@ controller_interface::return_type CartesianImpedanceController::update(
   tau_secondary << nullspace_stiffness * (q_ref - q) + nullspace_damping * (dq_ref - dq);
 
   tau_nullspace << nullspace_projection * tau_secondary;
+  tau_nullspace = tau_nullspace.cwiseMin(params_.nullspace.max_tau).cwiseMax(-params_.nullspace.max_tau);
 
   tau_friction = params_.use_friction ? get_friction(dq)
                                       : Eigen::VectorXd::Zero(model_.nv);
@@ -142,12 +145,16 @@ controller_interface::return_type CartesianImpedanceController::update(
     tau_coriolis = Eigen::VectorXd::Zero(model_.nv);
   }
 
-  tau_d << tau_task + tau_nullspace + tau_friction + tau_coriolis +
+  tau_gravity = params_.use_gravity_compensation ? pinocchio::computeGeneralizedGravity(model_, data_, q)
+                                                 : Eigen::VectorXd::Zero(model_.nv);
+
+  tau_d << tau_task + tau_nullspace + tau_friction + tau_coriolis + tau_gravity +
                tau_joint_limits + tau_random_noise;
 
   if (params_.limit_torques) {
     tau_d = saturateTorqueRate(tau_d, tau_previous, params_.max_delta_tau);
   } 
+  tau_d = exponential_moving_average(tau_d, tau_previous, params_.filter.output_torque);
 
   if (not params_.stop_commands) {
     for (size_t i = 0; i < num_joints; ++i) {
@@ -184,6 +191,10 @@ controller_interface::return_type CartesianImpedanceController::update(
                                   1000, "error: " << error.transpose());
       RCLCPP_INFO_STREAM_THROTTLE(get_node()->get_logger(), *get_node()->get_clock(),
                                   1000, "max_delta: " << max_delta_.transpose());
+      RCLCPP_INFO_STREAM_THROTTLE(get_node()->get_logger(), *get_node()->get_clock(),
+                                  1000, "q_ref: " << q_ref.transpose());
+      RCLCPP_INFO_STREAM_THROTTLE(get_node()->get_logger(), *get_node()->get_clock(),
+                                  1000, "dq_ref: " << dq_ref.transpose());
     }
 
     if (params_.log.controller_parameters) {
@@ -231,6 +242,8 @@ controller_interface::return_type CartesianImpedanceController::update(
                                   1000, "Mx: " << Mx);
       RCLCPP_INFO_STREAM_THROTTLE(get_node()->get_logger(), *get_node()->get_clock(),
                                   1000, "Minv: " << data_.Minv);
+      RCLCPP_INFO_STREAM_THROTTLE(get_node()->get_logger(), *get_node()->get_clock(),
+                                  1000, "nullspace projector: " << nullspace_projection);
     }
 
     if (params_.log.timing) {
@@ -382,15 +395,12 @@ void CartesianImpedanceController::target_pose_callback_(
 
 void CartesianImpedanceController::target_joint_callback_(
     const sensor_msgs::msg::JointState::SharedPtr msg) {
-  for (size_t i = 0; i < msg->position.size(); i++) {
-    if (i < params_.joints.size()) {
-      q_ref[i] = msg->position[i];
-    }
+  // We only pick the joits that should be controlled in the nullspace
+  if (msg->position.size()) {
+    filterJointValues(msg->name, msg->position, params_.joints, q_ref);
   }
-  for (size_t i = 0; i < msg->velocity.size(); i++) {
-    if (i < params_.joints.size()) {
-      dq_ref[i] = msg->velocity[i];
-    }
+  if (msg->velocity.size()) {
+    filterJointValues(msg->name, msg->velocity, params_.joints, dq_ref);
   }
 }
 
