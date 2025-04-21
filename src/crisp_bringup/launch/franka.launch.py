@@ -49,21 +49,26 @@ def robot_description_dependent_nodes_spawner(
     load_gripper_str = context.perform_substitution(load_gripper)
 
     franka_xacro_filepath = os.path.join(
-        get_package_share_directory("franka_description"),
-        "robots",
-        arm_id_str,
-        arm_id_str + ".urdf.xacro",
+        get_package_share_directory("crisp_bringup"),
+        "config",
+        "fr3",
+        "fr3_single.urdf.xacro",
     )
     robot_description = xacro.process_file(
         franka_xacro_filepath,
         mappings={
-            "ros2_control": "true",
             "arm_id": arm_id_str,
             "robot_ip": robot_ip_str,
             "hand": load_gripper_str,
             "use_fake_hardware": use_fake_hardware_str,
             "fake_sensor_commands": fake_sensor_commands_str,
             "arm_prefix": arm_prefix_str,
+            "mujoco_model": os.path.join(
+                get_package_share_directory("crisp_bringup"),
+                "config",
+                "fr3",
+                "scene.xml",
+            )
         },
     ).toprettyxml(indent="  ")
 
@@ -85,8 +90,6 @@ def robot_description_dependent_nodes_spawner(
             parameters=[
                 franka_controllers,
                 {"robot_description": robot_description},
-                {"arm_id": arm_id},
-                {"load_gripper": load_gripper},
             ],
             remappings=[("joint_states", "franka/joint_states")],
             output={
