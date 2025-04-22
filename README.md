@@ -11,7 +11,10 @@ Check the [docs](https://danielsanjosepro.github.io/crisp_controllers/)!
 |:--:|:--:|
 | *Robot following a moving target, while base joint follows a sine curve.* | *Real robot following a target and being disturbed (contact) + null space control demonstration* |
 
-
+<p align="center">
+<img src="https://github.com/user-attachments/assets/d64c1416-12f0-44ee-821f-e91d0bf6434d" />
+<p align="center"><i>Demonstration using a cartesian controller teleoperated using Vicon tracking system (Speed x4)</i></p>
+</p>
 
 ## Features
 
