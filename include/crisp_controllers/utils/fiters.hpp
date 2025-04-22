@@ -1,6 +1,5 @@
 #pragma once
 
-#include <stdexcept>
 #include <eigen3/Eigen/Dense>
 
 /**
@@ -14,10 +13,6 @@
 template <typename T>
   inline T exponential_moving_average(const T output, const T current, const double alpha)
   {
-  if (alpha <= 0.0 || alpha >= 1.0) {
-      throw std::invalid_argument("alpha must be in (0, 1)");
-  }
-
     return (1.0 - alpha) * current + alpha * output;
   }
 

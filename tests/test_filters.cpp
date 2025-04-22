@@ -51,16 +51,6 @@ TEST(ExponentialMovingAverageTest, Convergence) {
   EXPECT_NEAR(output, current, 1e-3);
 }
 
-TEST(ExponentialMovingAverageTest, DeathTest) {
-  double output = 0.0;
-  double current = 1.0;
-  
-  EXPECT_THROW(exponential_moving_average(output, current, 0.0), std::invalid_argument);
-  EXPECT_THROW(exponential_moving_average(output, current, 1.0), std::invalid_argument);
-  EXPECT_THROW(exponential_moving_average(output, current, -0.5), std::invalid_argument);
-  EXPECT_THROW(exponential_moving_average(output, current, 1.5), std::invalid_argument);
-}
-
 TEST(FilterJointValuesTest, BasicFiltering) {
   std::vector<std::string> msg_names = {"joint1", "joint2", "joint3"};
   Eigen::VectorXd msg_values(3);

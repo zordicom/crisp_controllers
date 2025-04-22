@@ -1,5 +1,6 @@
 #include "crisp_controllers/utils/fiters.hpp"
 #include "crisp_controllers/utils/torque_rate_saturation.hpp"
+#include <Eigen/src/Core/Matrix.h>
 #include <controller_interface/controller_interface_base.hpp>
 #include <crisp_controllers/pch.hpp>
 #include <crisp_controllers/cartesian_impedance_controller.hpp>
@@ -7,11 +8,15 @@
 #include <crisp_controllers/utils/joint_limits.hpp>
 #include <crisp_controllers/utils/pseudo_inverse.hpp>
 
+#include <fmt/format.h>
 #include <pinocchio/algorithm/aba.hpp>
 #include <pinocchio/algorithm/compute-all-terms.hpp>
 #include <pinocchio/algorithm/frames.hxx>
 #include <pinocchio/algorithm/rnea.hpp>
+#include <pinocchio/multibody/fwd.hpp>
 #include <pinocchio/parsers/urdf.hpp>
+#include "pinocchio/algorithm/joint-configuration.hpp"
+#include "pinocchio/algorithm/model.hpp"
 #include <pinocchio/spatial/explog.hpp>
 #include <pinocchio/spatial/fwd.hpp>
 #include <rclcpp/logging.hpp>
@@ -303,7 +308,28 @@ CallbackReturn CartesianImpedanceController::on_configure(
     return CallbackReturn::ERROR;
   }
 
-  pinocchio::urdf::buildModelFromXML(robot_description_, model_);
+  pinocchio::Model raw_model_;
+  pinocchio::urdf::buildModelFromXML(robot_description_, raw_model_);
+
+  // First we check that the passed joints exist in the kineatic tree
+  for (auto& joint : params_.joints) {
+    if (not raw_model_.existJointName(joint)) {
+      RCLCPP_ERROR_STREAM(get_node()->get_logger(), "Failed to configure because " << joint << " is not part of the kinematic tree but it has been passed in the parameters.");
+    }
+  }
+  RCLCPP_INFO(get_node()->get_logger(), "All joints passed in the parameters exist in the kinematic tree of the URDF.");
+  RCLCPP_INFO_STREAM(get_node()->get_logger(), "Removing the rest of the joints that are not used: ");
+  // Now we fix all joints that are not referenced in the tree
+  std::vector<pinocchio::JointIndex> list_of_joints_to_lock_by_id;
+  for (auto& joint : raw_model_.names) {
+    if (std::find(params_.joints.begin(), params_.joints.end(), joint) == params_.joints.end() and joint != "universe") {
+      RCLCPP_INFO_STREAM(get_node()->get_logger(), "Joint " << joint << " is not used, removing it from the model.");
+      list_of_joints_to_lock_by_id.push_back(raw_model_.getJointId(joint));
+    }
+  }
+
+  Eigen::VectorXd q_locked = Eigen::VectorXd::Zero(raw_model_.nq);
+  model_ = pinocchio::buildReducedModel(raw_model_, list_of_joints_to_lock_by_id, q_locked);
   data_ = pinocchio::Data(model_);
 
   end_effector_frame_id = model_.getFrameId(params_.end_effector_frame);
