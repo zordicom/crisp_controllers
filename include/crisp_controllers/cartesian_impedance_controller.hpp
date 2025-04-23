@@ -17,6 +17,8 @@
 
 #include <cartesian_impedance_controller_parameters.hpp>
 #include <sensor_msgs/msg/joint_state.hpp>
+#include <string>
+#include <unordered_set>
 
 using CallbackReturn =
     rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn;
@@ -142,8 +144,13 @@ private:
   /** @brief Nullspace damping matrix for posture control */
   Eigen::MatrixXd nullspace_damping;
 
-  /** @brief Current joint positions */
+  /** @brief Current joint positions with dimension nv. */
   Eigen::VectorXd q;
+  /** @brief Current joint positions with dimension nq.
+   This is size might be different than the actuated dimension of the joint type is different! 
+   Check https://github.com/stack-of-tasks/pinocchio/issues/1127
+  */
+  Eigen::VectorXd q_pin;
   /** @brief Current joint velocities */
   Eigen::VectorXd dq;
   /** @brief Current measured torque */
@@ -160,6 +167,12 @@ private:
   pinocchio::SE3 end_effector_pose;
   /** @brief End effector Jacobian matrix */
   pinocchio::Data::Matrix6x J;
+
+  /** @brief Allowed type of joints **/
+  const std::unordered_set<std::basic_string<char>> allowed_joint_types = {"JointModelRZ", "JointModelRUBX", "JointModelRUBY", "JointModelRUBZ"};
+  /** @brief Continous joint types that should be considered separetly. **/
+  const std::unordered_set<std::basic_string<char>> continous_joint_types =
+    {"JointModelRUBX", "JointModelRUBY", "JointModelRUBZ"};
 
 };
 

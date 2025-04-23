@@ -1,6 +1,7 @@
 #include "crisp_controllers/utils/fiters.hpp"
 #include "crisp_controllers/utils/torque_rate_saturation.hpp"
 #include <Eigen/src/Core/Matrix.h>
+#include <cmath>
 #include <controller_interface/controller_interface_base.hpp>
 #include <crisp_controllers/pch.hpp>
 #include <crisp_controllers/cartesian_impedance_controller.hpp>
@@ -55,12 +56,25 @@ controller_interface::return_type CartesianImpedanceController::update(
 
   size_t num_joints = params_.joints.size();
   for (size_t i = 0; i < num_joints; i++) {
+
+    // TODO: later it might be better to get this thing prepared in the configuration part (not in the control loop)
+    auto joint_name = params_.joints[i];
+    auto joint_id = model_.getJointId(joint_name);  // pinocchio joind id might be different
+    auto joint = model_.joints[joint_id];
+
     q[i] = exponential_moving_average(q[i], state_interfaces_[i].get_value(), params_.filter.q);
+    if (joint.shortname() == "JointModelRZ") {  // simple revolute joint case
+      q_pin[joint.idx_q()] = q[i];
+    }
+    else if (continous_joint_types.count(joint.shortname())) {  // Then we are handling a continous joint that is SO(2)
+      q_pin[joint.idx_q()] = std::cos(q[i]);
+      q_pin[joint.idx_q()+1] = std::sin(q[i]);
+    }
     dq[i] = exponential_moving_average(dq[i], state_interfaces_[num_joints + i].get_value(), params_.filter.dq);
     tau[i] = state_interfaces_[2 * num_joints + i].get_value();
   }
 
-  pinocchio::forwardKinematics(model_, data_, q, dq);
+  pinocchio::forwardKinematics(model_, data_, q_pin, dq);
   pinocchio::updateFramePlacements(model_, data_);
 
   pinocchio::SE3 new_target_pose = pinocchio::SE3(target_orientation_.toRotationMatrix(), target_position_);
@@ -92,13 +106,13 @@ controller_interface::return_type CartesianImpedanceController::update(
   J.setZero();
   auto reference_frame = params_.use_local_jacobian ? pinocchio::ReferenceFrame::LOCAL
                                                     : pinocchio::ReferenceFrame::WORLD;
-  pinocchio::computeFrameJacobian(model_, data_, q, end_effector_frame_id,
+  pinocchio::computeFrameJacobian(model_, data_, q_pin, end_effector_frame_id,
                                   reference_frame, J);
 
   Eigen::MatrixXd J_pinv(model_.nv, 6);
   Eigen::MatrixXd Id_nv = Eigen::MatrixXd::Identity(model_.nv, model_.nv);
 
-  pinocchio::computeMinverse(model_, data_, q);
+  pinocchio::computeMinverse(model_, data_, q_pin);
   auto Mx_inv = J * data_.Minv * J.transpose();
   auto Mx = pseudo_inverse(Mx_inv);
   auto J_bar = data_.Minv * J.transpose() * Mx;
@@ -130,7 +144,12 @@ controller_interface::return_type CartesianImpedanceController::update(
     tau_task << J.transpose() * (stiffness * error - damping * (J * dq));
   }
 
-  tau_joint_limits = get_joint_limit_torque(q, model_.lowerPositionLimit, model_.upperPositionLimit);
+  if (model_.nq != model_.nv) {
+    // TODO: Then we have some continouts joints, not being handled for now
+    tau_joint_limits = Eigen::VectorXd::Zero(model_.nv);
+  } else {
+    tau_joint_limits = get_joint_limit_torque(q, model_.lowerPositionLimit, model_.upperPositionLimit);
+  }
 
   tau_secondary << nullspace_stiffness * (q_ref - q) + nullspace_damping * (dq_ref - dq);
 
@@ -144,13 +163,13 @@ controller_interface::return_type CartesianImpedanceController::update(
                                                     : Eigen::VectorXd::Zero(model_.nv);
 
   if (params_.use_coriolis_compensation) {
-    pinocchio::computeAllTerms(model_, data_, q, dq);
-    tau_coriolis = pinocchio::computeCoriolisMatrix(model_, data_, q, dq) * dq;
+    pinocchio::computeAllTerms(model_, data_, q_pin, dq);
+    tau_coriolis = pinocchio::computeCoriolisMatrix(model_, data_, q_pin, dq) * dq;
   } else {
     tau_coriolis = Eigen::VectorXd::Zero(model_.nv);
   }
 
-  tau_gravity = params_.use_gravity_compensation ? pinocchio::computeGeneralizedGravity(model_, data_, q)
+  tau_gravity = params_.use_gravity_compensation ? pinocchio::computeGeneralizedGravity(model_, data_, q_pin)
                                                  : Eigen::VectorXd::Zero(model_.nv);
 
   tau_d << tau_task + tau_nullspace + tau_friction + tau_coriolis + tau_gravity +
@@ -183,6 +202,8 @@ controller_interface::return_type CartesianImpedanceController::update(
       /*                            1000, "end_effector_rot" << end_effector_pose.rotation());*/
       RCLCPP_INFO_STREAM_THROTTLE(get_node()->get_logger(), *get_node()->get_clock(),
                                   1000, "q: " << q.transpose());
+      RCLCPP_INFO_STREAM_THROTTLE(get_node()->get_logger(), *get_node()->get_clock(),
+                                  1000, "q_pin: " << q_pin.transpose());
       RCLCPP_INFO_STREAM_THROTTLE(get_node()->get_logger(), *get_node()->get_clock(),
                                   1000, "dq: " << dq.transpose());
       RCLCPP_INFO_STREAM_THROTTLE(get_node()->get_logger(), *get_node()->get_clock(),
@@ -311,10 +332,23 @@ CallbackReturn CartesianImpedanceController::on_configure(
   pinocchio::Model raw_model_;
   pinocchio::urdf::buildModelFromXML(robot_description_, raw_model_);
 
+  RCLCPP_INFO(get_node()->get_logger(), "Checking available joints in model:"); 
+  for (int joint_id = 0; joint_id < raw_model_.njoints; joint_id++) {
+      RCLCPP_INFO_STREAM(get_node()->get_logger(), "Joint " << joint_id << " with name " << raw_model_.names[joint_id] << " is of type " << raw_model_.joints[joint_id].shortname());
+    if (raw_model_.names[joint_id] == "universe") {
+      continue;
+    }
+      if (not allowed_joint_types.count(raw_model_.joints[joint_id].shortname())) {
+        RCLCPP_ERROR_STREAM(get_node()->get_logger(), "This joint type is unsupported, only revolute/continous like joints can be used.");
+        return CallbackReturn::ERROR;
+      }
+  }
+
   // First we check that the passed joints exist in the kineatic tree
   for (auto& joint : params_.joints) {
     if (not raw_model_.existJointName(joint)) {
       RCLCPP_ERROR_STREAM(get_node()->get_logger(), "Failed to configure because " << joint << " is not part of the kinematic tree but it has been passed in the parameters.");
+      return CallbackReturn::ERROR;
     }
   }
   RCLCPP_INFO(get_node()->get_logger(), "All joints passed in the parameters exist in the kinematic tree of the URDF.");
@@ -333,9 +367,10 @@ CallbackReturn CartesianImpedanceController::on_configure(
   data_ = pinocchio::Data(model_);
 
   end_effector_frame_id = model_.getFrameId(params_.end_effector_frame);
-  q = Eigen::VectorXd::Zero(model_.nq);
+  q = Eigen::VectorXd::Zero(model_.nv);
+  q_pin = Eigen::VectorXd::Zero(model_.nq);
   dq = Eigen::VectorXd::Zero(model_.nv);
-  q_ref = Eigen::VectorXd::Zero(model_.nq);
+  q_ref = Eigen::VectorXd::Zero(model_.nv);
   dq_ref = Eigen::VectorXd::Zero(model_.nv);
   tau = Eigen::VectorXd::Zero(model_.nv);
   tau_previous = Eigen::VectorXd::Zero(model_.nv);
@@ -381,7 +416,20 @@ CallbackReturn CartesianImpedanceController::on_activate(
   auto num_joints = params_.joints.size();
   for (size_t i = 0; i < num_joints; i++) {
 
+    // TODO: later it might be better to get this thing prepared in the configuration part (not in the control loop)
+    auto joint_name = params_.joints[i];
+    auto joint_id = model_.getJointId(joint_name);  // pinocchio joind id might be different
+    auto joint = model_.joints[joint_id];
+
     q[i] = state_interfaces_[i].get_value();
+    if (joint.shortname() == "JointModelRZ") {  // simple revolute joint case
+      q_pin[joint.idx_q()] = q[i];
+    }
+    else if (continous_joint_types.count(joint.shortname())) {  // Then we are handling a continous joint that is SO(2)
+      q_pin[joint.idx_q()] = std::cos(q[i]);
+      q_pin[joint.idx_q()+1] = std::sin(q[i]);
+    }
+
     q_ref[i] = state_interfaces_[i].get_value();
 
     dq[i] = state_interfaces_[num_joints + i].get_value();
@@ -389,7 +437,7 @@ CallbackReturn CartesianImpedanceController::on_activate(
 
   }
 
-  pinocchio::forwardKinematics(model_, data_, q, dq);
+  pinocchio::forwardKinematics(model_, data_, q_pin, dq);
   pinocchio::updateFramePlacements(model_, data_);
 
   end_effector_pose = data_.oMf[end_effector_frame_id];
