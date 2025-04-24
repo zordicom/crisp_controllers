@@ -64,7 +64,7 @@ controller_interface::return_type CartesianImpedanceController::update(
 
     q[i] = exponential_moving_average(q[i], state_interfaces_[i].get_value(), params_.filter.q);
     if (joint.shortname() == "JointModelRZ") {  // simple revolute joint case
-      q_pin[joint.idx_q()] = q[i];
+      q_pin[i] = q[i];
     }
     else if (continous_joint_types.count(joint.shortname())) {  // Then we are handling a continous joint that is SO(2)
       q_pin[joint.idx_q()] = std::cos(q[i]);
@@ -335,13 +335,6 @@ CallbackReturn CartesianImpedanceController::on_configure(
   RCLCPP_INFO(get_node()->get_logger(), "Checking available joints in model:"); 
   for (int joint_id = 0; joint_id < raw_model_.njoints; joint_id++) {
       RCLCPP_INFO_STREAM(get_node()->get_logger(), "Joint " << joint_id << " with name " << raw_model_.names[joint_id] << " is of type " << raw_model_.joints[joint_id].shortname());
-    if (raw_model_.names[joint_id] == "universe") {
-      continue;
-    }
-      if (not allowed_joint_types.count(raw_model_.joints[joint_id].shortname())) {
-        RCLCPP_ERROR_STREAM(get_node()->get_logger(), "This joint type is unsupported, only revolute/continous like joints can be used.");
-        return CallbackReturn::ERROR;
-      }
   }
 
   // First we check that the passed joints exist in the kineatic tree
@@ -365,6 +358,16 @@ CallbackReturn CartesianImpedanceController::on_configure(
   Eigen::VectorXd q_locked = Eigen::VectorXd::Zero(raw_model_.nq);
   model_ = pinocchio::buildReducedModel(raw_model_, list_of_joints_to_lock_by_id, q_locked);
   data_ = pinocchio::Data(model_);
+
+  for (int joint_id = 0; joint_id < model_.njoints; joint_id++) {
+    if (model_.names[joint_id] == "universe") {
+      continue;
+    }
+      if (not allowed_joint_types.count(model_.joints[joint_id].shortname())) {
+        RCLCPP_ERROR_STREAM(get_node()->get_logger(), "Joint type "  << model_.joints[joint_id].shortname() << " is unsupported (" << model_.names[joint_id] << "), only revolute/continous like joints can be used.");
+        return CallbackReturn::ERROR;
+      }
+  }
 
   end_effector_frame_id = model_.getFrameId(params_.end_effector_frame);
   q = Eigen::VectorXd::Zero(model_.nv);
@@ -423,7 +426,7 @@ CallbackReturn CartesianImpedanceController::on_activate(
 
     q[i] = state_interfaces_[i].get_value();
     if (joint.shortname() == "JointModelRZ") {  // simple revolute joint case
-      q_pin[joint.idx_q()] = q[i];
+      q_pin[i] = q[i];
     }
     else if (continous_joint_types.count(joint.shortname())) {  // Then we are handling a continous joint that is SO(2)
       q_pin[joint.idx_q()] = std::cos(q[i]);
