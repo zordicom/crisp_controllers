@@ -26,8 +26,6 @@ controller_interface::InterfaceConfiguration
 PoseBroadcaster::state_interface_configuration() const {
   controller_interface::InterfaceConfiguration config;
   config.type = controller_interface::interface_configuration_type::INDIVIDUAL;
-  // The first num_joints_ are the joint positions, the next num_joints_ are the
-  // joint velocities, and the last num_joints_ are the joint torques
   for (const auto &joint_name : params_.joints) {
     config.names.push_back(joint_name + "/position");
   }
