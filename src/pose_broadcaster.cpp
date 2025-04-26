@@ -1,3 +1,4 @@
+#include <Eigen/src/Core/Matrix.h>
 #include <geometry_msgs/msg/detail/pose_stamped__struct.hpp>
 #include <crisp_controllers/pose_broadcaster.hpp>
 
@@ -8,6 +9,7 @@
 #include <memory>
 #include <pinocchio/algorithm/frames.hxx>
 #include <pinocchio/algorithm/kinematics.hpp>
+#include <pinocchio/algorithm/model.hpp>
 #include <pinocchio/parsers/urdf.hpp>
 #include <rclcpp/logging.hpp>
 
@@ -36,11 +38,26 @@ controller_interface::return_type
 PoseBroadcaster::update(const rclcpp::Time &time,
                                    const rclcpp::Duration & /*period*/) {
 
-  for (size_t i = 0; i < params_.joints.size(); i++) {
+  size_t num_joints = params_.joints.size();
+  Eigen::VectorXd q_pin = Eigen::VectorXd::Zero(model_.nq);
+
+  for (size_t i = 0; i < num_joints; i++) {
+
+    auto joint_name = params_.joints[i];
+    auto joint_id = model_.getJointId(joint_name);
+    auto joint = model_.joints[joint_id];
+
     q[i] = state_interfaces_[i].get_value();
+    if (joint.shortname() == "JointModelRZ") {  // simple revolute joint case
+      q_pin[joint.idx_q()] = q[i];
+    }
+    else if (continous_joint_types.count(joint.shortname())) {  // Then we are handling a continous joint that is SO(2)
+      q_pin[joint.idx_q()] = std::cos(q[i]);
+      q_pin[joint.idx_q()+1] = std::sin(q[i]);
+    }
   }
 
-  pinocchio::forwardKinematics(model_, data_, q);
+  pinocchio::forwardKinematics(model_, data_, q_pin);
   pinocchio::updateFramePlacements(model_, data_);
 
   auto current_pose = data_.oMf[end_effector_frame_id];
@@ -92,10 +109,48 @@ CallbackReturn PoseBroadcaster::on_configure(
     return CallbackReturn::ERROR;
   }
 
-  pinocchio::urdf::buildModelFromXML(robot_description_, model_);
+  pinocchio::Model raw_model_;
+  pinocchio::urdf::buildModelFromXML(robot_description_, raw_model_);
+
+  RCLCPP_INFO(get_node()->get_logger(), "Checking available joints in model:"); 
+  for (int joint_id = 0; joint_id < raw_model_.njoints; joint_id++) {
+      RCLCPP_INFO_STREAM(get_node()->get_logger(), "Joint " << joint_id << " with name " << raw_model_.names[joint_id] << " is of type " << raw_model_.joints[joint_id].shortname());
+  }
+
+  // First we check that the passed joints exist in the kineatic tree
+  for (auto& joint : params_.joints) {
+    if (not raw_model_.existJointName(joint)) {
+      RCLCPP_ERROR_STREAM(get_node()->get_logger(), "Failed to configure because " << joint << " is not part of the kinematic tree but it has been passed in the parameters.");
+      return CallbackReturn::ERROR;
+    }
+  }
+  RCLCPP_INFO(get_node()->get_logger(), "All joints passed in the parameters exist in the kinematic tree of the URDF.");
+  RCLCPP_INFO_STREAM(get_node()->get_logger(), "Removing the rest of the joints that are not used: ");
+  // Now we fix all joints that are not referenced in the tree
+  std::vector<pinocchio::JointIndex> list_of_joints_to_lock_by_id;
+  for (auto& joint : raw_model_.names) {
+    if (std::find(params_.joints.begin(), params_.joints.end(), joint) == params_.joints.end() and joint != "universe") {
+      RCLCPP_INFO_STREAM(get_node()->get_logger(), "Joint " << joint << " is not used, removing it from the model.");
+      list_of_joints_to_lock_by_id.push_back(raw_model_.getJointId(joint));
+    }
+  }
+
+  Eigen::VectorXd q_locked = Eigen::VectorXd::Zero(raw_model_.nq);
+  model_ = pinocchio::buildReducedModel(raw_model_, list_of_joints_to_lock_by_id, q_locked);
   data_ = pinocchio::Data(model_);
+
+  for (int joint_id = 0; joint_id < model_.njoints; joint_id++) {
+    if (model_.names[joint_id] == "universe") {
+      continue;
+    }
+      if (not allowed_joint_types.count(model_.joints[joint_id].shortname())) {
+        RCLCPP_ERROR_STREAM(get_node()->get_logger(), "Joint type "  << model_.joints[joint_id].shortname() << " is unsupported (" << model_.names[joint_id] << "), only revolute/continous like joints can be used.");
+        return CallbackReturn::ERROR;
+      }
+  }
+
   end_effector_frame_id = model_.getFrameId(params_.end_effector_frame);
-  q = Eigen::VectorXd::Zero(model_.nq);
+  q = Eigen::VectorXd::Zero(model_.nv);
 
   pose_publisher_ = get_node()->create_publisher<geometry_msgs::msg::PoseStamped>(
           "current_pose", rclcpp::SystemDefaultsQoS());

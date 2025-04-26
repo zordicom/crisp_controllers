@@ -64,7 +64,7 @@ controller_interface::return_type CartesianImpedanceController::update(
 
     q[i] = exponential_moving_average(q[i], state_interfaces_[i].get_value(), params_.filter.q);
     if (joint.shortname() == "JointModelRZ") {  // simple revolute joint case
-      q_pin[i] = q[i];
+      q_pin[joint.idx_q()] = q[i];
     }
     else if (continous_joint_types.count(joint.shortname())) {  // Then we are handling a continous joint that is SO(2)
       q_pin[joint.idx_q()] = std::cos(q[i]);
@@ -112,15 +112,15 @@ controller_interface::return_type CartesianImpedanceController::update(
   Eigen::MatrixXd J_pinv(model_.nv, 6);
   Eigen::MatrixXd Id_nv = Eigen::MatrixXd::Identity(model_.nv, model_.nv);
 
-  pinocchio::computeMinverse(model_, data_, q_pin);
-  auto Mx_inv = J * data_.Minv * J.transpose();
-  auto Mx = pseudo_inverse(Mx_inv);
-  auto J_bar = data_.Minv * J.transpose() * Mx;
 
   J_pinv = pseudo_inverse(J, params_.nullspace.regularization);
 
   Eigen::MatrixXd nullspace_projection(model_.nv, model_.nv);
   if (params_.nullspace.projector_type == "dynamic") {
+    pinocchio::computeMinverse(model_, data_, q_pin);
+    auto Mx_inv = J * data_.Minv * J.transpose();
+    auto Mx = pseudo_inverse(Mx_inv);
+    auto J_bar = data_.Minv * J.transpose() * Mx;
     nullspace_projection = Id_nv - J.transpose() * J_bar.transpose();
   } else if (params_.nullspace.projector_type == "kinematic") {
     nullspace_projection = Id_nv - J_pinv * J;
@@ -136,8 +136,9 @@ controller_interface::return_type CartesianImpedanceController::update(
 
   if (params_.use_operational_space) {
 
-    /*RCLCPP_INFO_STREAM_THROTTLE(get_node()->get_logger(), *get_node()->get_clock(),*/
-    /*                           5000, "Using OSC");*/
+    pinocchio::computeMinverse(model_, data_, q_pin);
+    auto Mx_inv = J * data_.Minv * J.transpose();
+    auto Mx = pseudo_inverse(Mx_inv);
 
     tau_task << J.transpose() * Mx * (stiffness * error - damping * (J * dq));
   } else {
@@ -264,8 +265,8 @@ controller_interface::return_type CartesianImpedanceController::update(
     if (params_.log.dynamic_params) {
       RCLCPP_INFO_STREAM_THROTTLE(get_node()->get_logger(), *get_node()->get_clock(),
                                   1000, "M: " << data_.M);
-      RCLCPP_INFO_STREAM_THROTTLE(get_node()->get_logger(), *get_node()->get_clock(),
-                                  1000, "Mx: " << Mx);
+      /*RCLCPP_INFO_STREAM_THROTTLE(get_node()->get_logger(), *get_node()->get_clock(),*/
+      /*                            1000, "Mx: " << Mx);*/
       RCLCPP_INFO_STREAM_THROTTLE(get_node()->get_logger(), *get_node()->get_clock(),
                                   1000, "Minv: " << data_.Minv);
       RCLCPP_INFO_STREAM_THROTTLE(get_node()->get_logger(), *get_node()->get_clock(),
@@ -426,7 +427,7 @@ CallbackReturn CartesianImpedanceController::on_activate(
 
     q[i] = state_interfaces_[i].get_value();
     if (joint.shortname() == "JointModelRZ") {  // simple revolute joint case
-      q_pin[i] = q[i];
+      q_pin[joint.idx_q()] = q[i];
     }
     else if (continous_joint_types.count(joint.shortname())) {  // Then we are handling a continous joint that is SO(2)
       q_pin[joint.idx_q()] = std::cos(q[i]);
