@@ -1,5 +1,6 @@
 #include "crisp_controllers/utils/fiters.hpp"
 #include "crisp_controllers/utils/torque_rate_saturation.hpp"
+#include <Eigen/src/Core/Map.h>
 #include <Eigen/src/Core/Matrix.h>
 #include <cmath>
 #include <controller_interface/controller_interface_base.hpp>
@@ -295,18 +296,6 @@ CallbackReturn CartesianImpedanceController::on_init() {
   params_listener_->refresh_dynamic_parameters();
   params_ = params_listener_->get_params();
 
-  pose_sub_ = get_node()->create_subscription<geometry_msgs::msg::PoseStamped>(
-      "target_pose", rclcpp::QoS(1),
-      std::bind(&CartesianImpedanceController::target_pose_callback_,
-                this, std::placeholders::_1));
-
-  joint_sub_ = get_node()->create_subscription<sensor_msgs::msg::JointState>(
-      "target_joint", rclcpp::QoS(1),
-      std::bind(&CartesianImpedanceController::target_joint_callback_,
-                this, std::placeholders::_1));
-
-  target_position_ = Eigen::Vector3d::Zero();
-  target_orientation_ = Eigen::Quaterniond::Identity();
 
   return CallbackReturn::SUCCESS;
 }
@@ -384,6 +373,19 @@ CallbackReturn CartesianImpedanceController::on_configure(
   nullspace_damping = Eigen::MatrixXd::Zero(model_.nv, model_.nv);
 
   setStiffnessAndDamping();
+
+  pose_sub_ = get_node()->create_subscription<geometry_msgs::msg::PoseStamped>(
+      "target_pose", rclcpp::QoS(1),
+      std::bind(&CartesianImpedanceController::target_pose_callback_,
+                this, std::placeholders::_1));
+
+  joint_sub_ = get_node()->create_subscription<sensor_msgs::msg::JointState>(
+      "target_joint", rclcpp::QoS(1),
+      std::bind(&CartesianImpedanceController::target_joint_callback_,
+                this, std::placeholders::_1));
+
+  target_position_ = Eigen::Vector3d::Zero();
+  target_orientation_ = Eigen::Quaterniond::Identity();
 
   RCLCPP_INFO(get_node()->get_logger(), "State interfaces set up.");
 
@@ -475,10 +477,16 @@ void CartesianImpedanceController::target_joint_callback_(
     const sensor_msgs::msg::JointState::SharedPtr msg) {
   // We only pick the joits that should be controlled in the nullspace
   if (msg->position.size()) {
-    filterJointValues(msg->name, msg->position, params_.joints, q_ref);
+    for (size_t i = 0; i < msg->position.size(); ++i) {
+      q_ref[i] = msg->position[i];
+    }
+    /*filterJointValues(msg->name, msg->position, params_.joints, q_ref);*/
   }
   if (msg->velocity.size()) {
-    filterJointValues(msg->name, msg->velocity, params_.joints, dq_ref);
+    for (size_t i = 0; i < msg->position.size(); ++i) {
+      dq_ref[i] = msg->velocity[i];
+    }
+    /*filterJointValues(msg->name, msg->velocity, params_.joints, dq_ref);*/
   }
 }
 

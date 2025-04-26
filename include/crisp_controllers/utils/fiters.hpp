@@ -37,6 +37,9 @@ void filterJointValues(
     }
 
     for (size_t i = 0; i < msg_names.size(); ++i) {
+        if (msg_names[i].empty() || msg_names[i].size() > 1000) {
+            continue;
+        }
         auto it = name_to_index.find(msg_names[i]);
         if (it != name_to_index.end() && i < msg_values.size()) {
             output(it->second) = msg_values[i];
