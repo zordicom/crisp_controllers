@@ -7,9 +7,10 @@
 Collection of C++ controllers for torque-based control for manipulators in ROS2. Tested on the Franka Robotics FR3 Robot.
 Check the [docs](https://danielsanjosepro.github.io/crisp_controllers/)!
 
-| ![Figure 1](https://github.com/user-attachments/assets/5b12bd87-7880-4125-89ba-c3a682a938ff) | ![franka_eight_reduced](https://github.com/user-attachments/assets/5a53a4c4-4679-4ae0-a12d-7dbcd0dbedb3) ![franka_ns_reduced](https://github.com/user-attachments/assets/65fdf8af-101d-4b04-8388-6f933328cd8c) |
+| ![Figure 1](https://github.com/user-attachments/assets/5b12bd87-7880-4125-89ba-c3a682a938ff) ![kinova](https://github.com/user-attachments/assets/18b0dda6-c9aa-4753-ac5b-004e64d3c9a3) | ![franka_eight_reduced](https://github.com/user-attachments/assets/5a53a4c4-4679-4ae0-a12d-7dbcd0dbedb3) ![franka_ns_reduced](https://github.com/user-attachments/assets/65fdf8af-101d-4b04-8388-6f933328cd8c) |
 |:--:|:--:|
 | *Robot following a moving target, while base joint follows a sine curve.* | *Real robot following a target and being disturbed (contact) + null space control demonstration* |
+
 
 <p align="center">
 <img src="https://github.com/user-attachments/assets/d64c1416-12f0-44ee-821f-e91d0bf6434d" />
