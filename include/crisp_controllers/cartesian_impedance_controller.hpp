@@ -8,6 +8,7 @@
 
 #include <Eigen/Dense>
 
+#include <Eigen/src/Core/Matrix.h>
 #include <Eigen/src/Geometry/Transform.h>
 #include <controller_interface/controller_interface.hpp>
 #include <geometry_msgs/msg/pose_stamped.hpp>
@@ -167,6 +168,14 @@ private:
   pinocchio::SE3 end_effector_pose;
   /** @brief End effector Jacobian matrix */
   pinocchio::Data::Matrix6x J;
+
+  /** @brief Friction parameters 1 of size nv */
+  Eigen::VectorXd fp1;
+  /** @brief Friction parameters 2 of size nv */
+  Eigen::VectorXd fp2;
+  /** @brief Friction parameters 3 of size nv */
+  Eigen::VectorXd fp3;
+
 
   /** @brief Allowed type of joints **/
   const std::unordered_set<std::basic_string<char>> allowed_joint_types = {"JointModelRZ", "JointModelRUBX", "JointModelRUBY", "JointModelRUBZ"};

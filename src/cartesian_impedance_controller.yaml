@@ -63,9 +63,13 @@ cartesian_impedance_controller:
       validation:
         bounds<>: [0.0, 500.0]
     weights:
-      type: double_array
-      default_value: []
-      description: "Weights for each joint for the nullspace parameters."
+      __map_joints:
+        value:
+          type: double
+          default_value: 1.0
+          description: "Weights for each joint for the nullspace parameters."
+          validation:
+            bounds<>: [0.0, 500.0]
     regularization:
       type: double
       default_value: 0.000001
@@ -200,3 +204,17 @@ cartesian_impedance_controller:
     type: bool
     default_value: False
     description: "If set to true, we will stop sending commands to the robot. This is mainly for debugging useful."
+
+  friction:
+    fp1:
+      type: double_array
+      default_value: [0.54615, 0.87224, 0.64068, 1.2794, 0.83904, 0.30301, 0.56489]
+      description: "Friction parameters part 1"
+    fp2:
+      type: double_array
+      default_value: [ 5.1181, 9.0657, 10.136, 5.5903, 8.3469, 17.133, 10.336]
+      description: "Friction parameters part 2"
+    fp3:
+      type: double_array
+      default_value: [ 0.039533, 0.025882, -0.04607, 0.036194, 0.026226, -0.021047, 0.0035526]
+      description: "Friction parameters part 3"

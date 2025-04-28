@@ -41,10 +41,6 @@ generate_parameter_library(
 )
 
 generate_parameter_library(
-  joint_impedance_controller_parameters
-  src/joint_impedance_controller.yaml
-)
-generate_parameter_library(
   pose_broadcaster_parameters
   src/pose_broadcaster.yaml
 )
@@ -53,7 +49,6 @@ add_library(
         ${PROJECT_NAME}
         SHARED
         src/cartesian_impedance_controller.cpp
-        src/joint_impedance_controller.cpp
         src/pose_broadcaster.cpp
 )
 
@@ -74,7 +69,6 @@ endif()
 target_link_libraries(${PROJECT_NAME}
   PRIVATE
     cartesian_impedance_controller_parameters
-    joint_impedance_controller_parameters
     pose_broadcaster_parameters
 )
 
