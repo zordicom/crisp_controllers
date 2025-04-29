@@ -48,12 +48,11 @@ PoseBroadcaster::update(const rclcpp::Time &time,
     auto joint = model_.joints[joint_id];
 
     q[i] = state_interfaces_[i].get_value();
-    if (joint.shortname() == "JointModelRZ") {  // simple revolute joint case
-      q_pin[joint.idx_q()] = q[i];
-    }
-    else if (continous_joint_types.count(joint.shortname())) {  // Then we are handling a continous joint that is SO(2)
+    if (continous_joint_types.count(joint.shortname())) {  // Then we are handling a continous joint that is SO(2)
       q_pin[joint.idx_q()] = std::cos(q[i]);
       q_pin[joint.idx_q()+1] = std::sin(q[i]);
+    } else {
+      q_pin[joint.idx_q()] = q[i];
     }
   }
 

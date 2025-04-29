@@ -46,7 +46,15 @@ private:
   pinocchio::Data data_;
 
   /** @brief Allowed type of joints **/
-  const std::unordered_set<std::basic_string<char>> allowed_joint_types = {"JointModelRZ", "JointModelRUBX", "JointModelRUBY", "JointModelRUBZ"};
+  const std::unordered_set<std::basic_string<char>> allowed_joint_types = {
+    "JointModelRX",
+    "JointModelRY",
+    "JointModelRZ",
+    "JointModelRevoluteUnaligned",
+    "JointModelRUBX",
+    "JointModelRUBY",
+    "JointModelRUBZ",
+  };
   /** @brief Continous joint types that should be considered separetly. **/
   const std::unordered_set<std::basic_string<char>> continous_joint_types =
     {"JointModelRUBX", "JointModelRUBY", "JointModelRUBZ"};
