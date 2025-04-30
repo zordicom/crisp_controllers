@@ -110,7 +110,7 @@ CartesianImpedanceController::update(const rclcpp::Time &time,
                                     end_effector_pose.rotation().transpose());
   }
 
-  auto max_delta_ = Eigen::VectorXd::Zero(6);
+  Eigen::VectorXd max_delta_(6);
   if (params_.limit_error) {
     max_delta_ << params_.task.error_clip.x, params_.task.error_clip.y, params_.task.error_clip.z, 
                   params_.task.error_clip.rx, params_.task.error_clip.ry, params_.task.error_clip.rz;
