@@ -4,7 +4,7 @@
 <a href="https://github.com/danielsanjosepro/crisp_controllers/actions/workflows/rolling_ros2_ci.yml"><img src="https://github.com/danielsanjosepro/crisp_controllers/actions/workflows/rolling_ros2_ci.yml/badge.svg"/></a>
 <a href="https://danielsanjosepro.github.io/crisp_controllers/"><img alt="Static Badge" src="https://img.shields.io/badge/docs-passing-blue?style=flat&link=https%3A%2F%2Fdanielsanjosepro.github.io%2Fcrisp_controllers%2F"></a>
 
-Collection of C++ controllers for torque-based control for manipulators in ROS2. Tested on the Franka Robotics FR3 Robot.
+Collection of C++ controllers for torque-based control for manipulators in ROS2. Robot agnostic and tested on the Franka Robotics FR3 Robot.
 Check the [docs](https://danielsanjosepro.github.io/crisp_controllers/)!
 
 | ![Figure 1](https://github.com/user-attachments/assets/5b12bd87-7880-4125-89ba-c3a682a938ff) | ![kinova](https://github.com/user-attachments/assets/18b0dda6-c9aa-4753-ac5b-004e64d3c9a3) | ![iiwa](https://github.com/user-attachments/assets/5753ab66-e2c3-4102-b32b-419497567ac1) |
