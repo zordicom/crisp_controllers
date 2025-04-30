@@ -1,6 +1,6 @@
 #include "crisp_controllers/utils/fiters.hpp"
 #include "crisp_controllers/utils/torque_rate_saturation.hpp"
-#include <Eigen/src/Core/Map.h>
+
 #include <Eigen/src/Core/Matrix.h>
 #include <cmath>
 #include <controller_interface/controller_interface_base.hpp>
@@ -110,16 +110,10 @@ CartesianImpedanceController::update(const rclcpp::Time &time,
                                     end_effector_pose.rotation().transpose());
   }
 
-  auto max_delta_ = Eigen::Map<Eigen::VectorXd>(params_.max_delta.data(), 6);
+  auto max_delta_ = Eigen::VectorXd::Zero(6);
   if (params_.limit_error) {
-
-    if ((size_t)error.size() != (size_t)params_.max_delta.size()) {
-      RCLCPP_ERROR_ONCE(get_node()->get_logger(),
-                        "Size mismatch: error is %ld, max_delta_ is %ld",
-                        error.size(), max_delta_.size());
-      return controller_interface::return_type::ERROR;
-    }
-
+    max_delta_ << params_.task.error_clip.x, params_.task.error_clip.y, params_.task.error_clip.z, 
+                  params_.task.error_clip.rx, params_.task.error_clip.ry, params_.task.error_clip.rz;
     error = error.cwiseMax(-max_delta_).cwiseMin(max_delta_);
   }
 
