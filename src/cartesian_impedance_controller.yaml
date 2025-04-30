@@ -55,24 +55,29 @@ cartesian_impedance_controller:
       validation:
         bounds<>: [0.0, 2000.0]
     error_clip:
-      description: "Max allowed displacement. This is used to clamp the (twist) error."
       x:
         type: double
+        description: "Max allowed error in x direction."
         default_value: 0.1
       y:
         type: double
+        description: "Max allowed error in y direction."
         default_value: 0.1
       z:
         type: double
+        description: "Max allowed error in z direction."
         default_value: 0.1
       rx:
         type: double
+        description: "Max allowed error in the rotational x direction (local or global frame)."
         default_value: 0.5
       ry:
         type: double
+        description: "Max allowed error in the rotational y direction (local or global frame)."
         default_value: 0.5
       rz:
         type: double
+        description: "Max allowed error in the rotational z direction (local or global frame)."
         default_value: 0.5
 
   nullspace:
