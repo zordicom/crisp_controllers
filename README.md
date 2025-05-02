@@ -1,11 +1,17 @@
-# CRISP ros2_controllers
+#  CRISP ros2_controllers
+
+<img src="https://github.com/user-attachments/assets/284983f8-2311-4699-86ab-06fc2ea9d5af" alt="CRISP Controllers Logo" width="160" align="right"/>
+
 <a href="https://github.com/danielsanjosepro/crisp_controllers/actions/workflows/humble_ros2_ci.yml"><img src="https://github.com/danielsanjosepro/crisp_controllers/actions/workflows/humble_ros2_ci.yml/badge.svg"/></a>
 <a href="https://github.com/danielsanjosepro/crisp_controllers/actions/workflows/jazzy_ros2_ci.yml"><img src="https://github.com/danielsanjosepro/crisp_controllers/actions/workflows/jazzy_ros2_ci.yml/badge.svg"/></a>
 <a href="https://github.com/danielsanjosepro/crisp_controllers/actions/workflows/rolling_ros2_ci.yml"><img src="https://github.com/danielsanjosepro/crisp_controllers/actions/workflows/rolling_ros2_ci.yml/badge.svg"/></a>
 <a href="https://danielsanjosepro.github.io/crisp_controllers/"><img alt="Static Badge" src="https://img.shields.io/badge/docs-passing-blue?style=flat&link=https%3A%2F%2Fdanielsanjosepro.github.io%2Fcrisp_controllers%2F"></a>
 
-Collection of C++ controllers for torque-based control for manipulators in ROS2. Robot agnostic and tested on the Franka Robotics FR3 Robot.
-Check the [docs](https://danielsanjosepro.github.io/crisp_controllers/)!
+Collection of C++ controllers for torque-based control for manipulators compatible with `ros2_control`, including Operational Space Control and Cartesian Impedance Control. Robot agnostic and tested on the Franka Robotics FR3 Robot in single and bimanual operation. Check the [docs](https://danielsanjosepro.github.io/crisp_controllers/)!
+
+## Demos
+
+Some of the things that you can do with our controllers. Check the [crisp_controller_demos](https://github.com/utiasDSL/crisp_controllers_demos) for more information on how to get the controllers running on you robot.
 
 | ![Figure 1](https://github.com/user-attachments/assets/5b12bd87-7880-4125-89ba-c3a682a938ff) | ![kinova](https://github.com/user-attachments/assets/18b0dda6-c9aa-4753-ac5b-004e64d3c9a3) | ![iiwa](https://github.com/user-attachments/assets/5753ab66-e2c3-4102-b32b-419497567ac1) |
 |:--:|:--:|:--:|
@@ -20,12 +26,12 @@ Check the [docs](https://danielsanjosepro.github.io/crisp_controllers/)!
 - 🤖 Operational Space Controller as well as Joint Impedance Controller for torque-based control.  
 - 🚫 No MoveIt or complicated path-planning, just a simple C++ `ros2_controller`. Ready to use.  
 - ⚙️ Dynamically and highly parametrizable: powered by the `generate_parameter_library` you can modify stiffness and more during operation.  
-- 🐍 Python interface to move your ROS2 robot around without having to think about topics, spinning, and more ROS2 jargon! Check [crisp_py](https://github.com/danielsanjosepro/crisp_py) for more information and examples.
-- ❓ Demos showcasing how to use the controller with FR3 of Franka Emika in single and bimanual setup. Check the [crisp_controller_demos](https://github.com/danielsanjosepro/crisp_controllers_demos).
+- 🐍 Python interface to move your ROS2 robot around without having to think about topics, spinning, and more ROS2 jargon! Check [crisp_py](https://github.com/utiasDSL/crisp_py) for more information and examples.
+- ❓ Demos showcasing how to use the controller with FR3 of Franka Emika in single and bimanual setup. Check the [crisp_controller_demos](https://github.com/utiasDSL/crisp_controllers_demos).
 
 ## Getting Started
 
-Independently of your setup, you *should* use a real-time patch. You don't want any jitter with this type of controllers otherwise they can get unstable.
+Independently of your setup, you *should* use a real-time patch. You don't want any jitter with this type of controllers otherwise they can get unstable. Most vendors will not even allow you to use the manipulator.
 If you are trying it out on simulation, you should not worry about it. If using a real robot, you can check the [Franka Robotics guide on how to set up a patch](https://frankaemika.github.io/docs/installation_linux.html#setting-up-the-real-time-kernel). 
 
 ### From source
@@ -42,5 +48,5 @@ touch src/crisp_controllers/COLCON_IGNORE  # Forget about it
 ```
 
 ### Docker
-You can try the controller with the provided Dockerfile using devcontainers. Our docker setup uses the RT-capabilities if available. If you are using VSCode, you should be able
+You can try the controller with the provided Dockerfile and devcontainer setup in [crisp_controller_demos](https://github.com/utiasDSL/crisp_controllers_demos). Our docker setup uses the RT-capabilities if available. If you are using VSCode, you should be able
 to open the container directly from there using the devcontainer plugin. Check [the devcontainer documentation](https://code.visualstudio.com/docs/devcontainers/containers) for more information.
