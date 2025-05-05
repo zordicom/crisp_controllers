@@ -12,6 +12,7 @@
 #include <Eigen/src/Geometry/Transform.h>
 #include <controller_interface/controller_interface.hpp>
 #include <geometry_msgs/msg/pose_stamped.hpp>
+#include <geometry_msgs/msg/wrench_stamped.hpp>
 #include <pinocchio/algorithm/kinematics.hpp>
 #include <pinocchio/multibody/fwd.hpp>
 #include <rclcpp/rclcpp.hpp>
@@ -96,6 +97,8 @@ private:
   rclcpp::Subscription<geometry_msgs::msg::PoseStamped>::SharedPtr pose_sub_;
   /** @brief Subscription for target joint state messages */
   rclcpp::Subscription<sensor_msgs::msg::JointState>::SharedPtr joint_sub_;
+  /** @brief Subscription for target wrench messages */
+  rclcpp::Subscription<geometry_msgs::msg::WrenchStamped>::SharedPtr wrench_sub_;
 
   /**
    * @brief Callback for target joint state messages
@@ -106,8 +109,23 @@ private:
   void
   target_joint_callback_(const sensor_msgs::msg::JointState::SharedPtr msg);
 
+  /**
+   * @brief Callback for target pose messages
+   *
+   * Updates the target pose configuration for the main task
+   * @param msg Target pose message
+   */
   void
-  target_pose_callback_(const geometry_msgs::msg::PoseStamped::SharedPtr msg);
+ target_pose_callback_(const geometry_msgs::msg::PoseStamped::SharedPtr msg);
+
+  /**
+   * @brief Callback for target wrench messages
+   * 
+   * Updates the target wrench to be applied in task space
+   * @param msg Target wrench message containing force/torque values
+   */
+  void
+  target_wrench_callback_(const geometry_msgs::msg::WrenchStamped::SharedPtr msg);
 
   /**
    * @brief Set the stiffness and damping matrices based on parameters
@@ -118,6 +136,8 @@ private:
   Eigen::Vector3d target_position_;
   /** @brief Target orientation as quaternion */
   Eigen::Quaterniond target_orientation_;
+  /** @brief Target wrench in task space */
+  Eigen::VectorXd target_wrench_;
   /** @brief Combined target pose as SE3 transformation */
   pinocchio::SE3 target_pose_;
 

@@ -146,7 +146,7 @@ CartesianImpedanceController::update(const rclcpp::Time &time,
   Eigen::VectorXd tau_task(model_.nv), tau_d(model_.nv),
       tau_secondary(model_.nv), tau_nullspace(model_.nv),
       tau_friction(model_.nv), tau_coriolis(model_.nv), tau_gravity(model_.nv),
-      tau_joint_limits(model_.nv), tau_random_noise(model_.nv);
+      tau_joint_limits(model_.nv), tau_wrench(model_.nv);
 
   if (params_.use_operational_space) {
 
@@ -177,11 +177,6 @@ CartesianImpedanceController::update(const rclcpp::Time &time,
   tau_friction = params_.use_friction ? get_friction(dq, fp1, fp2, fp3)
                                       : Eigen::VectorXd::Zero(model_.nv);
 
-  tau_random_noise =
-      params_.noise.add_random_noise
-          ? (Eigen::VectorXd::Random(model_.nv) * params_.noise.amplitude)
-                .eval()
-          : Eigen::VectorXd::Zero(model_.nv);
 
   if (params_.use_coriolis_compensation) {
     pinocchio::computeAllTerms(model_, data_, q_pin, dq);
@@ -195,8 +190,10 @@ CartesianImpedanceController::update(const rclcpp::Time &time,
                     ? pinocchio::computeGeneralizedGravity(model_, data_, q_pin)
                     : Eigen::VectorXd::Zero(model_.nv);
 
+  tau_wrench << J.transpose() * target_wrench_;
+
   tau_d << tau_task + tau_nullspace + tau_friction + tau_coriolis +
-               tau_gravity + tau_joint_limits + tau_random_noise;
+               tau_gravity + tau_joint_limits + tau_wrench;
 
   if (params_.limit_torques) {
     tau_d = saturateTorqueRate(tau_d, tau_previous, params_.max_delta_tau);
@@ -450,6 +447,11 @@ CallbackReturn CartesianImpedanceController::on_configure(
       std::bind(&CartesianImpedanceController::target_pose_callback_, this,
                 std::placeholders::_1));
 
+  wrench_sub_ = get_node()->create_subscription<geometry_msgs::msg::WrenchStamped>(
+      "target_wrench", rclcpp::QoS(1),
+      std::bind(&CartesianImpedanceController::target_wrench_callback_, this,
+                std::placeholders::_1));
+
   joint_sub_ = get_node()->create_subscription<sensor_msgs::msg::JointState>(
       "target_joint", rclcpp::QoS(1),
       std::bind(&CartesianImpedanceController::target_joint_callback_, this,
@@ -457,6 +459,7 @@ CallbackReturn CartesianImpedanceController::on_configure(
 
   target_position_ = Eigen::Vector3d::Zero();
   target_orientation_ = Eigen::Quaterniond::Identity();
+  target_wrench_ = Eigen::VectorXd::Zero(6);
 
   RCLCPP_INFO(get_node()->get_logger(), "State interfaces set up.");
 
@@ -542,6 +545,11 @@ void CartesianImpedanceController::target_pose_callback_(
   target_orientation_ =
       Eigen::Quaterniond(msg->pose.orientation.w, msg->pose.orientation.x,
                          msg->pose.orientation.y, msg->pose.orientation.z);
+}
+void CartesianImpedanceController::target_wrench_callback_(
+    const geometry_msgs::msg::WrenchStamped::SharedPtr msg) {
+  target_wrench_ << msg->wrench.force.x, msg->wrench.force.y, msg->wrench.force.z,
+                    msg->wrench.torque.x, msg->wrench.torque.y, msg->wrench.torque.z;
 }
 
 void CartesianImpedanceController::target_joint_callback_(
