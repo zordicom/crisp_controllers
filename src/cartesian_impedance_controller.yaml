@@ -24,36 +24,72 @@ cartesian_impedance_controller:
       description: "Stiffness in the x direction for the translation"
       validation:
         bounds<>: [0.0, 2000.0]
+    d_pos_x:
+      type: double
+      default_value: -1.0
+      description: "Damping in the x direction for the translation. If negative, computed as 2*sqrt(stiffness)"
+      validation:
+        bounds<>: [-1.0, 2000.0]
     k_pos_y:
       type: double
       default_value: 500.0
       description: "Stiffness in the y direction for the translation"
       validation:
         bounds<>: [0.0, 2000.0]
+    d_pos_y:
+      type: double
+      default_value: -1.0
+      description: "Damping in the y direction for the translation. If negative, computed as 2*sqrt(stiffness)"
+      validation:
+        bounds<>: [-1.0, 2000.0]
     k_pos_z:
       type: double
       default_value: 500.0
       description: "Stiffness in the z direction for the translation"
       validation:
         bounds<>: [0.0, 2000.0]
+    d_pos_z:
+      type: double
+      default_value: -1.0
+      description: "Damping in the z direction for the translation. If negative, computed as 2*sqrt(stiffness)"
+      validation:
+        bounds<>: [-1.0, 2000.0]
     k_rot_x:
       type: double
       default_value: 30.0
       description: "Stiffness in the x direction for the orientation"
       validation:
         bounds<>: [0.0, 2000.0]
+    d_rot_x:
+      type: double
+      default_value: -1.0
+      description: "Damping in the x direction for the orientation. If negative, computed as 2*sqrt(stiffness)"
+      validation:
+        bounds<>: [-1.0, 2000.0]
     k_rot_y:
       type: double
       default_value: 30.0
       description: "Stiffness in the y direction for the orientation"
       validation:
         bounds<>: [0.0, 2000.0]
+    d_rot_y:
+      type: double
+      default_value: -1.0
+      description: "Damping in the y direction for the orientation. If negative, computed as 2*sqrt(stiffness)"
+      validation:
+        bounds<>: [-1.0, 2000.0]
     k_rot_z:
       type: double
       default_value: 30.0
       description: "Stiffness in the z direction for the orientation"
       validation:
         bounds<>: [0.0, 2000.0]
+    d_rot_z:
+      type: double
+      default_value: -1.0
+      description: "Damping in the z direction for the orientation. If negative, computed as 2*sqrt(stiffness)"
+      validation:
+        bounds<>: [-1.0, 2000.0]
     error_clip:
       x:
         type: double
@@ -87,6 +123,12 @@ cartesian_impedance_controller:
       description: "Stiffness of the nullspace controller."
       validation:
         bounds<>: [0.0, 500.0]
+    damping:
+      type: double
+      default_value: -1.0
+      description: "Damping of the nullspace controller. If negative, then 2 sqrt(stiffness) is used."
+      validation:
+        bounds<>: [-1.0, 500.0]
     weights:
       __map_joints:
         value:

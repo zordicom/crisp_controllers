@@ -174,8 +174,6 @@ private:
   Eigen::VectorXd q_pin;
   /** @brief Current joint velocities */
   Eigen::VectorXd dq;
-  /** @brief Current measured torque */
-  Eigen::VectorXd tau;
   /** @brief Reference joint positions for posture task */
   Eigen::VectorXd q_ref;
   /** @brief Reference joint velocities */
@@ -211,6 +209,39 @@ private:
   const std::unordered_set<std::basic_string<char>> continous_joint_types =
     {"JointModelRUBX", "JointModelRUBY", "JointModelRUBZ"};
 
+  /** @brief Maximum allowed delta values for error clipping */
+  Eigen::VectorXd max_delta_ = Eigen::VectorXd::Zero(6);
+
+  /** @brief Nullspace projection matrix */
+  Eigen::MatrixXd nullspace_projection;
+
+  /** @brief Task space error vector (6x1) */
+  Eigen::VectorXd error = Eigen::VectorXd::Zero(6);
+
+  /** @brief Task space control torque */
+  Eigen::VectorXd tau_task;
+  /** @brief Joint limit avoidance torque */
+  Eigen::VectorXd tau_joint_limits;
+  /** @brief Secondary task torque before nullspace projection */
+  Eigen::VectorXd tau_secondary;
+  /** @brief Nullspace projected secondary task torque */
+  Eigen::VectorXd tau_nullspace;
+  /** @brief Friction compensation torque */
+  Eigen::VectorXd tau_friction;
+  /** @brief Coriolis compensation torque */
+  Eigen::VectorXd tau_coriolis;
+  /** @brief Gravity compensation torque */
+  Eigen::VectorXd tau_gravity;
+  /** @brief External wrench compensation torque */
+  Eigen::VectorXd tau_wrench;
+  /** @brief Final desired torque command */
+  Eigen::VectorXd tau_d;
+
+  /**
+   * @brief Log debug information based on parameter settings
+   * @param time Current time for throttling logs
+   */
+  void log_debug_info(const rclcpp::Time& time);
 };
 
 } // namespace crisp_controllers

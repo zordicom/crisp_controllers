@@ -46,9 +46,6 @@ CartesianImpedanceController::state_interface_configuration() const {
   for (const auto &joint_name : params_.joints) {
     config.names.push_back(joint_name + "/velocity");
   }
-  for (const auto &joint_name : params_.joints) {
-    config.names.push_back(joint_name + "/effort");
-  }
   return config;
 }
 
@@ -79,7 +76,6 @@ CartesianImpedanceController::update(const rclcpp::Time &time,
     dq[i] = exponential_moving_average(
         dq[i], state_interfaces_[num_joints + i].get_value(),
         params_.filter.dq);
-    tau[i] = state_interfaces_[2 * num_joints + i].get_value();
   }
 
   pinocchio::forwardKinematics(model_, data_, q_pin, dq);
@@ -87,16 +83,17 @@ CartesianImpedanceController::update(const rclcpp::Time &time,
 
   pinocchio::SE3 new_target_pose =
       pinocchio::SE3(target_orientation_.toRotationMatrix(), target_position_);
+
   target_pose_ = pinocchio::exp6(exponential_moving_average(
       pinocchio::log6(target_pose_), pinocchio::log6(new_target_pose),
       params_.filter.target_pose));
+
   /*target_pose_ = pinocchio::SE3(target_orientation_.toRotationMatrix(),
    * target_position_);*/
   end_effector_pose = data_.oMf[end_effector_frame_id];
 
   // We consider translation and rotation separately to avoid unatural screw
   // motions
-  Eigen::VectorXd error(6);
   if (params_.use_local_jacobian) {
     error.head(3) =
         end_effector_pose.rotation().transpose() *
@@ -110,7 +107,6 @@ CartesianImpedanceController::update(const rclcpp::Time &time,
                                     end_effector_pose.rotation().transpose());
   }
 
-  Eigen::VectorXd max_delta_(6);
   if (params_.limit_error) {
     max_delta_ << params_.task.error_clip.x, params_.task.error_clip.y, params_.task.error_clip.z, 
                   params_.task.error_clip.rx, params_.task.error_clip.ry, params_.task.error_clip.rz;
@@ -125,11 +121,9 @@ CartesianImpedanceController::update(const rclcpp::Time &time,
                                   reference_frame, J);
 
   Eigen::MatrixXd J_pinv(model_.nv, 6);
+  J_pinv = pseudo_inverse(J, params_.nullspace.regularization);
   Eigen::MatrixXd Id_nv = Eigen::MatrixXd::Identity(model_.nv, model_.nv);
 
-  J_pinv = pseudo_inverse(J, params_.nullspace.regularization);
-
-  Eigen::MatrixXd nullspace_projection(model_.nv, model_.nv);
   if (params_.nullspace.projector_type == "dynamic") {
     pinocchio::computeMinverse(model_, data_, q_pin);
     auto Mx_inv = J * data_.Minv * J.transpose();
@@ -140,13 +134,12 @@ CartesianImpedanceController::update(const rclcpp::Time &time,
     nullspace_projection = Id_nv - J_pinv * J;
   } else if (params_.nullspace.projector_type == "none") {
     nullspace_projection = Eigen::MatrixXd::Identity(model_.nv, model_.nv);
+  } else {
+    RCLCPP_ERROR_STREAM_ONCE(get_node()->get_logger(),
+                        "Unknown nullspace projector type: "
+                            << params_.nullspace.projector_type);
+    return controller_interface::return_type::ERROR;
   }
-
-  // Now we compute all terms of the control law
-  Eigen::VectorXd tau_task(model_.nv), tau_d(model_.nv),
-      tau_secondary(model_.nv), tau_nullspace(model_.nv),
-      tau_friction(model_.nv), tau_coriolis(model_.nv), tau_gravity(model_.nv),
-      tau_joint_limits(model_.nv), tau_wrench(model_.nv);
 
   if (params_.use_operational_space) {
 
@@ -213,125 +206,11 @@ CartesianImpedanceController::update(const rclcpp::Time &time,
   params_ = params_listener_->get_params();
   setStiffnessAndDamping();
 
-  if (params_.log.enabled) {
-    if (params_.log.robot_state) {
-      RCLCPP_INFO_STREAM_THROTTLE(get_node()->get_logger(),
-                                  *get_node()->get_clock(), 1000,
-                                  "nq: " << model_.nq << ", nv: " << model_.nv);
-      RCLCPP_INFO_STREAM_THROTTLE(
-          get_node()->get_logger(), *get_node()->get_clock(), 1000,
-          "end_effector_pos" << end_effector_pose.translation());
-      /*RCLCPP_INFO_STREAM_THROTTLE(get_node()->get_logger(),
-       * *get_node()->get_clock(),*/
-      /*                            1000, "end_effector_rot" <<
-       * end_effector_pose.rotation());*/
-      RCLCPP_INFO_STREAM_THROTTLE(get_node()->get_logger(),
-                                  *get_node()->get_clock(), 1000,
-                                  "q: " << q.transpose());
-      RCLCPP_INFO_STREAM_THROTTLE(get_node()->get_logger(),
-                                  *get_node()->get_clock(), 1000,
-                                  "q_pin: " << q_pin.transpose());
-      RCLCPP_INFO_STREAM_THROTTLE(get_node()->get_logger(),
-                                  *get_node()->get_clock(), 1000,
-                                  "dq: " << dq.transpose());
-      RCLCPP_INFO_STREAM_THROTTLE(get_node()->get_logger(),
-                                  *get_node()->get_clock(), 1000,
-                                  "tau: " << tau.transpose());
-      RCLCPP_INFO_STREAM_THROTTLE(get_node()->get_logger(),
-                                  *get_node()->get_clock(), 1000, "J: " << J);
-    }
-
-    if (params_.log.control_values) {
-      RCLCPP_INFO_STREAM_THROTTLE(get_node()->get_logger(),
-                                  *get_node()->get_clock(), 1000,
-                                  "error: " << error.transpose());
-      RCLCPP_INFO_STREAM_THROTTLE(get_node()->get_logger(),
-                                  *get_node()->get_clock(), 1000,
-                                  "max_delta: " << max_delta_.transpose());
-      RCLCPP_INFO_STREAM_THROTTLE(get_node()->get_logger(),
-                                  *get_node()->get_clock(), 1000,
-                                  "q_ref: " << q_ref.transpose());
-      RCLCPP_INFO_STREAM_THROTTLE(get_node()->get_logger(),
-                                  *get_node()->get_clock(), 1000,
-                                  "dq_ref: " << dq_ref.transpose());
-    }
-
-    if (params_.log.controller_parameters) {
-      RCLCPP_INFO_STREAM_THROTTLE(get_node()->get_logger(),
-                                  *get_node()->get_clock(), 1000,
-                                  "stiffness: " << stiffness);
-      RCLCPP_INFO_STREAM_THROTTLE(get_node()->get_logger(),
-                                  *get_node()->get_clock(), 1000,
-                                  "damping: " << damping);
-      RCLCPP_INFO_STREAM_THROTTLE(
-          get_node()->get_logger(), *get_node()->get_clock(), 1000,
-          "nullspace_stiffness: " << nullspace_stiffness);
-      RCLCPP_INFO_STREAM_THROTTLE(get_node()->get_logger(),
-                                  *get_node()->get_clock(), 1000,
-                                  "nullspace_damping: " << nullspace_damping);
-    }
-
-    if (params_.log.limits) {
-      RCLCPP_INFO_STREAM_THROTTLE(
-          get_node()->get_logger(), *get_node()->get_clock(), 1000,
-          "joint_limits: " << model_.lowerPositionLimit.transpose() << ", "
-                           << model_.upperPositionLimit.transpose());
-      RCLCPP_INFO_STREAM_THROTTLE(get_node()->get_logger(),
-                                  *get_node()->get_clock(), 1000,
-                                  "velocity_limits: " << model_.velocityLimit);
-      RCLCPP_INFO_STREAM_THROTTLE(get_node()->get_logger(),
-                                  *get_node()->get_clock(), 1000,
-                                  "effort_limits: " << model_.effortLimit);
-    }
-
-    if (params_.log.computed_torques) {
-      RCLCPP_INFO_STREAM_THROTTLE(get_node()->get_logger(),
-                                  *get_node()->get_clock(), 1000,
-                                  "tau_task: " << tau_task.transpose());
-      RCLCPP_INFO_STREAM_THROTTLE(
-          get_node()->get_logger(), *get_node()->get_clock(), 1000,
-          "tau_nullspace: " << tau_nullspace.transpose());
-      RCLCPP_INFO_STREAM_THROTTLE(
-          get_node()->get_logger(), *get_node()->get_clock(), 1000,
-          "tau_joint_limits: " << tau_joint_limits.transpose());
-      RCLCPP_INFO_STREAM_THROTTLE(
-          get_node()->get_logger(), *get_node()->get_clock(), 1000,
-          "tau_nullspace: " << tau_nullspace.transpose());
-      RCLCPP_INFO_STREAM_THROTTLE(get_node()->get_logger(),
-                                  *get_node()->get_clock(), 1000,
-                                  "tau_friction: " << tau_friction.transpose());
-      RCLCPP_INFO_STREAM_THROTTLE(get_node()->get_logger(),
-                                  *get_node()->get_clock(), 1000,
-                                  "tau_coriolis: " << tau_friction.transpose());
-    }
-
-    if (params_.log.dynamic_params) {
-      RCLCPP_INFO_STREAM_THROTTLE(get_node()->get_logger(),
-                                  *get_node()->get_clock(), 1000,
-                                  "M: " << data_.M);
-      /*RCLCPP_INFO_STREAM_THROTTLE(get_node()->get_logger(),
-       * *get_node()->get_clock(),*/
-      /*                            1000, "Mx: " << Mx);*/
-      RCLCPP_INFO_STREAM_THROTTLE(get_node()->get_logger(),
-                                  *get_node()->get_clock(), 1000,
-                                  "Minv: " << data_.Minv);
-      RCLCPP_INFO_STREAM_THROTTLE(
-          get_node()->get_logger(), *get_node()->get_clock(), 1000,
-          "nullspace projector: " << nullspace_projection);
-    }
-
-    if (params_.log.timing) {
-
-      auto t_end = get_node()->get_clock()->now();
-      RCLCPP_INFO_STREAM_THROTTLE(
-          get_node()->get_logger(), *get_node()->get_clock(), 2000,
-          "Control loop needed: "
-              << (t_end.nanoseconds() - time.nanoseconds()) * 1e-6 << " ms");
-    }
-  }
+  log_debug_info(time);
 
   return controller_interface::return_type::OK;
 }
+
 
 CallbackReturn CartesianImpedanceController::on_init() {
   params_listener_ =
@@ -428,7 +307,6 @@ CallbackReturn CartesianImpedanceController::on_configure(
   dq = Eigen::VectorXd::Zero(model_.nv);
   q_ref = Eigen::VectorXd::Zero(model_.nv);
   dq_ref = Eigen::VectorXd::Zero(model_.nv);
-  tau = Eigen::VectorXd::Zero(model_.nv);
   tau_previous = Eigen::VectorXd::Zero(model_.nv);
   J = Eigen::MatrixXd::Zero(6, model_.nv);
 
@@ -457,11 +335,31 @@ CallbackReturn CartesianImpedanceController::on_configure(
       std::bind(&CartesianImpedanceController::target_joint_callback_, this,
                 std::placeholders::_1));
 
+  // Initialize all control vectors with appropriate dimensions
+  tau_task = Eigen::VectorXd::Zero(model_.nv);
+  tau_joint_limits = Eigen::VectorXd::Zero(model_.nv);
+  tau_secondary = Eigen::VectorXd::Zero(model_.nv);
+  tau_nullspace = Eigen::VectorXd::Zero(model_.nv);
+  tau_friction = Eigen::VectorXd::Zero(model_.nv);
+  tau_coriolis = Eigen::VectorXd::Zero(model_.nv);
+  tau_gravity = Eigen::VectorXd::Zero(model_.nv);
+  tau_wrench = Eigen::VectorXd::Zero(model_.nv);
+  tau_d = Eigen::VectorXd::Zero(model_.nv);
+
+  // Initialize target state vectors
   target_position_ = Eigen::Vector3d::Zero();
   target_orientation_ = Eigen::Quaterniond::Identity();
   target_wrench_ = Eigen::VectorXd::Zero(6);
+  target_pose_ = pinocchio::SE3::Identity();
 
-  RCLCPP_INFO(get_node()->get_logger(), "State interfaces set up.");
+  // Initialize error vector
+  error = Eigen::VectorXd::Zero(6);
+  max_delta_ = Eigen::VectorXd::Zero(6);
+
+  // Initialize nullspace projection matrix
+  nullspace_projection = Eigen::MatrixXd::Identity(model_.nv, model_.nv);
+
+  RCLCPP_INFO(get_node()->get_logger(), "State interfaces and control vectors initialized.");
 
   return CallbackReturn::SUCCESS;
 }
@@ -474,7 +372,14 @@ void CartesianImpedanceController::setStiffnessAndDamping() {
       params_.task.k_rot_z;
 
   damping.setZero();
-  damping.diagonal() << 2.0 * stiffness.diagonal().cwiseSqrt();
+  // For each axis, use explicit damping if > 0, otherwise compute from stiffness
+  damping.diagonal() << 
+      (params_.task.d_pos_x > 0 ? params_.task.d_pos_x : 2.0 * std::sqrt(params_.task.k_pos_x)),
+      (params_.task.d_pos_y > 0 ? params_.task.d_pos_y : 2.0 * std::sqrt(params_.task.k_pos_y)),
+      (params_.task.d_pos_z > 0 ? params_.task.d_pos_z : 2.0 * std::sqrt(params_.task.k_pos_z)),
+      (params_.task.d_rot_x > 0 ? params_.task.d_rot_x : 2.0 * std::sqrt(params_.task.k_rot_x)),
+      (params_.task.d_rot_y > 0 ? params_.task.d_rot_y : 2.0 * std::sqrt(params_.task.k_rot_y)),
+      (params_.task.d_rot_z > 0 ? params_.task.d_rot_z : 2.0 * std::sqrt(params_.task.k_rot_z));
 
   nullspace_stiffness.setZero();
   nullspace_damping.setZero();
@@ -487,6 +392,12 @@ void CartesianImpedanceController::setStiffnessAndDamping() {
   nullspace_stiffness.diagonal() << params_.nullspace.stiffness * weights;
   nullspace_damping.diagonal()
       << 2.0 * nullspace_stiffness.diagonal().cwiseSqrt();
+
+  if (params_.nullspace.damping) {
+      nullspace_damping.diagonal() = params_.nullspace.damping * weights;
+  } else {
+      nullspace_damping.diagonal() = 2.0 * nullspace_stiffness.diagonal().cwiseSqrt();
+  }
 }
 
 CallbackReturn CartesianImpedanceController::on_activate(
@@ -567,6 +478,121 @@ void CartesianImpedanceController::target_joint_callback_(
     }
     /*filterJointValues(msg->name, msg->velocity, params_.joints, dq_ref);*/
   }
+}
+
+void CartesianImpedanceController::log_debug_info(const rclcpp::Time &time) {
+  if (!params_.log.enabled) {
+    return;
+  }
+  if (params_.log.robot_state) {
+    RCLCPP_INFO_STREAM_THROTTLE(get_node()->get_logger(),
+                                *get_node()->get_clock(), 1000,
+                                "nq: " << model_.nq << ", nv: " << model_.nv);
+
+      RCLCPP_INFO_STREAM_THROTTLE(
+          get_node()->get_logger(), *get_node()->get_clock(), 1000,
+          "end_effector_pos" << end_effector_pose.translation());
+      /*RCLCPP_INFO_STREAM_THROTTLE(get_node()->get_logger(),
+       * *get_node()->get_clock(),*/
+      /*                            1000, "end_effector_rot" <<
+       * end_effector_pose.rotation());*/
+      RCLCPP_INFO_STREAM_THROTTLE(get_node()->get_logger(),
+                                  *get_node()->get_clock(), 1000,
+                                  "q: " << q.transpose());
+      RCLCPP_INFO_STREAM_THROTTLE(get_node()->get_logger(),
+                                  *get_node()->get_clock(), 1000,
+                                  "q_pin: " << q_pin.transpose());
+      RCLCPP_INFO_STREAM_THROTTLE(get_node()->get_logger(),
+                                  *get_node()->get_clock(), 1000,
+                                  "dq: " << dq.transpose());
+      RCLCPP_INFO_STREAM_THROTTLE(get_node()->get_logger(),
+                                  *get_node()->get_clock(), 1000, "J: " << J);
+    }
+
+    if (params_.log.control_values) {
+      RCLCPP_INFO_STREAM_THROTTLE(get_node()->get_logger(),
+                                  *get_node()->get_clock(), 1000,
+                                  "error: " << error.transpose());
+      RCLCPP_INFO_STREAM_THROTTLE(get_node()->get_logger(),
+                                  *get_node()->get_clock(), 1000,
+                                  "max_delta: " << max_delta_.transpose());
+      RCLCPP_INFO_STREAM_THROTTLE(get_node()->get_logger(),
+                                  *get_node()->get_clock(), 1000,
+                                  "q_ref: " << q_ref.transpose());
+      RCLCPP_INFO_STREAM_THROTTLE(get_node()->get_logger(),
+                                  *get_node()->get_clock(), 1000,
+                                  "dq_ref: " << dq_ref.transpose());
+    }
+
+    if (params_.log.controller_parameters) {
+      RCLCPP_INFO_STREAM_THROTTLE(get_node()->get_logger(),
+                                  *get_node()->get_clock(), 1000,
+                                  "stiffness: " << stiffness);
+      RCLCPP_INFO_STREAM_THROTTLE(get_node()->get_logger(),
+                                  *get_node()->get_clock(), 1000,
+                                  "damping: " << damping);
+      RCLCPP_INFO_STREAM_THROTTLE(
+          get_node()->get_logger(), *get_node()->get_clock(), 1000,
+          "nullspace_stiffness: " << nullspace_stiffness);
+      RCLCPP_INFO_STREAM_THROTTLE(get_node()->get_logger(),
+                                  *get_node()->get_clock(), 1000,
+                                  "nullspace_damping: " << nullspace_damping);
+    }
+
+    if (params_.log.limits) {
+      RCLCPP_INFO_STREAM_THROTTLE(
+          get_node()->get_logger(), *get_node()->get_clock(), 1000,
+          "joint_limits: " << model_.lowerPositionLimit.transpose() << ", "
+                           << model_.upperPositionLimit.transpose());
+      RCLCPP_INFO_STREAM_THROTTLE(get_node()->get_logger(),
+                                  *get_node()->get_clock(), 1000,
+                                  "velocity_limits: " << model_.velocityLimit);
+      RCLCPP_INFO_STREAM_THROTTLE(get_node()->get_logger(),
+                                  *get_node()->get_clock(), 1000,
+                                  "effort_limits: " << model_.effortLimit);
+    }
+
+    if (params_.log.computed_torques) {
+      RCLCPP_INFO_STREAM_THROTTLE(get_node()->get_logger(),
+                                  *get_node()->get_clock(), 1000,
+                                  "tau_task: " << tau_task.transpose());
+      RCLCPP_INFO_STREAM_THROTTLE(
+          get_node()->get_logger(), *get_node()->get_clock(), 1000,
+          "tau_joint_limits: " << tau_joint_limits.transpose());
+      RCLCPP_INFO_STREAM_THROTTLE(
+          get_node()->get_logger(), *get_node()->get_clock(), 1000,
+          "tau_nullspace: " << tau_nullspace.transpose());
+      RCLCPP_INFO_STREAM_THROTTLE(get_node()->get_logger(),
+                                  *get_node()->get_clock(), 1000,
+                                  "tau_friction: " << tau_friction.transpose());
+      RCLCPP_INFO_STREAM_THROTTLE(get_node()->get_logger(),
+                                  *get_node()->get_clock(), 1000,
+                                  "tau_coriolis: " << tau_coriolis.transpose());
+    }
+
+    if (params_.log.dynamic_params) {
+      RCLCPP_INFO_STREAM_THROTTLE(get_node()->get_logger(),
+                                  *get_node()->get_clock(), 1000,
+                                  "M: " << data_.M);
+      /*RCLCPP_INFO_STREAM_THROTTLE(get_node()->get_logger(),
+       * *get_node()->get_clock(),*/
+      /*                            1000, "Mx: " << Mx);*/
+      RCLCPP_INFO_STREAM_THROTTLE(get_node()->get_logger(),
+                                  *get_node()->get_clock(), 1000,
+                                  "Minv: " << data_.Minv);
+      RCLCPP_INFO_STREAM_THROTTLE(
+          get_node()->get_logger(), *get_node()->get_clock(), 1000,
+          "nullspace projector: " << nullspace_projection);
+    }
+
+    if (params_.log.timing) {
+
+      auto t_end = get_node()->get_clock()->now();
+      RCLCPP_INFO_STREAM_THROTTLE(
+          get_node()->get_logger(), *get_node()->get_clock(), 2000,
+          "Control loop needed: "
+              << (t_end.nanoseconds() - time.nanoseconds()) * 1e-6 << " ms");
+    }
 }
 
 } // namespace crisp_controllers
