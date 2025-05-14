@@ -33,6 +33,7 @@ find_package(rclcpp_lifecycle REQUIRED)
 find_package(hardware_interface REQUIRED)
 find_package(Eigen3 REQUIRED)
 find_package(pinocchio REQUIRED)
+find_package(realtime_tools REQUIRED)
 find_package(generate_parameter_library REQUIRED)
 
 generate_parameter_library(
@@ -82,6 +83,7 @@ rclcpp
 rclcpp_lifecycle
 pinocchio
 generate_parameter_library
+realtime_tools
 )
 
 pluginlib_export_plugin_description_file(

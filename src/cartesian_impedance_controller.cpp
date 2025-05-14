@@ -78,6 +78,10 @@ CartesianImpedanceController::update(const rclcpp::Time &time,
         params_.filter.dq);
   }
 
+  if (new_target_pose_) {parse_target_pose_(); new_target_pose_ = false;}
+  if (new_target_joint_) {parse_target_joint_(); new_target_joint_ = false;}
+  if (new_target_wrench_) {parse_target_wrench_(); new_target_wrench_ = false;}
+
   pinocchio::forwardKinematics(model_, data_, q_pin, dq);
   pinocchio::updateFramePlacements(model_, data_);
 
@@ -320,20 +324,39 @@ CallbackReturn CartesianImpedanceController::on_configure(
 
   setStiffnessAndDamping();
 
-  pose_sub_ = get_node()->create_subscription<geometry_msgs::msg::PoseStamped>(
-      "target_pose", rclcpp::QoS(1),
-      std::bind(&CartesianImpedanceController::target_pose_callback_, this,
-                std::placeholders::_1));
+  new_target_pose_ = false;
+  new_target_joint_ = false;
+  new_target_wrench_ = false;
 
-  wrench_sub_ = get_node()->create_subscription<geometry_msgs::msg::WrenchStamped>(
-      "target_wrench", rclcpp::QoS(1),
-      std::bind(&CartesianImpedanceController::target_wrench_callback_, this,
-                std::placeholders::_1));
+  auto target_pose_callback =
+    [this](const std::shared_ptr<geometry_msgs::msg::PoseStamped> msg) -> void
+  {
+    target_pose_buffer_.writeFromNonRT(msg);
+    new_target_pose_ = true;
+  };
+
+  auto target_joint_callback =
+    [this](const std::shared_ptr<sensor_msgs::msg::JointState> msg) -> void
+  {
+    target_joint_buffer_.writeFromNonRT(msg);
+    new_target_joint_ = true;
+  };
+
+  auto target_wrench_callback =
+    [this](const std::shared_ptr<geometry_msgs::msg::WrenchStamped> msg) -> void
+  {
+    target_wrench_buffer_.writeFromNonRT(msg);
+    new_target_wrench_ = true;
+  };
+
+  pose_sub_ = get_node()->create_subscription<geometry_msgs::msg::PoseStamped>(
+      "target_pose", rclcpp::QoS(1),target_pose_callback);
 
   joint_sub_ = get_node()->create_subscription<sensor_msgs::msg::JointState>(
-      "target_joint", rclcpp::QoS(1),
-      std::bind(&CartesianImpedanceController::target_joint_callback_, this,
-                std::placeholders::_1));
+      "target_joint", rclcpp::QoS(1), target_joint_callback);
+
+  wrench_sub_ = get_node()->create_subscription<geometry_msgs::msg::WrenchStamped>(
+      "target_wrench", rclcpp::QoS(1), target_wrench_callback);
 
   // Initialize all control vectors with appropriate dimensions
   tau_task = Eigen::VectorXd::Zero(model_.nv);
@@ -448,24 +471,17 @@ CartesianImpedanceController::on_deactivate(
   return CallbackReturn::SUCCESS;
 }
 
-void CartesianImpedanceController::target_pose_callback_(
-    const geometry_msgs::msg::PoseStamped::SharedPtr msg) {
-
+void CartesianImpedanceController::parse_target_pose_() {
+  auto msg = *target_pose_buffer_.readFromRT();
   target_position_ << msg->pose.position.x, msg->pose.position.y,
       msg->pose.position.z;
   target_orientation_ =
       Eigen::Quaterniond(msg->pose.orientation.w, msg->pose.orientation.x,
                          msg->pose.orientation.y, msg->pose.orientation.z);
 }
-void CartesianImpedanceController::target_wrench_callback_(
-    const geometry_msgs::msg::WrenchStamped::SharedPtr msg) {
-  target_wrench_ << msg->wrench.force.x, msg->wrench.force.y, msg->wrench.force.z,
-                    msg->wrench.torque.x, msg->wrench.torque.y, msg->wrench.torque.z;
-}
 
-void CartesianImpedanceController::target_joint_callback_(
-    const sensor_msgs::msg::JointState::SharedPtr msg) {
-  // We only pick the joits that should be controlled in the nullspace
+void CartesianImpedanceController::parse_target_joint_() {
+  auto msg = *target_joint_buffer_.readFromRT();
   if (msg->position.size()) {
     for (size_t i = 0; i < msg->position.size(); ++i) {
       q_ref[i] = msg->position[i];
@@ -478,6 +494,12 @@ void CartesianImpedanceController::target_joint_callback_(
     }
     /*filterJointValues(msg->name, msg->velocity, params_.joints, dq_ref);*/
   }
+}
+
+void CartesianImpedanceController::parse_target_wrench_() {
+  auto msg = *target_wrench_buffer_.readFromRT();
+  target_wrench_ << msg->wrench.force.x, msg->wrench.force.y, msg->wrench.force.z,
+                    msg->wrench.torque.x, msg->wrench.torque.y, msg->wrench.torque.z;
 }
 
 void CartesianImpedanceController::log_debug_info(const rclcpp::Time &time) {

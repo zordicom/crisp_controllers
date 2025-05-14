@@ -17,6 +17,7 @@
 #include <pinocchio/multibody/fwd.hpp>
 #include <rclcpp/rclcpp.hpp>
 
+#include "realtime_tools/realtime_buffer.hpp"
 #include <cartesian_impedance_controller_parameters.hpp>
 #include <sensor_msgs/msg/joint_state.hpp>
 #include <string>
@@ -101,36 +102,37 @@ private:
   rclcpp::Subscription<geometry_msgs::msg::WrenchStamped>::SharedPtr wrench_sub_;
 
   /**
-   * @brief Callback for target joint state messages
-   *
-   * Updates the target joint configuration for the posture task
-   * @param msg Target joint state message containing joint positions
-   */
-  void
-  target_joint_callback_(const sensor_msgs::msg::JointState::SharedPtr msg);
-
-  /**
-   * @brief Callback for target pose messages
-   *
-   * Updates the target pose configuration for the main task
-   * @param msg Target pose message
-   */
-  void
- target_pose_callback_(const geometry_msgs::msg::PoseStamped::SharedPtr msg);
-
-  /**
-   * @brief Callback for target wrench messages
-   * 
-   * Updates the target wrench to be applied in task space
-   * @param msg Target wrench message containing force/torque values
-   */
-  void
-  target_wrench_callback_(const geometry_msgs::msg::WrenchStamped::SharedPtr msg);
-
-  /**
    * @brief Set the stiffness and damping matrices based on parameters
    */
   void setStiffnessAndDamping();
+
+  /**
+   * @brief Reads the target pose in realtime loop from the buffer and parses it to be used in the controller.
+   */
+  void parse_target_pose_();
+
+  /**
+   * @brief Reads the target joint in realtime loop from the buffer and parses it to be used in the controller.
+   */
+  void parse_target_joint_();
+
+  /**
+   * @brief Reads the target wrench in realtime loop from the buffer and parses it to be used in the controller.
+   */
+  void parse_target_wrench_();
+
+  bool new_target_pose_;
+  bool new_target_joint_;
+  bool new_target_wrench_;
+
+  realtime_tools::RealtimeBuffer<std::shared_ptr<geometry_msgs::msg::PoseStamped>>
+    target_pose_buffer_;
+
+  realtime_tools::RealtimeBuffer<std::shared_ptr<sensor_msgs::msg::JointState>>
+    target_joint_buffer_;
+
+  realtime_tools::RealtimeBuffer<std::shared_ptr<geometry_msgs::msg::WrenchStamped>>
+    target_wrench_buffer_;
 
   /** @brief Target position in Cartesian space */
   Eigen::Vector3d target_position_;
