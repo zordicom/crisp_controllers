@@ -63,8 +63,9 @@ CartesianImpedanceController::update(const rclcpp::Time &time,
         model_.getJointId(joint_name); // pinocchio joind id might be different
     auto joint = model_.joints[joint_id];
 
-    q[i] = exponential_moving_average(q[i], state_interfaces_[i].get_value(),
-                                      params_.filter.q);
+    /*q[i] = exponential_moving_average(q[i], state_interfaces_[i].get_value(),*/
+    /*                                  params_.filter.q);*/
+    q[i] = state_interfaces_[i].get_value();
     if (continous_joint_types.count(
                    joint.shortname())) { // Then we are handling a continous
                                          // joint that is SO(2)
@@ -73,9 +74,10 @@ CartesianImpedanceController::update(const rclcpp::Time &time,
     } else {  // simple revolute joint case
       q_pin[joint.idx_q()] = q[i];
     }
-    dq[i] = exponential_moving_average(
-        dq[i], state_interfaces_[num_joints + i].get_value(),
-        params_.filter.dq);
+    /*dq[i] = exponential_moving_average(*/
+    /*    dq[i], state_interfaces_[num_joints + i].get_value(),*/
+    /*    params_.filter.dq);*/
+    dq[i] = state_interfaces_[num_joints + i].get_value();
   }
 
   if (new_target_pose_) {parse_target_pose_(); new_target_pose_ = false;}
@@ -195,8 +197,8 @@ CartesianImpedanceController::update(const rclcpp::Time &time,
   if (params_.limit_torques) {
     tau_d = saturateTorqueRate(tau_d, tau_previous, params_.max_delta_tau);
   }
-  tau_d = exponential_moving_average(tau_d, tau_previous,
-                                     params_.filter.output_torque);
+  /*tau_d = exponential_moving_average(tau_d, tau_previous,*/
+  /*                                   params_.filter.output_torque);*/
 
   if (not params_.stop_commands) {
     for (size_t i = 0; i < num_joints; ++i) {

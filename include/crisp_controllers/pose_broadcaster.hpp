@@ -9,6 +9,7 @@
 
 #include <rclcpp/rclcpp.hpp>
 #include <rclcpp/publisher.hpp>
+#include <realtime_tools/realtime_publisher.hpp>
 
 
 using CallbackReturn =
@@ -38,6 +39,9 @@ private:
   pose_broadcaster::Params params_;
 
   rclcpp::Publisher<geometry_msgs::msg::PoseStamped>::SharedPtr pose_publisher_;
+  std::shared_ptr<realtime_tools::RealtimePublisher<geometry_msgs::msg::PoseStamped>>
+    realtime_pose_publisher_;
+
 
   std::string end_effector_frame_;
   int end_effector_frame_id;

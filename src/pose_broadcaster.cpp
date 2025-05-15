@@ -1,5 +1,4 @@
 #include <Eigen/src/Core/Matrix.h>
-#include <geometry_msgs/msg/detail/pose_stamped__struct.hpp>
 #include <crisp_controllers/pose_broadcaster.hpp>
 
 #include <ament_index_cpp/get_package_share_directory.hpp>
@@ -63,18 +62,21 @@ PoseBroadcaster::update(const rclcpp::Time &time,
   auto current_quaternion =
       Eigen::Quaterniond(current_pose.rotation());
 
-  auto pose_msg = geometry_msgs::msg::PoseStamped();
-  pose_msg.header.stamp = time;
-  pose_msg.header.frame_id = params_.base_frame;
-  pose_msg.pose.position.x = current_pose.translation()[0];
-  pose_msg.pose.position.y = current_pose.translation()[1];
-  pose_msg.pose.position.z = current_pose.translation()[2];
-  pose_msg.pose.orientation.x = current_quaternion.x();
-  pose_msg.pose.orientation.y = current_quaternion.y();
-  pose_msg.pose.orientation.z = current_quaternion.z();
-  pose_msg.pose.orientation.w = current_quaternion.w();
+  if (realtime_pose_publisher_ && realtime_pose_publisher_->trylock())
+  {
+    auto & pose_msg = realtime_pose_publisher_->msg_;
 
-  pose_publisher_->publish(pose_msg);
+    pose_msg.header.stamp = time;
+    pose_msg.header.frame_id = params_.base_frame;
+    pose_msg.pose.position.x = current_pose.translation()[0];
+    pose_msg.pose.position.y = current_pose.translation()[1];
+    pose_msg.pose.position.z = current_pose.translation()[2];
+    pose_msg.pose.orientation.x = current_quaternion.x();
+    pose_msg.pose.orientation.y = current_quaternion.y();
+    pose_msg.pose.orientation.z = current_quaternion.z();
+    pose_msg.pose.orientation.w = current_quaternion.w();
+    realtime_pose_publisher_->unlockAndPublish();
+  }
 
   return controller_interface::return_type::OK;
 }
@@ -153,6 +155,9 @@ CallbackReturn PoseBroadcaster::on_configure(
 
   pose_publisher_ = get_node()->create_publisher<geometry_msgs::msg::PoseStamped>(
           "current_pose", rclcpp::SystemDefaultsQoS());
+  realtime_pose_publisher_ =
+      std::make_shared<realtime_tools::RealtimePublisher<geometry_msgs::msg::PoseStamped>>(
+        pose_publisher_);
   return CallbackReturn::SUCCESS;
 }
 
