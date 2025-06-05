@@ -1,29 +1,70 @@
-site_name: CRISP Controllers
+site_name: CRISP Controllers - Learning Systems Lab
 nav:
   - Home: index.md
 
 theme:
   name: material
+  logo: images/logo.png
+  favicon: images/favicon.png
   palette:
+
+    # Palette toggle for automatic mode
+    - media: "(prefers-color-scheme)"
+      primary: grey
+      accent: grey
+      toggle:
+        icon: material/brightness-auto
+        name: Switch to light mode
+
+    # Palette toggle for light mode
     - media: "(prefers-color-scheme: light)"
-      scheme: default
-      primary: indigo
-      accent: indigo
+      scheme: default 
+      primary: grey
+      accent: grey
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+
+    # Palette toggle for dark mode
     - media: "(prefers-color-scheme: dark)"
       scheme: slate
-      primary: indigo
-      accent: indigo
+      primary: grey
+      accent: grey
+      toggle:
+        icon: material/brightness-4
+        name: Switch to system preference
+  font:
+    text: Poppins
+    # text: Montserrat
+    code: Source Code Pro
+  features:
+    - header.autohide
+  icon:
+    repo: fontawesome/brands/github
 
 plugins:
   - search
-  - mkdoxy:
-      projects:
-        crisp_controllers: # name of project must be alphanumeric + numbers (without spaces)
-          src-dirs: crisp_controllers
-          full-doc: True # if you want to generate full documentation
-          doxy-cfg: # standard doxygen configuration (key: value)
-            FILE_PATTERNS: "*.cpp *.h*" # specify file patterns to filter out
-            RECURSIVE: True # recursive search in source directories
+  # - mkdoxy:
+  #     projects:
+  #       crisp_controllers: # name of project must be alphanumeric + numbers (without spaces)
+  #         src-dirs: crisp_controllers
+  #         full-doc: True # if you want to generate full documentation
+  #         doxy-cfg: # standard doxygen configuration (key: value)
+  #           FILE_PATTERNS: "*.cpp *.h*" # specify file patterns to filter out
+  #           RECURSIVE: True # recursive search in source directorie
 
-nav:
-  - crisp_controllers: "crisp_controllers/links.md"
+
+
+extra:
+  social:
+    - icon: fontawesome/brands/github 
+      link: https://github.com/utiasDSL/crisp_controllers
+
+# nav:
+#   - crisp_controllers: "crisp_controllers/links.md"
+
+markdown_extensions:
+  - attr_list
+  - pymdownx.emoji:
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
