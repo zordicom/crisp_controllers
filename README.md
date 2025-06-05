@@ -23,7 +23,7 @@ Some of the things that you can do with our controllers. Check the [crisp_contro
 
 ## Features
 
-- 🤖 Operational Space Controller as well as Joint Impedance Controller for torque-based control.  
+- 🤖 Operational Space Controller as well as Cartesian Impedance Controller for torque-based control.  
 - 🚫 No MoveIt or complicated path-planning, just a simple C++ `ros2_controller`. Ready to use.  
 - ⚙️ Dynamically and highly parametrizable: powered by the `generate_parameter_library` you can modify stiffness and more during operation.  
 - 🐍 Python interface to move your ROS2 robot around without having to think about topics, spinning, and more ROS2 jargon! Check [crisp_py](https://github.com/utiasDSL/crisp_py) for more information and examples.
