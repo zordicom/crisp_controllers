@@ -4,6 +4,8 @@
 #include <controller_interface/controller_interface.hpp>
 #include <crisp_controllers/torque_feedback_controller_parameters.hpp>
 #include <sensor_msgs/msg/joint_state.hpp>
+#include <pinocchio/multibody/model.hpp>
+#include <pinocchio/multibody/data.hpp>
 
 using CallbackReturn =
     rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn;
@@ -21,7 +23,7 @@ namespace crisp_controllers {
  * filter out noise and small disturbances. Only when the total torque exceeds
  * the threshold are the torques used for feedback control.
  * 
- * Control law: tau_d = -kp_fb * tau_ext_filtered - kd * dq + tau_friction
+ * Control law: tau_d = -kp_fb * tau_ext_filtered - kd * dq + tau_friction + tau_nullspace
  * 
  * Where:
  * - tau_ext_filtered: External torques after threshold filtering
@@ -29,6 +31,7 @@ namespace crisp_controllers {
  * - kd: Derivative (damping) gain
  * - dq: Joint velocities
  * - tau_friction: Friction compensation torques
+ * - tau_nullspace: Nullspace control torques to maintain initial joint positions
  */
 class TorqueFeedbackController
     : public controller_interface::ControllerInterface {
@@ -114,15 +117,6 @@ private:
   std::vector<std::string> joint_names_;
   /// Number of controlled joints
   int num_joints_;
-  /// Flag indicating if using fake hardware (simulation)
-  bool use_fake_hardware_;
-  /// Proportional feedback gain for external torques
-  float kp_fb_;
-  /// Derivative (damping) gain for joint velocities
-  float kd_;
-  /// Threshold for external torque vector magnitude filtering
-  double torque_threshold_;
-
   /// Current joint positions
   Eigen::VectorXd q_;
   /// Current joint velocities
@@ -132,6 +126,30 @@ private:
 
   /// External torques received from subscriber
   Eigen::VectorXd tau_ext_;
+  
+  /// Initial joint positions recorded on activation (nullspace target)
+  Eigen::VectorXd q_init_;
+  
+  /// Nullspace weights (computed from parameters)
+  Eigen::VectorXd nullspace_weights_;
+  
+  /// Friction parameters as Eigen vectors
+  Eigen::VectorXd friction_fp1_;
+  Eigen::VectorXd friction_fp2_;
+  Eigen::VectorXd friction_fp3_;
+  
+  /// Nullspace projection matrix
+  Eigen::MatrixXd nullspace_projection_;
+  
+  /// Pinocchio model and data for dynamics computations
+  pinocchio::Model model_;
+  pinocchio::Data data_;
+  
+  /// End-effector frame ID for jacobian computation
+  pinocchio::FrameIndex end_effector_frame_id_;
+  
+  /// Jacobian matrix for nullspace projection
+  Eigen::MatrixXd J_;
 };
 
 } // namespace crisp_controllers
