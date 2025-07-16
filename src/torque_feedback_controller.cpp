@@ -116,9 +116,7 @@ TorqueFeedbackController::update(const rclcpp::Time & /*time*/,
   
   // Update nullspace weights
   for (size_t i = 0; i < joint_names_.size(); ++i) {
-    if (params_.nullspace.weights.count(joint_names_[i])) {
-      nullspace_weights_[i] = params_.nullspace.weights.at(joint_names_[i]);
-    }
+    nullspace_weights_[i] = params_.nullspace.weights.joints_map.at(joint_names_[i]).value;
   }
   
   return controller_interface::return_type::OK;
@@ -146,9 +144,7 @@ CallbackReturn TorqueFeedbackController::on_init() {
   // Initialize nullspace weights
   nullspace_weights_ = Eigen::VectorXd::Ones(num_joints_);
   for (size_t i = 0; i < joint_names_.size(); ++i) {
-    if (params_.nullspace.weights.count(joint_names_[i])) {
-      nullspace_weights_[i] = params_.nullspace.weights.at(joint_names_[i]);
-    }
+    nullspace_weights_[i] = params_.nullspace.weights.joints_map.at(joint_names_[i]).value;
   }
   
   // Initialize friction parameters as Eigen vectors
