@@ -1,0 +1,46 @@
+torque_feedback_controller:
+  use_fake_hardware:
+    type: bool
+    default_value: false
+    description: "Whether to use fake hardware"
+  joints:
+    type: string_array
+    default_value: []
+    description: "Names of the joints"
+  k_fb:
+    type: double
+    default_value: 0.6
+    description: "Feedback coefficient."
+    validation:
+      bounds<>: [0.1, 1.0]
+  kd:
+    type: double
+    default_value: 0.1
+    description: "Damping for the joints."
+    validation:
+      bounds<>: [0.0, 1.0]
+  joint_source_topic:
+    type: string
+    default_value: "target_joint"
+    description: "Target joints topic to track"
+  torque_threshold:
+    type: double
+    default_value: 0.1
+    description: "Minimum torque threshold below which torques are ignored"
+    validation:
+      bounds<>: [0.0, 10.0]
+
+  friction:
+    fp1:
+      type: double_array
+      default_value: [0.54615, 0.87224, 0.64068, 1.2794, 0.83904, 0.30301, 0.56489]
+      description: "Friction parameters part 1 (maximum friction torque)"
+    fp2:
+      type: double_array
+      default_value: [5.1181, 9.0657, 10.136, 5.5903, 8.3469, 17.133, 10.336]
+      description: "Friction parameters part 2 (steepness of friction curve)"
+    fp3:
+      type: double_array
+      default_value: [0.039533, 0.025882, -0.04607, 0.036194, 0.026226, -0.021047, 0.0035526]
+      description: "Friction parameters part 3 (velocity offset parameter)"
+

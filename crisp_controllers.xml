@@ -11,4 +11,10 @@
             Simple broadcaster for the pose.
         </description>
     </class>
+    <class name="crisp_controllers/TorqueFeedbackController"
+           type="crisp_controllers::TorqueFeedbackController" base_class_type="controller_interface::ControllerInterface">
+        <description>
+            Torque feedback controller for robotic manipulators that responds to external torques with PD control and friction compensation.
+        </description>
+    </class>
 </library>
