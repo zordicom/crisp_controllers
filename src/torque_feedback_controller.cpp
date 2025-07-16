@@ -2,9 +2,6 @@
 #include <crisp_controllers/utils/friction_model.hpp>
 #include <crisp_controllers/utils/pseudo_inverse.hpp>
 
-#include <ament_index_cpp/get_package_share_directory.hpp>
-#include <binders.h>
-#include <cassert>
 #include <cmath>
 #include <memory>
 #include <set>
@@ -14,12 +11,9 @@
 #include <pinocchio/algorithm/kinematics.hpp>
 #include <pinocchio/algorithm/frames.hpp>
 #include <pinocchio/algorithm/aba.hpp>
-#include <pinocchio/algorithm/compute-all-terms.hpp>
+#include <pinocchio/algorithm/model.hpp>
 #include <pinocchio/parsers/urdf.hpp>
 
-#define USE_WARM_START
-
-using namespace std::chrono_literals;
 
 namespace crisp_controllers {
 
