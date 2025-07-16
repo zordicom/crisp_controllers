@@ -101,6 +101,12 @@ private:
   /** @brief Subscription for target wrench messages */
   rclcpp::Subscription<geometry_msgs::msg::WrenchStamped>::SharedPtr wrench_sub_;
 
+  /** @brief Flag to indicate if multiple publishers detected */
+  bool multiple_publishers_detected_;
+
+  /** @brief Expected maximum number of publishers per topic */
+  size_t max_allowed_publishers_;
+
   /**
    * @brief Set the stiffness and damping matrices based on parameters
    */
@@ -244,6 +250,13 @@ private:
    * @param time Current time for throttling logs
    */
   void log_debug_info(const rclcpp::Time& time);
+
+  /**
+   * @brief Check publisher count for a specific topic
+   * @param topic_name Name of the topic to check
+   * @return true if publisher count is safe (<=1), false otherwise
+   */
+  bool check_topic_publisher_count(const std::string& topic_name);
 };
 
 } // namespace crisp_controllers

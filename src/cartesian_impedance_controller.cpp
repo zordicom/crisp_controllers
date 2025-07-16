@@ -330,9 +330,17 @@ CallbackReturn CartesianImpedanceController::on_configure(
   new_target_joint_ = false;
   new_target_wrench_ = false;
 
+  multiple_publishers_detected_ = false;
+  max_allowed_publishers_ = 1;
+
   auto target_pose_callback =
     [this](const std::shared_ptr<geometry_msgs::msg::PoseStamped> msg) -> void
   {
+    if (!check_topic_publisher_count("target_pose")) {
+      RCLCPP_WARN_THROTTLE(get_node()->get_logger(), *get_node()->get_clock(), 1000,
+                           "Ignoring target_pose message due to multiple publishers detected!");
+      return;
+    }
     target_pose_buffer_.writeFromNonRT(msg);
     new_target_pose_ = true;
   };
@@ -340,6 +348,11 @@ CallbackReturn CartesianImpedanceController::on_configure(
   auto target_joint_callback =
     [this](const std::shared_ptr<sensor_msgs::msg::JointState> msg) -> void
   {
+    if (!check_topic_publisher_count("target_joint")) {
+      RCLCPP_WARN_THROTTLE(get_node()->get_logger(), *get_node()->get_clock(), 1000,
+                           "Ignoring target_joint message due to multiple publishers detected!");
+      return;
+    }
     target_joint_buffer_.writeFromNonRT(msg);
     new_target_joint_ = true;
   };
@@ -347,6 +360,11 @@ CallbackReturn CartesianImpedanceController::on_configure(
   auto target_wrench_callback =
     [this](const std::shared_ptr<geometry_msgs::msg::WrenchStamped> msg) -> void
   {
+    if (!check_topic_publisher_count("target_wrench")) {
+      RCLCPP_WARN_THROTTLE(get_node()->get_logger(), *get_node()->get_clock(), 1000,
+                           "Ignoring target_wrench message due to multiple publishers detected!");
+      return;
+    }
     target_wrench_buffer_.writeFromNonRT(msg);
     new_target_wrench_ = true;
   };
@@ -359,6 +377,7 @@ CallbackReturn CartesianImpedanceController::on_configure(
 
   wrench_sub_ = get_node()->create_subscription<geometry_msgs::msg::WrenchStamped>(
       "target_wrench", rclcpp::QoS(1), target_wrench_callback);
+
 
   // Initialize all control vectors with appropriate dimensions
   tau_task = Eigen::VectorXd::Zero(model_.nv);
@@ -617,6 +636,35 @@ void CartesianImpedanceController::log_debug_info(const rclcpp::Time &time) {
           "Control loop needed: "
               << (t_end.nanoseconds() - time.nanoseconds()) * 1e-6 << " ms");
     }
+}
+
+bool CartesianImpedanceController::check_topic_publisher_count(const std::string& topic_name) {
+  auto topic_info = get_node()->get_publishers_info_by_topic(topic_name);
+  size_t publisher_count = topic_info.size();
+  
+  if (publisher_count > max_allowed_publishers_) {
+    RCLCPP_WARN_THROTTLE(get_node()->get_logger(), *get_node()->get_clock(), 2000,
+                         "Topic '%s' has %zu publishers (expected max: %zu). Multiple command sources detected!",
+                         topic_name.c_str(), publisher_count, max_allowed_publishers_);
+    
+    if (!multiple_publishers_detected_) {
+      RCLCPP_ERROR(get_node()->get_logger(),
+                   "SAFETY WARNING: Multiple publishers detected on topic '%s'! "
+                   "Ignoring commands from this topic to prevent conflicting control signals.",
+                   topic_name.c_str());
+      multiple_publishers_detected_ = true;
+    }
+    return false;
+  }
+  
+  if (multiple_publishers_detected_ && publisher_count <= max_allowed_publishers_) {
+    RCLCPP_INFO(get_node()->get_logger(),
+                "Publisher conflict resolved on topic '%s'. Resuming message processing.",
+                topic_name.c_str());
+    multiple_publishers_detected_ = false;
+  }
+  
+  return true;
 }
 
 } // namespace crisp_controllers
