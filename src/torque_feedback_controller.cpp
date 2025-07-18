@@ -107,6 +107,7 @@ TorqueFeedbackController::update(const rclcpp::Time & /*time*/,
   auto tau_d = -params_.k_fb * tau_ext_thresholded - params_.kd * dq_;
   auto tau_f = get_friction(dq_, friction_fp1_, friction_fp2_, friction_fp3_);
 
+
   for (int i = 0; i < num_joints_; i++) {
     command_interfaces_[i].set_value(tau_d[i] + tau_f[i] + tau_nullspace[i]);
   }
