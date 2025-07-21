@@ -9,9 +9,9 @@ hide:
 # CRISP - **C**a**R**tesian **I**mpedance and Operational **SP**ace Control for Learning-based Policies
 *Authors: Daniel San Jose Pro, Oliver Hausdoerfer, Ralf Roemer, Martin Schuck and Angela Schoellig.*
 
-> Collection of C++ controllers for torque-based control for manipulators compatible with `ros2_control`, including Operational Space Control and Cartesian Impedance Control. 
+> Collection of C++ controllers for torque-based control for manipulators compatible with `ros2_control`, including Operational Space Control and Cartesian Impedance Control. Developed for deploying high-level learning-based policies (VLA, Diffusion, ...).
 
-Check the [controllers (crisp_controllers) :simple-github:](https://github.com/utiasDSL/crisp_controllers) , robot [demos (crisp_controllers_demos) :simple-github:](https://github.com/utiasDSL/crisp_controllers_demos), a simple [python interface (crisp_py) :simple-github:](https://github.com/utiasDSL/crisp_py), and a [gym wrapper (crisp_gym) :simple-github:](https://github.com/utiasDSL/crisp_gym) for real-world experiments.
+Check the [controllers (CRISP controllers) :simple-github:](https://github.com/utiasDSL/crisp_controllers) , robot [demos (CRISP controllers demos) :simple-github:](https://github.com/utiasDSL/crisp_controllers_demos), a simple [python interface (CRISP_PY) :simple-github:](https://github.com/utiasDSL/crisp_py), and a [gym wrapper (CRISP_GYM) :simple-github:](https://github.com/utiasDSL/crisp_gym) for real-world experiments.
 
 | <video src="media/pap_demo.mp4" controls="true" loop="true" autoplay="true" width="800"/> | <video src="media/policy.mp4" controls="true" loop="true" autoplay="true" width="800"/> |
 |:--:|:--:|
