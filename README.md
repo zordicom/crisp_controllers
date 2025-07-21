@@ -1,32 +1,20 @@
-#  CRISP - `ros2_control` cartesian torque-based controllers
-
-<img src="https://github.com/user-attachments/assets/284983f8-2311-4699-86ab-06fc2ea9d5af" alt="CRISP Controllers Logo" width="160" align="right"/>
+<img src="media/crisp_logo.png" alt="CRISP Controllers Logo"/>
 
 <a href="https://github.com/utiasDSL/crisp_controllers/actions/workflows/humble_ros2_ci.yml"><img src="https://github.com/utiasDSL/crisp_controllers/actions/workflows/humble_ros2_ci.yml/badge.svg"/></a>
 <a href="https://github.com/utiasDSL/crisp_controllers/actions/workflows/jazzy_ros2_ci.yml"><img src="https://github.com/utiasDSL/crisp_controllers/actions/workflows/jazzy_ros2_ci.yml/badge.svg"/></a>
+<a href="https://github.com/utiasDSL/crisp_controllers/actions/workflows/kilted_ros2_ci.yml"><img src="https://github.com/utiasDSL/crisp_controllers/actions/workflows/kilted_ros2_ci.yml/badge.svg"/></a>
 <a href="https://github.com/utiasDSL/crisp_controllers/actions/workflows/rolling_ros2_ci.yml"><img src="https://github.com/utiasDSL/crisp_controllers/actions/workflows/rolling_ros2_ci.yml/badge.svg"/></a>
 <a href="https://danielsanjosepro.github.io/crisp_controllers/"><img alt="Static Badge" src="https://img.shields.io/badge/docs-passing-blue?style=flat&link=https%3A%2F%2Fdanielsanjosepro.github.io%2Fcrisp_controllers%2F"></a>
 
-Collection of C++ controllers for torque-based control for manipulators compatible with `ros2_control`, including Operational Space Control and Cartesian Impedance Control. The controllers are developed with intend to be used with learning-based policies (VLA, Diffusion Policies, ...). The controllers are robot agnostic and tested on the Franka Robotics FR3 Robot hardware in single and bimanual operation, as well as on multiple robots in simulation. Check out the [website](https://utiasdsl.github.io/crisp_controllers/) for demos!
-
-## Demos
-
-Some of the things that you can do with our controllers. Check the [crisp_controller_demos](https://github.com/utiasDSL/crisp_controllers_demos) for more information on how to get the controllers running on you robot.
-
-| ![Franka](media/franka.gif) | ![kinova](media/kinova.gif) | ![iiwa](media/iiwa.gif) |
-|:--:|:--:|:--:|
-| *Robot following a moving target, while base joint follows a sine curve.* | *Simulated kinova robot with continous joints and nullspace control* | *Simulated iiwa robot example...* |
-
-| ![franka_eight_reduced](media/franka_eight_reduced.gif) ![franka_ns_reduced](media/franka_ns_reduced.gif)  | ![vicon](media/franka_teleop.gif)|
-|:--:|:--:|
-| *Real robot following a target and being disturbed (contact) + null space control demonstration*  | *Demonstration using a cartesian controller teleoperated using Vicon tracking system (Speed x4)*| 
+CRISP is a collection of C++ controllers for torque-based control for manipulators compatible with `ros2_control`, including Operational Space Control and Cartesian Impedance Control. Robot agnostic and tested on the Franka Robotics FR3 Robot in single and bimanual operation. Check the [docs](https://danielsanjosepro.github.io/crisp_controllers/)!
+Check the [project website](utiasDSL.github.io/crisp_controllers) for videos and more! 
 
 ## Features
 
 - 🤖 Operational Space Controller as well as Cartesian Impedance Controller for torque-based control.  
 - 🚫 No MoveIt or complicated path-planning, just a simple C++ `ros2_controller`. Ready to use.  
 - ⚙️ Dynamically and highly parametrizable: powered by the `generate_parameter_library` you can modify stiffness and more during operation.  
-- 🐍 Python interface to move your ROS2 robot around without having to think about topics, spinning, and more ROS2 jargon! Check [crisp_py](https://github.com/utiasDSL/crisp_py) for more information and examples.
+- 🐍 Python interface to move your ROS2 robot around without having to think about topics, spinning, and more ROS2 concepts. Check [crisp_py](https://github.com/utiasDSL/crisp_py) for more information and examples.
 - ❓ Demos showcasing how to use the controller with FR3 of Franka Emika in single and bimanual setup. Check the [crisp_controller_demos](https://github.com/utiasDSL/crisp_controllers_demos).
 
 ## Getting Started
@@ -50,3 +38,13 @@ touch src/crisp_controllers/COLCON_IGNORE  # Forget about it
 ### Docker
 You can try the controller with the provided Dockerfile and devcontainer setup in [crisp_controller_demos](https://github.com/utiasDSL/crisp_controllers_demos). Our docker setup uses the RT-capabilities if available. If you are using VSCode, you should be able
 to open the container directly from there using the devcontainer plugin. Check [the devcontainer documentation](https://code.visualstudio.com/docs/devcontainers/containers) for more information.
+
+### Update the website for contributors
+
+We use [mkdocs](https://www.mkdocs.org/) to generate the website from markdown. You can modify it within `docs/` in particular the `index.md`.
+Then you can serve it locally or update the github pages with:
+```bash
+uv run mkdocs serve
+uv run mkdocs gh-deploy
+```
+
