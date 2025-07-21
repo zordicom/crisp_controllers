@@ -7,7 +7,7 @@ hide:
 <img src="media/crisp_logo.webp" alt="CRISP Controllers Logo"/>
 
 # CRISP - **C**a**R**tesian **I**mpedance and Operational **SP**ace Control for Learning-based Policies
-*Authors: Daniel San Jose Pro, [Oliver Hausdoerfer](https://oliver.hausdoerfer.de/), Ralf Roemer, Martin Schuck and Angela Schoellig.*
+*Authors: Daniel San Jose Pro, [Oliver Hausdörfer](https://oliver.hausdoerfer.de/), Ralf Roemer, Martin Schuck and Angela Schoellig.*
 
 > Collection of C++ controllers for torque-based control for manipulators compatible with `ros2_control`, including Operational Space Control and Cartesian Impedance Control. Developed for deploying high-level learning-based policies (VLA, Diffusion, ...).
 
