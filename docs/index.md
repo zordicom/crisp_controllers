@@ -15,7 +15,7 @@ Check the [controllers (CRISP controllers) :simple-github:](https://github.com/u
 
 | <video src="media/pap_demo.mp4" controls="true" loop="true" autoplay="true" width="800"/> | <video src="media/policy.mp4" controls="true" loop="true" autoplay="true" width="800"/> |
 |:--:|:--:|
-| Robot teleoperated using a Follower-Leader system in [crisp_gym :simple-github:](https://github.com/utiasDSL/crisp_gym) | Diffusion Policy trained and deployed from the same demonstrations. | 
+| Robot teleoperated using a Follower-Leader system in [CRISP GYM :simple-github:](https://github.com/utiasDSL/crisp_gym) | Diffusion Policy trained and deployed from the same demonstrations. | 
 
 
 | ![Franka](media/franka.gif) | ![kinova](media/kinova.gif) | ![iiwa](media/iiwa.gif) |
