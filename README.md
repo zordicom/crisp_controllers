@@ -7,7 +7,7 @@
 <a href="https://github.com/utiasDSL/crisp_controllers/actions/workflows/rolling_ros2_ci.yml"><img src="https://github.com/utiasDSL/crisp_controllers/actions/workflows/rolling_ros2_ci.yml/badge.svg"/></a>
 <a href="https://danielsanjosepro.github.io/crisp_controllers/"><img alt="Static Badge" src="https://img.shields.io/badge/docs-passing-blue?style=flat&link=https%3A%2F%2Fdanielsanjosepro.github.io%2Fcrisp_controllers%2F"></a>
 
-Collection of C++ controllers for torque-based control for manipulators compatible with `ros2_control`, including Operational Space Control and Cartesian Impedance Control. Robot agnostic and tested on the Franka Robotics FR3 Robot in single and bimanual operation. Check the [docs](https://danielsanjosepro.github.io/crisp_controllers/)!
+Collection of C++ controllers for torque-based control for manipulators compatible with `ros2_control`, including Operational Space Control and Cartesian Impedance Control. The controllers are developed with intend to be used with learning-based policies (VLA, Diffusion Policies, ...). The controllers are robot agnostic and tested on the Franka Robotics FR3 Robot hardware in single and bimanual operation, as well as on multiple robots in simulation. Check out the [website](https://utiasdsl.github.io/crisp_controllers/) for demos!
 
 ## Demos
 
@@ -15,7 +15,7 @@ Some of the things that you can do with our controllers. Check the [crisp_contro
 
 | ![Franka](media/franka.gif) | ![kinova](media/kinova.gif) | ![iiwa](media/iiwa.gif) |
 |:--:|:--:|:--:|
-| *Robot following a moving target, while base joint follows a sine curve.* | *Simulated kinova robot with continous joints and nullspace control* | *Another simulated robot example...* |
+| *Robot following a moving target, while base joint follows a sine curve.* | *Simulated kinova robot with continous joints and nullspace control* | *Simulated iiwa robot example...* |
 
 | ![franka_eight_reduced](media/franka_eight_reduced.gif) ![franka_ns_reduced](media/franka_ns_reduced.gif)  | ![vicon](media/franka_teleop.gif)|
 |:--:|:--:|
