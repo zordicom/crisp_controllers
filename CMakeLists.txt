@@ -46,11 +46,17 @@ generate_parameter_library(
   src/pose_broadcaster.yaml
 )
 
+generate_parameter_library(
+  torque_feedback_controller_parameters
+  src/torque_feedback_controller.yaml
+)
+
 add_library(
         ${PROJECT_NAME}
         SHARED
         src/cartesian_impedance_controller.cpp
         src/pose_broadcaster.cpp
+        src/torque_feedback_controller.cpp
 )
 
 target_include_directories(${PROJECT_NAME}
@@ -71,6 +77,7 @@ target_link_libraries(${PROJECT_NAME}
   PRIVATE
     cartesian_impedance_controller_parameters
     pose_broadcaster_parameters
+    torque_feedback_controller_parameters
 )
 
 
