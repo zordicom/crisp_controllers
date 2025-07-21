@@ -4,7 +4,7 @@ hide:
   - toc
 ---
 
-<img src="media/crisp_logo.png" alt="CRISP Controllers Logo"/>
+<img src="media/crisp_logo.webp" alt="CRISP Controllers Logo"/>
 
 # CRISP - **C**a**R**tesian **I**mpedance and Operational **SP**ace Control for Learning-based Policies
 *Authors: Daniel San Jose Pro, Oliver Hausdoerfer, Ralf Roemer, Martin Schuck and Angela Schoellig.*
