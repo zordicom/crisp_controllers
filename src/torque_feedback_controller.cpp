@@ -50,13 +50,12 @@ TorqueFeedbackController::update(const rclcpp::Time & /*time*/,
   for (int i = 0; i < num_joints_; i++) {
     q_[i] = state_interfaces_[i].get_value();
     dq_[i] = state_interfaces_[num_joints_ + i].get_value();
-    tau_[i] = state_interfaces_[2 * num_joints_ + i].get_value();
   }
-  
+
   // Compute forward kinematics and jacobian
   pinocchio::forwardKinematics(model_, data_, q_, dq_);
   pinocchio::updateFramePlacements(model_, data_);
-  
+
   J_.setZero();
   pinocchio::computeFrameJacobian(model_, data_, q_, end_effector_frame_id_,
                                   pinocchio::ReferenceFrame::LOCAL, J_);
@@ -67,17 +66,16 @@ TorqueFeedbackController::update(const rclcpp::Time & /*time*/,
   if (tau_ext_magnitude > params_.torque_threshold) {
     tau_ext_thresholded = tau_ext_;
   }
-  
+
   // Compute nullspace control to maintain initial joint positions
   Eigen::VectorXd q_error = q_ - q_init_;
-  double nullspace_damping_computed = params_.nullspace.damping > 0 ? params_.nullspace.damping : 2.0 * sqrt(params_.nullspace.stiffness);
-  
+  double nullspace_damping = params_.nullspace.damping > 0 ? params_.nullspace.damping : 2.0 * sqrt(params_.nullspace.stiffness);
+
   Eigen::VectorXd tau_secondary = -params_.nullspace.stiffness * nullspace_weights_.cwiseProduct(q_error) - 
-                                  nullspace_damping_computed * nullspace_weights_.cwiseProduct(dq_);
-  
+                                  nullspace_damping * nullspace_weights_.cwiseProduct(dq_);
   // Compute nullspace projection based on projector type
   Eigen::MatrixXd Id_nv = Eigen::MatrixXd::Identity(model_.nv, model_.nv);
-  
+
   if (params_.nullspace.projector_type == "dynamic") {
     pinocchio::computeMinverse(model_, data_, q_);
     auto Mx_inv = J_ * data_.Minv * J_.transpose();
@@ -107,9 +105,11 @@ TorqueFeedbackController::update(const rclcpp::Time & /*time*/,
   auto tau_d = -params_.k_fb * tau_ext_thresholded - params_.kd * dq_;
   auto tau_f = get_friction(dq_, friction_fp1_, friction_fp2_, friction_fp3_);
 
+  // Save commanded torques for wrench computation
+  tau_commanded_ = tau_d + tau_f + tau_nullspace;
 
   for (int i = 0; i < num_joints_; i++) {
-    command_interfaces_[i].set_value(tau_d[i] + tau_f[i] + tau_nullspace[i]);
+    command_interfaces_[i].set_value(tau_commanded_[i]);
   }
 
   params_listener_->refresh_dynamic_parameters();
@@ -137,23 +137,20 @@ CallbackReturn TorqueFeedbackController::on_init() {
   // Initialize state vectors
   q_ = Eigen::VectorXd::Zero(num_joints_);
   dq_ = Eigen::VectorXd::Zero(num_joints_);
-  tau_ = Eigen::VectorXd::Zero(num_joints_);
+  tau_commanded_ = Eigen::VectorXd::Zero(num_joints_);
   q_init_ = Eigen::VectorXd::Zero(num_joints_);
 
   tau_ext_ = Eigen::VectorXd::Zero(num_joints_);
-  
-  // Initialize nullspace weights
+
   nullspace_weights_ = Eigen::VectorXd::Ones(num_joints_);
   for (size_t i = 0; i < joint_names_.size(); ++i) {
     nullspace_weights_[i] = params_.nullspace.weights.joints_map.at(joint_names_[i]).value;
   }
-  
-  // Initialize friction parameters as Eigen vectors
+
   friction_fp1_ = Eigen::Map<const Eigen::VectorXd>(params_.friction.fp1.data(), params_.friction.fp1.size());
   friction_fp2_ = Eigen::Map<const Eigen::VectorXd>(params_.friction.fp2.data(), params_.friction.fp2.size());
   friction_fp3_ = Eigen::Map<const Eigen::VectorXd>(params_.friction.fp3.data(), params_.friction.fp3.size());
-  
-  // Initialize nullspace projection matrix
+
   nullspace_projection_ = Eigen::MatrixXd::Identity(num_joints_, num_joints_);
 
   joint_sub_ = get_node()->create_subscription<sensor_msgs::msg::JointState>(
@@ -185,11 +182,9 @@ CallbackReturn TorqueFeedbackController::on_configure(
     return CallbackReturn::ERROR;
   }
 
-  // Build pinocchio model
   pinocchio::Model raw_model_;
   pinocchio::urdf::buildModelFromXML(robot_description_, raw_model_);
 
-  // Check that the passed joints exist in the kinematic tree
   for (auto &joint : joint_names_) {
     if (not raw_model_.existJointName(joint)) {
       RCLCPP_ERROR_STREAM(get_node()->get_logger(),
@@ -216,7 +211,6 @@ CallbackReturn TorqueFeedbackController::on_configure(
                                         list_of_joints_to_lock_by_id, q_locked);
   data_ = pinocchio::Data(model_);
 
-  // Check for unsupported joint types (continuous joints not implemented)
   std::set<std::string> allowed_joint_types = {"JointModelRZ", "JointModelRevoluteUnaligned", "JointModelRX", "JointModelRY"};
 
   for (int joint_id = 0; joint_id < model_.njoints; joint_id++) {
@@ -240,6 +234,13 @@ CallbackReturn TorqueFeedbackController::on_configure(
   
   // Initialize jacobian matrix
   J_ = Eigen::MatrixXd::Zero(6, model_.nv);
+  
+  wrench_pub_ = get_node()->create_publisher<geometry_msgs::msg::WrenchStamped>(
+      "~/commanded_wrench", rclcpp::QoS(10));
+  
+  wrench_timer_ = get_node()->create_wall_timer(
+      std::chrono::milliseconds(5),
+      std::bind(&TorqueFeedbackController::publish_wrench_callback_, this));
 
   return CallbackReturn::SUCCESS;
 }
@@ -249,10 +250,7 @@ CallbackReturn TorqueFeedbackController::on_activate(
   for (int i = 0; i < num_joints_; i++) {
     q_[i] = state_interfaces_[i].get_value();
     dq_[i] = state_interfaces_[num_joints_ + i].get_value();
-    tau_[i] = state_interfaces_[2 * num_joints_ + i].get_value();
     tau_ext_[i] = 0.0;
-    
-    // Record initial joint positions for nullspace control
     q_init_[i] = q_[i];
   }
 
@@ -271,6 +269,26 @@ void TorqueFeedbackController::target_joint_callback_(
       tau_ext_[i] = msg->effort[i];
     }
   }
+}
+
+void TorqueFeedbackController::publish_wrench_callback_() {
+  // Convert joint torques to Cartesian wrench using Jacobian transpose
+  // F = J^T * tau
+  Eigen::VectorXd wrench_commanded = J_.transpose() * tau_commanded_;
+  
+  // Create and publish wrench message
+  auto wrench_msg = geometry_msgs::msg::WrenchStamped();
+  wrench_msg.header.stamp = get_node()->get_clock()->now();
+  wrench_msg.header.frame_id = params_.end_effector_frame;
+  
+  wrench_msg.wrench.force.x = wrench_commanded[0];
+  wrench_msg.wrench.force.y = wrench_commanded[1];
+  wrench_msg.wrench.force.z = wrench_commanded[2];
+  wrench_msg.wrench.torque.x = wrench_commanded[3];
+  wrench_msg.wrench.torque.y = wrench_commanded[4];
+  wrench_msg.wrench.torque.z = wrench_commanded[5];
+  
+  wrench_pub_->publish(wrench_msg);
 }
 
 } // namespace crisp_controllers

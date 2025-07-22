@@ -4,6 +4,7 @@
 #include <controller_interface/controller_interface.hpp>
 #include <crisp_controllers/torque_feedback_controller_parameters.hpp>
 #include <sensor_msgs/msg/joint_state.hpp>
+#include <geometry_msgs/msg/wrench_stamped.hpp>
 #include <pinocchio/multibody/model.hpp>
 #include <pinocchio/multibody/data.hpp>
 
@@ -102,6 +103,12 @@ private:
 
   /// Subscriber for external torque commands
   rclcpp::Subscription<sensor_msgs::msg::JointState>::SharedPtr joint_sub_;
+  
+  /// Publisher for commanded wrench
+  rclcpp::Publisher<geometry_msgs::msg::WrenchStamped>::SharedPtr wrench_pub_;
+  
+  /// Timer for 200Hz wrench publishing
+  rclcpp::TimerBase::SharedPtr wrench_timer_;
 
   /**
    * @brief Callback for target joint state messages
@@ -112,6 +119,13 @@ private:
    */
   void
   target_joint_callback_(const sensor_msgs::msg::JointState::SharedPtr msg);
+  
+  /**
+   * @brief Callback for wrench publishing timer
+   *
+   * Computes and publishes the commanded wrench using the Jacobian transpose
+   */
+  void publish_wrench_callback_();
 
   /// Names of controlled joints
   std::vector<std::string> joint_names_;
@@ -123,6 +137,8 @@ private:
   Eigen::VectorXd dq_;
   /// Current joint torques
   Eigen::VectorXd tau_;
+  /// Commanded joint torques (for wrench computation)
+  Eigen::VectorXd tau_commanded_;
 
   /// External torques received from subscriber
   Eigen::VectorXd tau_ext_;
