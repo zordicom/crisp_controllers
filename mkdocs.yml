@@ -1,6 +1,8 @@
 site_name: CRISP Controllers - Learning Systems Lab
 nav:
   - Home: index.md
+  - Getting Started: getting_started.md
+  - Setting up a robot that is not available in the demos: new_robot_setup.md
 
 theme:
   name: material
@@ -31,6 +33,9 @@ theme:
     code: Source Code Pro
   features:
     - header.autohide
+    - content.code.copy
+    - content.code.select
+    - content.code.annotate
   icon:
     repo: fontawesome/brands/github
 
@@ -52,11 +57,22 @@ extra:
     - icon: fontawesome/brands/github 
       link: https://github.com/utiasDSL/crisp_controllers
 
-# nav:
-#   - crisp_controllers: "crisp_controllers/links.md"
-
 markdown_extensions:
   - attr_list
   - pymdownx.emoji:
       emoji_index: !!python/name:material.extensions.emoji.twemoji
       emoji_generator: !!python/name:material.extensions.emoji.to_svg
+  - pymdownx.highlight:
+      anchor_linenums: true
+      line_spans: __span
+      pygments_lang_class: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  - pymdownx.superfences
+  - def_list
+  - pymdownx.tasklist:
+      custom_checkbox: true 
+      clickable_checkbox: true
+
+extra_css:
+  - stylesheets/extra.css
