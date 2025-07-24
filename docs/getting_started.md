@@ -73,31 +73,33 @@ Now you can try to control the robot! Chech out the [examples](https://github.co
 ### Try it out with the robot
 
 Make sure that the demo container is running in the background. We will need it to access it.
-The easiest thing you can try is:
-```py
-from crisp_py.robot import Robot
-from crisp_py.robot_config import RobotConfig
+From now on, you can instantiate `Robot` objects to control the robot.
 
-robot_config = RobotConfig(...)
-robot = Robot(namespace="...", config=robot_config)  # (1)!
-robot.wait_until_ready()  # (2)!
+??? example "Example robot usage:"
+    ```py
+    from crisp_py.robot import Robot
+    from crisp_py.robot_config import RobotConfig
 
-print(robot.end_effector_pose)
+    robot_config = RobotConfig(...)
+    robot = Robot(namespace="...", config=robot_config)  # (1)!
+    robot.wait_until_ready()  # (2)!
+
+    print(robot.end_effector_pose)
 
 
-robot.controller_switcher_client.switch_controller(
-    "cartesian_impedance_controller",  # (4)!
-)  
-x, y, z = robot.end_effector_pose.position
-robot.set_target(position=[x, y, z-0.1])  # (3)!
+    robot.controller_switcher_client.switch_controller(
+        "cartesian_impedance_controller",  # (4)!
+    )  
+    x, y, z = robot.end_effector_pose.position
+    robot.set_target(position=[x, y, z-0.1])  # (3)!
 
-robot.shutdown()
-```
+    robot.shutdown()
+    ```
 
-1. This will get information from the robot asynchronously
-2. Make sure that we get information from the robot before trying to set targets or reading the pose of the robot.
-3. Set target 10 cm downwoards. Careful not to send poses that are too far away from the current one!
-4. This will request the controller manager to activate the cartesian impedance controller. You can use it with other controllers like the operational space controller!
+    1. This will get information from the robot asynchronously
+    2. Make sure that we get information from the robot before trying to set targets or reading the pose of the robot.
+    3. Set target 10 cm downwoards. Careful not to send poses that are too far away from the current one!
+    4. This will request the controller manager to activate the cartesian impedance controller. You can use it with other controllers like the operational space controller!
 
 ## 3. Adding cameras, grippers, and further sensors
 
@@ -111,31 +113,31 @@ The cameras that we tried are:
 
 But any camera should work with [camera_ros](https://github.com/christianrauch/camera_ros).
 
+??? example "Example camera usage:"
+    ```py
+    import cv2
+    from crisp_py.camera import Camera, CameraConfig
 
-```py
-import cv2
-from crisp_py.camera import Camera, CameraConfig
+    camera_config = CameraConfig(
+        camera_name="primary",
+        resolution=(256, 256),  # (1)!
+        camera_color_image_topic="camera_name/color/image_raw",  # (2)!
+        camera_color_info_topic="camera_name/color/camera_info",
+    )
 
-camera_config = CameraConfig(
-    camera_name="primary",
-    resolution=(256, 256),  # (1)!
-    camera_color_image_topic="camera_name/color/image_raw",  # (2)!
-    camera_color_info_topic="camera_name/color/camera_info",
-)
+    camera = Camera(config=camera_config)  # (3)!
+    camera.wait_until_ready() # (4)!
 
-camera = Camera(config=camera_config)  # (3)!
-camera.wait_until_ready() # (4)!
+    cv2.imshow("Camera Image", camera.current_image)  # (5)!
+    cv2.waitKey(0)
 
-cv2.imshow("Camera Image", camera.current_image)  # (5)!
-cv2.waitKey(0)
+    ```
 
-```
-
-1. You can define a custom resolution, independently of the resolution of the published image.
-2. Set here the topic of your custom camera name
-3. You can also pass `namespace="..."` to give the camera a namespace. This is required for a bimanual setup.
-4. Make sure that we received an image. This will fail with a timeout if the topic is wrong or the camera is not publishing.
-5. This will show you the latest received image!
+    1. You can define a custom resolution, independently of the resolution of the published image.
+    2. Set here the topic of your custom camera name
+    3. You can also pass `namespace="..."` to give the camera a namespace. This is required for a bimanual setup.
+    4. Make sure that we received an image. This will fail with a timeout if the topic is wrong or the camera is not publishing.
+    5. This will show you the latest received image!
 
 ### Grippers
 
@@ -144,31 +146,32 @@ To use a ...
 - Franka Hand you just need to start the demo. An adapter is already running to allow you to control the gripper this way,
 - Dynamixel motor to control a gripper we used the well-mantained [dynamixel_hardware_interface](https://github.com/ROBOTIS-GIT/dynamixel_hardware_interface) with a position controller for the gripper.
 
-You can use the gripper in `crisp_py` with:
-```py
-from crisp_py.gripper import Gripper, GripperConfig
+??? example "Example gripper usage:"
+    You can use the gripper in `crisp_py` with:
+    ```py
+    from crisp_py.gripper import Gripper, GripperConfig
 
-# config = GripperConfig.from_yaml(path="...")  (1)
-config = GripperConfig(
-    min_value=0.0,
-    max_value=1.0,
-    command_topic="gripper_position_controller/commands",
-    joint_state_topic="joint_states",
-)  # (2)!
-gripper = Gripper(gripper_config=config)  # (3)!
-gripper.wait_until_ready()  # (4)!
+    # config = GripperConfig.from_yaml(path="...")  (1)
+    config = GripperConfig(
+        min_value=0.0,
+        max_value=1.0,
+        command_topic="gripper_position_controller/commands",
+        joint_state_topic="joint_states",
+    )  # (2)!
+    gripper = Gripper(gripper_config=config)  # (3)!
+    gripper.wait_until_ready()  # (4)!
 
-print(gripper.value)
+    print(gripper.value)
 
-gripper.open()
-# gripper.close()
-# gripper.set_target(0.5)
-```
+    gripper.open()
+    # gripper.close()
+    # gripper.set_target(0.5)
+    ```
 
-1. You can load the configs from a yaml file. If you calibrate the gripper manually (check the crisp_py docs for more information) you can select this way your custom calibration file.
-2. Set the range of allowed commands (min stands for fully closed, max to fully open) and the topics for the gripper. You can check the topics using `ros2 topic list`
-3. You can also pass `namespace="..."` to give the gripper a namespace. This is required for a bimanual setup.
-4. Make sure that we received a gripper value. This will fail with a timeout if the topic is wrong or the gripper is not publishing.
+    1. You can load the configs from a yaml file. If you calibrate the gripper manually (check the crisp_py docs for more information) you can select this way your custom calibration file.
+    2. Set the range of allowed commands (min stands for fully closed, max to fully open) and the topics for the gripper. You can check the topics using `ros2 topic list`
+    3. You can also pass `namespace="..."` to give the gripper a namespace. This is required for a bimanual setup.
+    4. Make sure that we received a gripper value. This will fail with a timeout if the topic is wrong or the gripper is not publishing.
 
 ### Sensors
 
