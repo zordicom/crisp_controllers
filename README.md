@@ -20,7 +20,7 @@ CRISP is a collection of C++ controllers for torque-based control for manipulato
 ## Getting Started
 
 Independently of your setup, you *should* use a real-time patch. You don't want any jitter with this type of controllers otherwise they can get unstable. Most vendors will not even allow you to use the manipulator.
-If you are trying it out on simulation, you should not worry about it. If using a real robot, you can check the [Franka Robotics guide on how to set up a patch](https://frankaemika.github.io/docs/installation_linux.html#setting-up-the-real-time-kernel). 
+If you are trying it out on simulation, you should not worry about it. If using a real robot, you can check the [Franka Robotics guide on how to set up a patch](https://frankarobotics.github.io/docs/installation_linux.html#setting-up-the-real-time-kernel). 
 
 ### From source
 
