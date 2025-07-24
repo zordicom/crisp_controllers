@@ -1,36 +1,36 @@
 # Getting started
 
-Here is an overview of the framework
+Here is an overview of the framework.
 
 ![Stack overview](media/crisp_overview.png#only-light)
 ![Stack overview](media/crisp_overview_dark.png#only-dark)
 
-In short you have:
+In short, you have:
 
-- [ ] 1. The first part is the setup for the low level controllers i.e. [crisp_controllers](https://github.com/utiasDSL/crisp_controllers).
-- [ ] 2. Then, we will try out to move the robot around using [crisp_py](https://github.com/utiasDSL/crisp_py).
-- [ ] 3. After that, we can include cameras to the setup or further sensors. 
-- [ ] 4. Finally, we can setup [crisp_gym](https://github.com/utiasDSL/crisp_gym) and start recording episodes.
+- [ ] 1. The first part is the setup for the low-level controllers, i.e., [crisp_controllers](https://github.com/utiasDSL/crisp_controllers).
+- [ ] 2. Then, we will try to move the robot around using [crisp_py](https://github.com/utiasDSL/crisp_py).
+- [ ] 3. After that, we can include cameras in the setup or further sensors. 
+- [ ] 4. Finally, we can set up [crisp_gym](https://github.com/utiasDSL/crisp_gym) and start recording episodes.
 
 ## 1. Getting the low-level controller ready
 
-First, the computer running the controller needs a realtime patch for the controller to run smoothly and safely.
+First, the computer running the controller needs a real-time patch for the controller to run smoothly and safely.
 You can check out the [Franka Robotics guide on how to set up a RT-patch.](https://frankarobotics.github.io/docs/installation_linux.html#setting-up-the-real-time-kernel)
-On newer ubuntu versions, you can use [Ubuntu Pro](https://ubuntu.com/real-time) for an easy setup.
+On newer Ubuntu versions, you can use [Ubuntu Pro](https://ubuntu.com/real-time) for an easy setup.
 
 Then, check if your robot is part of our [demos](https://github.com/utiasDSL/crisp_controllers_demos).
-You can then follow the instructions there to start your robot(s) using a docker container.
-Some of them offer the possibility to run the demos with a simulated robots to test the setup.
+You can then follow the instructions there to start your robot(s) using a Docker container.
+Some of them offer the possibility to run the demos with simulated robots to test the setup.
 
-If your robot is not included in the demos, check out [How to setup a robot that is not available in the demos](new_robot_setup.md).
-If you get the controllers running, feel free to open a pull-request to add it to the demos!
+If your robot is not included in the demos, check out [How to set up a robot that is not available in the demos](new_robot_setup.md).
+If you get the controllers running, feel free to open a pull request to add it to the demos!
 
 ## 2. Use crisp_py to control the robot
 
 ### Installation
 
 To use `crisp_py`, we recommend using [pixi](https://pixi.sh/latest/) as a package manager, a modern conda-like package manager.
-It can be used in combination of [robostack](https://robostack.github.io/) to easily install ROS2 in any machine.
+It can be used in combination with [robostack](https://robostack.github.io/) to easily install ROS2 in any machine.
 There are a few ways to get you started:
 
 _... install from source:_
@@ -68,11 +68,11 @@ python -c "import crisp_py"  # (1)!
 
 1. This should not log anything if everything is fine
 
-Now you can try to control the robot! Chech out the [examples](https://github.com/utiasDSL/crisp_py/blob/main/examples) for inspiration.
+Now you can try to control the robot! Check out the [examples](https://github.com/utiasDSL/crisp_py/blob/main/examples) for inspiration.
 
 ### Try it out with the robot
 
-Make sure that the demo container is running in the background. We will need it to access it.
+Make sure that the demo container is running in the background, as we will need it to access the robot.
 From now on, you can instantiate `Robot` objects to control the robot.
 
 ??? example "Example robot usage:"
@@ -98,17 +98,17 @@ From now on, you can instantiate `Robot` objects to control the robot.
 
     1. This will get information from the robot asynchronously
     2. Make sure that we get information from the robot before trying to set targets or reading the pose of the robot.
-    3. Set target 10 cm downwoards. Careful not to send poses that are too far away from the current one!
+    3. Set target 10 cm downwards. Careful not to send poses that are too far away from the current one!
     4. This will request the controller manager to activate the cartesian impedance controller. You can use it with other controllers like the operational space controller!
 
 ## 3. Adding cameras, grippers, and further sensors
 
 ### Cameras
 
-To add a camera, you will need to run it in a container of the separate container as well.
+To add a camera, you will need to run it in a separate container as well.
 The cameras that we tried are:
 
-- [Real Sense](https://github.com/IntelRealSense/realsense-ros/tree/ros2-master) which give an amazing ROS2 support,
+- [Real Sense](https://github.com/IntelRealSense/realsense-ros/tree/ros2-master) which gives amazing ROS2 support,
 - or [Orbbec](https://github.com/orbbec/OrbbecSDK_ROS2).
 
 But any camera should work with [camera_ros](https://github.com/christianrauch/camera_ros).
@@ -141,10 +141,11 @@ But any camera should work with [camera_ros](https://github.com/christianrauch/c
 
 ### Grippers
 
-For the gripper control you need to make sure that a ROS2 node is running that accepts commands through a topic and publishes the state of the gripper.
-To use a ...
-- Franka Hand you just need to start the demo. An adapter is already running to allow you to control the gripper this way,
-- Dynamixel motor to control a gripper we used the well-mantained [dynamixel_hardware_interface](https://github.com/ROBOTIS-GIT/dynamixel_hardware_interface) with a position controller for the gripper.
+For gripper control, you need to make sure that a ROS2 node is running that accepts commands through a topic and publishes the state of the gripper.
+To use a:
+
+- Franka Hand, you just need to start the demo. An adapter is already running to allow you to control the gripper this way,
+- Dynamixel motor to control a gripper, we used the well-maintained [dynamixel_hardware_interface](https://github.com/ROBOTIS-GIT/dynamixel_hardware_interface) with a position controller for the gripper.
 
 ??? example "Example gripper usage:"
     You can use the gripper in `crisp_py` with:
@@ -192,7 +193,7 @@ python -c "import crisp_gym"
 
 ### Record data in LeRobotFormat
 
-You can record data in `LeRobotFormat` to train a policy directly in [lerobot](https://github.com/huggingface/lerobot) by runing:
+You can record data in `LeRobotFormat` to train a policy directly in [lerobot](https://github.com/huggingface/lerobot) by running:
 TODO: Add installation steps for lerobot.
 
 ```sh
@@ -200,7 +201,7 @@ pixi run -e humble-lerobot python scripts/record_data.py
 ```
 
 After recording the data, you can use the dataset to train a policy with [lerobot](https://github.com/huggingface/lerobot).
-They provided the latest implementations
+They provide the latest implementations.
 
 ### Deploy policy
 

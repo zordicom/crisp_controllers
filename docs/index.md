@@ -1,7 +1,7 @@
 ---
 hide:
   # - navigation
-  - toc
+  # - toc
 ---
 
 <img src="media/crisp_logo.webp" alt="CRISP Controllers Logo"/>
@@ -27,6 +27,11 @@ Check the [controllers (CRISP controllers) :simple-github:](https://github.com/u
 | ![franka_eight_reduced](media/franka_eight_reduced.gif)![franka_ns_reduced](media/franka_ns_reduced.gif) | ![vicon](media/franka_teleop.gif)|
 |:--:|:--:|
 | *Real robot following a target and being disturbed (contact) + null space control demonstration*  | *Demonstration using a cartesian controller teleoperated using Vicon tracking system (Speed x4)*| 
+
+| <video src="media/teleoperation.mp4" controls="true" loop="true" autoplay="true" width="800"> |
+|:--:|
+| Teleoperation setup with feedback wrench available. |
+
 
 
 ## Why?
