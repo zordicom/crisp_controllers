@@ -193,26 +193,38 @@ python -c "import crisp_gym"
 
 ### Record data in LeRobotFormat
 
-You can record data in `LeRobotFormat` to train a policy directly in [lerobot](https://github.com/huggingface/lerobot) by running:
+You can record data in `LeRobotFormat` to train a policy directly in [lerobot](https://github.com/huggingface/lerobot) by running.
+You will need to use teleoperation to record data and we highly recommend using a leader-follower setup to generate episodes. 
 
-TODO: Add installation steps for lerobot.
+#### Leader-follower
 
+The leader can be controlled by a human operator and the follower will mimic its motion.
+Checkout `scripts/leader_follower_teleop.py` to get an idea on how the code works.
+For your specific setup you need to:
+
+- Define your own `TeleopRobotConfig`, check [`teleop_robot_config.py`](https://github.com/utiasDSL/crisp_gym/blob/main/crisp_gym/teleop/teleop_robot_config.py).
+- Define your own `ManipulatorEnvConfig`, check [`manipulator_env_config.py`](https://github.com/utiasDSL/crisp_gym/blob/main/crisp_gym/manipulator_env_config.py).
+
+Then to record data use:
 ```sh
-pixi run -e humble-lerobot python scripts/record_data.py
+pixi run -e humble-lerobot python scripts/record_data_leader_follower.py --leader-config <your_leader_config> --env-config <your_env_config_name>  # (1)!
 ```
 
-After recording the data, you can use the dataset to train a policy with [lerobot](https://github.com/huggingface/lerobot).
-They provide the latest implementations.
+1. Add `--help` to check other parameters to pass to the record function.
+
+#### Other teleop setups
+
+You can add further teleop options to [`teleop/`](https://github.com/utiasDSL/crisp_gym/blob/main/crisp_gym/teleop) and create 
+a similar record script as [`scripts/record_data_leader_follower.py`](https://github.com/utiasDSL/crisp_gym/blob/main/crisp_gym/scripts/record_data_leader_follower.py)
 
 ### Deploy policy
 
-...with `lerobot`:
+After recording the data, you can use the dataset to train a policy with [lerobot](https://github.com/huggingface/lerobot).
+They provide the latest implementations of most VLA.
+After training with LeRobot, you can deploy the policy with:
 ```sh
-pixi run -e humble-lerobot python scripts/deploy_policy.py
+pixi run -e humble-lerobot python scripts/deploy_policy.py --path <path_to_model>
 ```
-
-...with a custom ONNX model:
-TODO
 
 
 
