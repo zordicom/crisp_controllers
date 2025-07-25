@@ -210,14 +210,3 @@ They provide the latest implementations.
 ```sh
 pixi run -e humble-lerobot python scripts/deploy_policy.py
 ```
-
-...with a custom ONNX model:
-TODO
-
-
-
-
-
-
-
-

@@ -32,6 +32,8 @@ theme:
   font:
     text: Poppins
     # text: Montserrat
+    # text: Tahoma
+    # text: Roboto
     code: Source Code Pro
   features:
     - header.autohide
