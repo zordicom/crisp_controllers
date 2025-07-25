@@ -3,6 +3,8 @@ nav:
   - Home: index.md
   - Getting Started: getting_started.md
   - Setting up a robot that is not available in the demos: new_robot_setup.md
+  - Available Controllers and Broadcasters: controllers.md
+  # - Test: crisp_controllers/classes.md
 
 theme:
   name: material
@@ -44,12 +46,11 @@ plugins:
   # - mkdoxy:
   #     projects:
   #       crisp_controllers: # name of project must be alphanumeric + numbers (without spaces)
-  #         src-dirs: crisp_controllers
+  #         src-dirs: .
   #         full-doc: True # if you want to generate full documentation
   #         doxy-cfg: # standard doxygen configuration (key: value)
   #           FILE_PATTERNS: "*.cpp *.h*" # specify file patterns to filter out
   #           RECURSIVE: True # recursive search in source directorie
-
 
 
 extra:

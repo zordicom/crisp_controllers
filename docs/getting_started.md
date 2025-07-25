@@ -194,6 +194,7 @@ python -c "import crisp_gym"
 ### Record data in LeRobotFormat
 
 You can record data in `LeRobotFormat` to train a policy directly in [lerobot](https://github.com/huggingface/lerobot) by running:
+
 TODO: Add installation steps for lerobot.
 
 ```sh

@@ -6,8 +6,9 @@ hide:
 
 <img src="media/crisp_logo.webp" alt="CRISP Controllers Logo"/>
 
-# CRISP - **C**a**R**tesian **I**mpedance and Operational **SP**ace Control for Learning-based Policies
-*Authors: [Daniel San Jose Pro](https://danielsanjosepro.github.io), [Oliver Hausdörfer](https://oliver.hausdoerfer.de/), [Ralf Römer](https://ralfroemer99.github.io), [Martin Schuck](https://amacati.github.io/) and Angela Schoellig.*
+# CRISP - **C**ompliant **R**OS2 Controllers for Learn**i**ng-Ba**s**ed Manipulation **P**olicies
+
+*Authors: [Daniel San Jose Pro](https://danielsanjosepro.github.io), [Oliver Hausdörfer](https://oliver.hausdoerfer.de/), [Ralf Römer](https://ralfroemer99.github.io), Maximilian Dösch [Martin Schuck](https://amacati.github.io/) and Angela Schöllig.*
 
 > Collection of C++ controllers for torque-based control for manipulators compatible with `ros2_control`, including Operational Space Control and Cartesian Impedance Control. Developed for deploying high-level learning-based policies (VLA, Diffusion, ...).
 
@@ -15,7 +16,7 @@ _If you use this work, please cite it using below bibtex._
 
 Check the [controllers (CRISP controllers) :simple-github:](https://github.com/utiasDSL/crisp_controllers) , robot [demos (CRISP controllers demos) :simple-github:](https://github.com/utiasDSL/crisp_controllers_demos), a simple [python interface (CRISP_PY) :simple-github:](https://github.com/utiasDSL/crisp_py), and a [gym wrapper (CRISP_GYM) :simple-github:](https://github.com/utiasDSL/crisp_gym) for real-world experiments.
 
-| <video src="media/pap_demo.mp4" controls="true" loop="true" autoplay="true" width="800"/> | <video src="media/policy.mp4" controls="true" loop="true" autoplay="true" width="800"/> |
+| <video src="media/pap_demo.mp4" playsinline muted controls loop autoplay width="800"/> | <video src="media/policy.mp4" playsinline controls="true" loop="true" autoplay="true" width="800"/> |
 |:--:|:--:|
 | Robot teleoperated using a Follower-Leader system in [CRISP GYM :simple-github:](https://github.com/utiasDSL/crisp_gym) | Diffusion Policy trained and deployed from the same demonstrations. | 
 
@@ -28,7 +29,7 @@ Check the [controllers (CRISP controllers) :simple-github:](https://github.com/u
 |:--:|:--:|
 | *Real robot following a target and being disturbed (contact) + null space control demonstration*  | *Demonstration using a cartesian controller teleoperated using Vicon tracking system (Speed x4)*| 
 
-| <video src="media/teleoperation.mp4" controls="true" loop="true" autoplay="true" width="800"> |
+| <video src="media/teleoperation.mp4" controls="true" loop="true" autoplay="true" playsinline width="800"> |
 |:--:|
 | Teleoperation setup with feedback wrench available. |
 
