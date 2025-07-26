@@ -17,7 +17,9 @@ CRISP is a collection of C++ controllers for torque-based control for manipulato
 - 🔁 Gym environment with utilities to record trajectories in LeRobotFormat and deploy trained policies. Check [crisp_gym](https://github.com/utiasDSL/crisp_gym).
 - ❓ Demos showcasing how to use the controller with FR3 of Franka Emika in single and bimanual setup. Check the [crisp_controller_demos](https://github.com/utiasDSL/crisp_controllers_demos).
 
-### Update the website for contributors
+### For Contributors
+
+##### Updating the website
 
 We use [mkdocs](https://www.mkdocs.org/) to generate the website from markdown. You can modify it within `docs/` in particular the `index.md`.
 Then you can serve it locally or update the github pages with:

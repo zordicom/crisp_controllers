@@ -52,8 +52,8 @@ _**On "CRISP"**:_ "CRISP" reflects our design philosophy behind the package: a c
 - 🤖 Operational Space Controller as well as Cartesian Impedance Controller for torque-based control.  
 - 🚫 No MoveIt or complicated path-planning, just a simple C++ `ros2_controller`. Ready to use.  
 - ⚙️ Dynamically and highly parametrizable: powered by the `generate_parameter_library` you can modify stiffness and more during operation.  
-- 🐍 Python interface to move your ROS2 robot around without having to think about topics, spinning, and more ROS2 concepts but without loosing the powerful ROS2 API. Check [crisp_py](https://github.com/utiasDSL/crisp_py) for more information and examples.
-- 🔁 Gym environment with utilities to record trajectories in LeRobotFormat and deploy trained policies. Check [crisp_gym](https://github.com/utiasDSL/crisp_gym).
+- 🐍 Python interface to move your ROS2 robot around without having to think about topics, spinning, and more ROS2 concepts but without loosing the powerful ROS2 API. Check [CRISP_PY](https://github.com/utiasDSL/crisp_py) for more information and examples.
+- 🔁 Gymnasium environment with utilities to record trajectories in LeRobotFormat and deploy trained policies. Check [CRISP_GYM](https://github.com/utiasDSL/crisp_gym).
 - ❓ Demos showcasing how to use the controller with FR3 of Franka Emika in single and bimanual setup. Check the [crisp_controller_demos](https://github.com/utiasDSL/crisp_controllers_demos).
 
 ## Citing

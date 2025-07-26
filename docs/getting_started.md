@@ -5,12 +5,12 @@ Here is an overview of the framework.
 ![Stack overview](media/crisp_overview.png#only-light)
 ![Stack overview](media/crisp_overview_dark.png#only-dark)
 
-Content:
+Overview
 
 - [ ] 1. The first part is the setup for the low-level controllers, i.e., [crisp_controllers](https://github.com/utiasDSL/crisp_controllers).
-- [ ] 2. Then, you will try to move the robot using [crisp_py](https://github.com/utiasDSL/crisp_py).
+- [ ] 2. Then, you will try to move the robot using [CRISP_PY](https://github.com/utiasDSL/crisp_py).
 - [ ] 3. After that, you can include cameras in the setup and other sensors. 
-- [ ] 4. Finally, you can set up [crisp_gym](https://github.com/utiasDSL/crisp_gym) - the Gymnasium interface - and start policy deployment or teleoperation.
+- [ ] 4. Finally, you can set up [CRISP_GYM](https://github.com/utiasDSL/crisp_gym) - the Gymnasium interface - and start policy deployment or teleoperation.
 
 ## 1. Getting the low-level C++ CRISP controller ready
 
@@ -107,7 +107,7 @@ The cameras that we tested are:
 - [Real Sense](https://github.com/IntelRealSense/realsense-ros/tree/ros2-master) which gives amazing ROS2 support,
 - and [Orbbec](https://github.com/orbbec/OrbbecSDK_ROS2).
 
-But any camera should work with [camera_ros](https://github.com/christianrauch/camera_ros).
+But any camera with [camera_ros](https://github.com/christianrauch/camera_ros) should work.
 
 ??? example "Example camera usage:"
     ```py
