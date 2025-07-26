@@ -5,31 +5,27 @@ Here is an overview of the framework.
 ![Stack overview](media/crisp_overview.png#only-light)
 ![Stack overview](media/crisp_overview_dark.png#only-dark)
 
-In short, you have:
+Content:
 
 - [ ] 1. The first part is the setup for the low-level controllers, i.e., [crisp_controllers](https://github.com/utiasDSL/crisp_controllers).
-- [ ] 2. Then, we will try to move the robot around using [crisp_py](https://github.com/utiasDSL/crisp_py).
-- [ ] 3. After that, we can include cameras in the setup or further sensors. 
-- [ ] 4. Finally, we can set up [crisp_gym](https://github.com/utiasDSL/crisp_gym) and start recording episodes.
+- [ ] 2. Then, you will try to move the robot using [crisp_py](https://github.com/utiasDSL/crisp_py).
+- [ ] 3. After that, you can include cameras in the setup and other sensors. 
+- [ ] 4. Finally, you can set up [crisp_gym](https://github.com/utiasDSL/crisp_gym) - the Gymnasium interface - and start policy deployment or teleoperation.
 
-## 1. Getting the low-level controller ready
+## 1. Getting the low-level C++ CRISP controller ready
 
-First, the computer running the controller needs a real-time patch for the controller to run smoothly and safely.
-You can check out the [Franka Robotics guide on how to set up a RT-patch.](https://frankarobotics.github.io/docs/installation_linux.html#setting-up-the-real-time-kernel)
+The computer running the CRISP controller needs a real-time patch for the controller to run smoothly and safely. You can check out the [Franka Robotics guide on how to set up a RT-patch.](https://frankarobotics.github.io/docs/installation_linux.html#setting-up-the-real-time-kernel)
 On newer Ubuntu versions, you can use [Ubuntu Pro](https://ubuntu.com/real-time) for an easy setup.
 
-Then, check if your robot is part of our [demos](https://github.com/utiasDSL/crisp_controllers_demos).
-You can then follow the instructions there to start your robot(s) using a Docker container.
-Some of them offer the possibility to run the demos with simulated robots to test the setup.
+Then, check if your robot is already included in one of our [demos](https://github.com/utiasDSL/crisp_controllers_demos). You can then follow the instructions there to start your robot(s) using a Docker container. Some of them offer the possibility to run the demos with simulated robots to test the setup.
 
-If your robot is not included in the demos, check out [How to set up a robot that is not available in the demos](new_robot_setup.md).
-If you get the controllers running, feel free to open a pull request to add it to the demos!
+If your robot is not included in the demos that is not problem. Check out [How to set up a robot that is not available in the demos](new_robot_setup.md). Once you get the controllers running, feel free to open a pull request on our repo to add it to the demos! We highly appreciate that!
 
-## 2. Use crisp_py to control the robot
+## 2. Use the python :snake: interface CRISP_PY to control the robot
 
 ### Installation
 
-To use `crisp_py`, we recommend using [pixi](https://pixi.sh/latest/) as a package manager, a modern conda-like package manager.
+To use `CRISP_PY`, we recommend using [pixi](https://pixi.sh/latest/) as a package manager, a modern conda-like package manager.
 It can be used in combination with [robostack](https://robostack.github.io/) to easily install ROS2 in any machine.
 There are a few ways to get you started:
 
@@ -46,9 +42,9 @@ python -c "import crisp_py"  # (1)!
 
 _... use in your already existing pixi project:_
 
-To use `crisp_py` in an already existing pixi project, you need to make sure that `ROS2` is available.
-Check the [pixi.toml](https://github.com/utiasDSL/crisp_py/blob/main/pixi.toml) of `crisp_py` to see how this looks like.
-Then you can add `crisp_py` as a pypi package:
+To use `CRISP_PY` in an already existing pixi project, you need to make sure that `ROS2` is available.
+Check the [pixi.toml](https://github.com/utiasDSL/crisp_py/blob/main/pixi.toml) of `CRISP_PY` to see how this looks like.
+Then you can add `CRISP_PY` as a pypi package:
 ```bash
 pixi add --pypi crisp-py
 ```
@@ -106,10 +102,10 @@ From now on, you can instantiate `Robot` objects to control the robot.
 ### Cameras
 
 To add a camera, you will need to run it in a separate container as well.
-The cameras that we tried are:
+The cameras that we tested are:
 
 - [Real Sense](https://github.com/IntelRealSense/realsense-ros/tree/ros2-master) which gives amazing ROS2 support,
-- or [Orbbec](https://github.com/orbbec/OrbbecSDK_ROS2).
+- and [Orbbec](https://github.com/orbbec/OrbbecSDK_ROS2).
 
 But any camera should work with [camera_ros](https://github.com/christianrauch/camera_ros).
 
@@ -191,9 +187,9 @@ pixi shell -e humble
 python -c "import crisp_gym"
 ```
 
-### Record data in LeRobotFormat
+### Teleoperation: Record data in LeRobotFormat
 
-You can record data in `LeRobotFormat` to train a policy directly in [lerobot](https://github.com/huggingface/lerobot) by running.
+You can record data in `LeRobotFormat` to train a policy directly in [lerobot](https://github.com/huggingface/lerobot).
 You will need to use teleoperation to record data and we highly recommend using a leader-follower setup to generate episodes. 
 
 #### Leader-follower
@@ -205,7 +201,7 @@ For your specific setup you need to:
 - Define your own `TeleopRobotConfig`, check [`teleop_robot_config.py`](https://github.com/utiasDSL/crisp_gym/blob/main/crisp_gym/teleop/teleop_robot_config.py).
 - Define your own `ManipulatorEnvConfig`, check [`manipulator_env_config.py`](https://github.com/utiasDSL/crisp_gym/blob/main/crisp_gym/manipulator_env_config.py).
 
-Then to record data use:
+Then, to record data use:
 ```sh
 pixi run -e humble-lerobot python scripts/record_data_leader_follower.py --leader-config <your_leader_config> --env-config <your_env_config_name>  # (1)!
 ```
