@@ -2,8 +2,12 @@ site_name: CRISP Controllers - Learning Systems Lab
 nav:
   - Home: index.md
   - Getting Started: getting_started.md
-  - Setting up a robot that is not available in the demos: new_robot_setup.md
-  - Available Controllers and Broadcasters: controllers.md
+  - Misc:
+    - Setting up a robot that is not available in the demos: misc/new_robot_setup.md
+    - Available Controllers and Broadcasters: misc/controllers.md
+    - Multi-machine setup: misc/multi_machine_setup.md
+    - ROS2 Diagnostics: misc/diagnostics.md
+      
   # - Test: crisp_controllers/classes.md
 
 theme:
@@ -41,6 +45,7 @@ theme:
     - content.code.copy
     - content.code.select
     - content.code.annotate
+    - navigation.footer
   icon:
     repo: fontawesome/brands/github
 

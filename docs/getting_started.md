@@ -19,7 +19,7 @@ On newer Ubuntu versions, you can use [Ubuntu Pro](https://ubuntu.com/real-time)
 
 Then, check if your robot is already included in one of our [demos](https://github.com/utiasDSL/crisp_controllers_demos). You can then follow the instructions there to start your robot(s) using a Docker container. Some of them offer the possibility to run the demos with simulated robots to test the setup.
 
-If your robot is not included in the demos that is not problem. Check out [How to set up a robot that is not available in the demos](new_robot_setup.md). Once you get the controllers running, feel free to open a pull request on our repo to add it to the demos! We highly appreciate that!
+If your robot is not included in the demos that is not problem. Check out [How to set up a robot that is not available in the demos](misc/new_robot_setup.md). Once you get the controllers running, feel free to open a pull request on our repo to add it to the demos! We highly appreciate that!
 
 ## 2. Use the python :snake: interface CRISP_PY to control the robot
 
@@ -189,7 +189,7 @@ python -c "import crisp_gym"
 
 ### Teleoperation: Record data in LeRobotFormat
 
-You can record data in `LeRobotFormat` to train a policy directly in [lerobot](https://github.com/huggingface/lerobot).
+You can record data in `LeRobotFormat` to train a policy directly in [LeRobot](https://github.com/huggingface/lerobot).
 You will need to use teleoperation to record data and we highly recommend using a leader-follower setup to generate episodes. 
 
 #### Leader-follower
@@ -203,29 +203,50 @@ For your specific setup you need to:
 
 Then, to record data use:
 ```sh
-pixi run -e humble-lerobot python scripts/record_data_leader_follower.py --leader-config <your_leader_config> --env-config <your_env_config_name>  # (1)!
+pixi run -e humble-lerobot python scripts/record_data_leader_follower.py \
+   --repo-id <your_account>/<repo_name> # (1)!
 ```
 
 1. Add `--help` to check other parameters to pass to the record function.
+
+The script is interactive. It will:
+- First ask to choose the desired configuration files for the recording
+- Allow you to record episodes interactively using the keyboard
+
+After this, you can visualize the episodes with rerun visualizer and LeRobot utils:
+```sh
+pixi run -e lerobot python -m lerobot.scripts.visualize_dataset \
+        --repo-id <your_account>/<repo_name> \
+        --episode-index 0
+```
 
 #### Other teleop setups
 
 You can add further teleop options to [`teleop/`](https://github.com/utiasDSL/crisp_gym/blob/main/crisp_gym/teleop) and create 
 a similar record script as [`scripts/record_data_leader_follower.py`](https://github.com/utiasDSL/crisp_gym/blob/main/crisp_gym/scripts/record_data_leader_follower.py)
 
-### Deploy policy
+### Train a policy
 
-After recording the data, you can use the dataset to train a policy with [lerobot](https://github.com/huggingface/lerobot).
-They provide the latest implementations of most VLA.
-After training with LeRobot, you can deploy the policy with:
+You can use LeRobot train scripts to train a policy simply by running:
 ```sh
-pixi run -e humble-lerobot python scripts/deploy_policy.py --path <path_to_model>
+pixi run -e lerobot python -m lerobot.scripts.train \
+          --dataset.repo_id=<your_account>/<repo_name> \
+          --policy.type=diffusion \
+          --policy.repo_id=<your_account>/<policy_repo_name>
 ```
 
+They provide the latest implementations of most VLA.
+Check [LeRobot](https://github.com/huggingface/lerobot) for more information.
 
+### Deploy policy
 
+After training with LeRobot, you can deploy the policy with:
+```sh
+pixi run -e humble-lerobot python scripts/deploy_policy.py \
+    --path <path_to_model>  # (1)!
+```
 
+1. ..or if you want to interactively choose a model you can simply leave the argument empty.
 
-
-
+Good job, now you can evaluate your model!
 
