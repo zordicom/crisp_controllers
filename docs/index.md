@@ -8,11 +8,11 @@ hide:
 
 # CRISP - **C**ompliant **R**OS2 Controllers for Learn**i**ng-Ba**s**ed Manipulation **P**olicies
 
-*Authors: [Daniel San Jose Pro](https://danielsanjosepro.github.io), [Oliver Hausdörfer](https://oliver.hausdoerfer.de/), [Ralf Römer](https://ralfroemer99.github.io), Maximilian Dösch [Martin Schuck](https://amacati.github.io/) and Angela Schöllig.*
+*Authors: [Daniel San Jose Pro](https://danielsanjosepro.github.io), [Oliver Hausdörfer](https://oliver.hausdoerfer.de/), [Ralf Römer](https://ralfroemer99.github.io), Maximilian Dösch, [Martin Schuck](https://amacati.github.io/) and Angela Schöllig.*
 
 > A Collection of C++ controllers for compliant torque-based control for manipulators compatible with `ros2_control`, including Operational Space Control and Cartesian Impedance Control. Developed for deploying high-level learning-based policies (VLA, Diffusion, ...) on your manipulator.
 
-_If you use this work, please cite it using the bibtex below._
+_If you use this work, please cite it using the [bibtex](#citing) below._
 
 Check the [controllers (CRISP controllers) :simple-github:](https://github.com/utiasDSL/crisp_controllers) , robot [demos (CRISP controllers demos) :simple-github:](https://github.com/utiasDSL/crisp_controllers_demos), a simple [python interface (CRISP_PY) :simple-github:](https://github.com/utiasDSL/crisp_py), and a [Gymnasium wrapper (CRISP_GYM) :simple-github:](https://github.com/utiasDSL/crisp_gym) for real-world experiments.
 

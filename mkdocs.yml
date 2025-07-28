@@ -3,10 +3,10 @@ nav:
   - Home: index.md
   - Getting Started: getting_started.md
   - Misc:
-    - Setting up a robot that is not available in the demos: misc/new_robot_setup.md
     - Available Controllers and Broadcasters: misc/controllers.md
     - Multi-machine setup: misc/multi_machine_setup.md
     - ROS2 Diagnostics: misc/diagnostics.md
+    - Setting up a robot that is not available in the demos: misc/new_robot_setup.md
       
   # - Test: crisp_controllers/classes.md
 
@@ -67,9 +67,14 @@ extra:
       link: https://github.com/utiasDSL/crisp_controllers
 
 markdown_extensions:
-  - attr_list
   - admonition
+  - attr_list
+  - def_list
+  - md_in_html
   - pymdownx.details
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  - pymdownx.superfences
   - pymdownx.emoji:
       emoji_index: !!python/name:material.extensions.emoji.twemoji
       emoji_generator: !!python/name:material.extensions.emoji.to_svg
@@ -77,10 +82,6 @@ markdown_extensions:
       anchor_linenums: true
       line_spans: __span
       pygments_lang_class: true
-  - pymdownx.inlinehilite
-  - pymdownx.snippets
-  - pymdownx.superfences
-  - def_list
   - pymdownx.tasklist:
       custom_checkbox: true 
       clickable_checkbox: true

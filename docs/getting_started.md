@@ -220,6 +220,9 @@ pixi run -e lerobot python -m lerobot.scripts.visualize_dataset \
         --episode-index 0
 ```
 
+!!! warning
+    LeRobot is subjected to rapid changes. This command might change in future versions.
+
 #### Other teleop setups
 
 You can add further teleop options to [`teleop/`](https://github.com/utiasDSL/crisp_gym/blob/main/crisp_gym/teleop) and create 
@@ -235,6 +238,9 @@ pixi run -e lerobot python -m lerobot.scripts.train \
           --policy.repo_id=<your_account>/<policy_repo_name>
 ```
 
+!!! warning
+    LeRobot is subjected to rapid changes. This command might change in future versions.
+
 They provide the latest implementations of most VLA.
 Check [LeRobot](https://github.com/huggingface/lerobot) for more information.
 
@@ -247,6 +253,9 @@ pixi run -e humble-lerobot python scripts/deploy_policy.py \
 ```
 
 1. ..or if you want to interactively choose a model you can simply leave the argument empty.
+
+!!! warning
+    LeRobot is subjected to rapid changes. This command might change in future versions.
 
 Good job, now you can evaluate your model!
 
