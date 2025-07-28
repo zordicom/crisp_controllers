@@ -5,6 +5,7 @@ nav:
   - Misc:
     - Available Controllers and Broadcasters: misc/controllers.md
     - Demos: misc/demos.md
+    - How to calibrate a gripper: misc/calibrate_gripper.md
     - Multi-machine setup: misc/multi_machine_setup.md
     - ROS2 Diagnostics: misc/diagnostics.md
     - Setting up a robot that is not available in the demos: misc/new_robot_setup.md

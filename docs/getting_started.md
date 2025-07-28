@@ -33,6 +33,7 @@ _... install from source:_
 
 ```bash
 git clone https://github.com/utiasDSL/crisp_py
+cd crisp_py
 pixi install
 pixi shell -e humble
 python -c "import crisp_py"  # (1)!
@@ -97,7 +98,7 @@ From now on, you can instantiate `Robot` objects to control the robot.
     3. Set target 10 cm downwards. Careful not to send poses that are too far away from the current one!
     4. This will request the controller manager to activate the cartesian impedance controller. You can use it with other controllers like the operational space controller!
 
-## 3. Adding cameras, grippers, and further sensors
+## 3. Adding cameras, grippers, and further sensors to CRISP_PY
 
 ### Cameras
 
@@ -176,16 +177,44 @@ You can add further sensors (Force Torque Sensor, Tactile Sensor...) by adding a
 Check the examples for more information.
 
 
-## 4. Using the Gym
+## 4. Getting started with CRISP_GYM
 
-Similar to `crisp_py`, we recommend using `pixi` to install `crisp_gym`.
+Similar to `CRISP_PY`, we recommend using `pixi` to install `CRISP_GYM`.
 
 ```sh
 git clone https://github.com/utiasDSL/crisp_gym
-pixi install
-pixi shell -e humble
-python -c "import crisp_gym"
+cd crisp_gym
 ```
+Now, you should set a few things before installing everything.
+Create a file `scripts/set_env.sh` which will be sourced every time that you run a command in your environment.
+The script will not be tracked by git.
+In this script you need to add a environment variables:
+
+- `ROS_DOMAIN_ID`: which is used to define nodes that should be able to see each other. In our [demos](misc/demos.md) they are set to 100 as default.
+- `CRISP_CONFIG_PATH`: which should be the path to a config folder similar to [config path of CRISP_PY](https://github.com/utiasDSL/crisp_py/tree/main/config). The easiest way to do this is to clone CRISP_PY somewhere
+and set this environment variable to point to it.
+
+```sh title="scripts/set_env.sh"
+export ROS_DOMAIN_ID=100
+export CRISP_CONFIG_PATH=/path/to/crisp_py/config  # (1)!
+```
+
+1. Modify this!
+
+If you want to work in a multi-machine setup (e.g. policy runs in a different machine as controllers), then check [how to setup multi-machine in ROS2](misc/multi_machine_setup.md).
+
+
+```sh
+source scripts/configure.sh  # (1)!
+pixi install
+pixi shell -e humble-lerobot
+python -c "import crisp_gym"
+
+```
+
+1. This will set some environment variable pre-installation as well as checking that you defined the previous script properly.
+
+If the previous steps worked, then you are good to go.
 
 ### Teleoperation: Record data in LeRobotFormat
 
@@ -203,7 +232,7 @@ For your specific setup you need to:
 
 Then, to record data use:
 ```sh
-pixi run -e humble-lerobot python scripts/record_data_leader_follower.py \
+pixi run -e humble-lerobot python scripts/record_lerobot_format_leader_follower.py \
    --repo-id <your_account>/<repo_name> # (1)!
 ```
 
@@ -226,7 +255,7 @@ pixi run -e lerobot python -m lerobot.scripts.visualize_dataset \
 #### Other teleop setups
 
 You can add further teleop options to [`teleop/`](https://github.com/utiasDSL/crisp_gym/blob/main/crisp_gym/teleop) and create 
-a similar record script as [`scripts/record_data_leader_follower.py`](https://github.com/utiasDSL/crisp_gym/blob/main/crisp_gym/scripts/record_data_leader_follower.py)
+a similar record script as [`scripts/record_lerobot_format_leader_follower.py`](https://github.com/utiasDSL/crisp_gym/blob/main/crisp_gym/scripts/record_lerobot_format_leader_follower.py)
 
 ### Train a policy
 
@@ -235,7 +264,7 @@ You can use LeRobot train scripts to train a policy simply by running:
 pixi run -e lerobot python -m lerobot.scripts.train \
           --dataset.repo_id=<your_account>/<repo_name> \
           --policy.type=diffusion \
-          --policy.repo_id=<your_account>/<policy_repo_name>
+          --policy.push_to_hub=false
 ```
 
 !!! warning
@@ -248,11 +277,10 @@ Check [LeRobot](https://github.com/huggingface/lerobot) for more information.
 
 After training with LeRobot, you can deploy the policy with:
 ```sh
-pixi run -e humble-lerobot python scripts/deploy_policy.py \
-    --path <path_to_model>  # (1)!
+pixi run -e humble-lerobot python scripts/deploy_policy.py # (1)!
 ```
 
-1. ..or if you want to interactively choose a model you can simply leave the argument empty.
+1. The script will interactively allow you to choose a model inside `outputs/train`. If you want to explicitly pass a path you can override it with `--path`
 
 !!! warning
     LeRobot is subjected to rapid changes. This command might change in future versions.
