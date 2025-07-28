@@ -17,7 +17,7 @@ Overview
 The computer running the CRISP controller needs a real-time patch for the controller to run smoothly and safely. You can check out the [Franka Robotics guide on how to set up a RT-patch.](https://frankarobotics.github.io/docs/installation_linux.html#setting-up-the-real-time-kernel)
 On newer Ubuntu versions, you can use [Ubuntu Pro](https://ubuntu.com/real-time) for an easy setup.
 
-Then, check if your robot is already included in one of our [demos](https://github.com/utiasDSL/crisp_controllers_demos). You can then follow the instructions there to start your robot(s) using a Docker container. Some of them offer the possibility to run the demos with simulated robots to test the setup.
+Then, check if your robot is already included in one of our demos, check [how to run a demo](misc/demos.md) from our [demos repository](https://github.com/utiasDSL/crisp_controllers_demos). You can then follow the instructions there to start your robot(s) using a Docker container. Some of them offer the possibility to run the demos with simulated robots to test the setup.
 
 If your robot is not included in the demos that is not problem. Check out [How to set up a robot that is not available in the demos](misc/new_robot_setup.md). Once you get the controllers running, feel free to open a pull request on our repo to add it to the demos! We highly appreciate that!
 
@@ -140,7 +140,7 @@ But any camera with [camera_ros](https://github.com/christianrauch/camera_ros) s
 For gripper control, you need to make sure that a ROS2 node is running that accepts commands through a topic and publishes the state of the gripper.
 To use a:
 
-- Franka Hand, you just need to start the demo. An adapter is already running to allow you to control the gripper this way,
+- Franka Hand, you just need to start the demo. An [adapter](https://github.com/utiasDSL/crisp_controllers_demos/blob/main/crisp_controllers_robot_demos/crisp_controllers_robot_demos/crisp_py_franka_hand_adapter.py) is already running to allow you to control the gripper this way,
 - Dynamixel motor to control a gripper, we used the well-maintained [dynamixel_hardware_interface](https://github.com/ROBOTIS-GIT/dynamixel_hardware_interface) with a position controller for the gripper.
 
 ??? example "Example gripper usage:"

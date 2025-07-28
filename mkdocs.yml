@@ -4,6 +4,7 @@ nav:
   - Getting Started: getting_started.md
   - Misc:
     - Available Controllers and Broadcasters: misc/controllers.md
+    - Demos: misc/demos.md
     - Multi-machine setup: misc/multi_machine_setup.md
     - ROS2 Diagnostics: misc/diagnostics.md
     - Setting up a robot that is not available in the demos: misc/new_robot_setup.md
@@ -45,6 +46,8 @@ theme:
     - content.code.copy
     - content.code.select
     - content.code.annotate
+    - content.footnote.tooltips
+    - content.tooltips
     - navigation.footer
   icon:
     repo: fontawesome/brands/github
@@ -67,9 +70,11 @@ extra:
       link: https://github.com/utiasDSL/crisp_controllers
 
 markdown_extensions:
+  - abbr
   - admonition
   - attr_list
   - def_list
+  - footnotes
   - md_in_html
   - pymdownx.details
   - pymdownx.inlinehilite
