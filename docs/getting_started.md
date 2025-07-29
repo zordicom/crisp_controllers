@@ -25,6 +25,10 @@ If your robot is not included in the demos that is not problem. Check out [How t
 
 ### Installation
 
+!!! Note
+    If you want to use the gymnasium interface, CRISP_PY will be autonmatically installed in the gym. You can therefore check the installation of [CRISP_GYM](#4-getting-started-with-crisp_gym).
+    However, this section still gives you an idea on how to use CRISP_PY with your robot. We do not recommend to skip it.
+
 To use `CRISP_PY`, we recommend using [pixi](https://pixi.sh/latest/) as a package manager, a modern conda-like package manager.
 It can be used in combination with [robostack](https://robostack.github.io/) to easily install ROS2 in any machine.
 There are a few ways to get you started:
@@ -238,9 +242,23 @@ pixi run -e humble-lerobot python scripts/record_lerobot_format_leader_follower.
 
 1. Add `--help` to check other parameters to pass to the record function.
 
-The script is interactive. It will:
-- First ask to choose the desired configuration files for the recording
-- Allow you to record episodes interactively using the keyboard
+The script is interactive. It will first ask to choose the desired configuration files for the recording and then allow you to record episodes interactively.
+There are two recording methods currently available:
+
+- `keyboard` (default): It allows you to record episodes using the keyboard with the keys 
+    - __r__(ecord start/stop) an episode,
+    - __d__(elete episode) after recording a failed episode,
+    - __s__(ave episode) after recording a succesful episode,
+    - __q__(uit) after finishing.
+- `ros`: It uses the topic `recording_state` to catch `String` ROS2 messages to follow the same recording workflow as the keyboard. 
+    With this you can implement custom recording devices to control the recording workflow
+
+    ??? example "Using the FR3 pilot buttons of Franka Robotics as a recording device"
+        In our lab, we use the buttons of the leader robot as a recording device with the [franka-buttons](https://github.com/nakama-lab/franka-buttons) repository.
+        The following script uses the circle, cross, check and up buttons as a record, delete, save and quit commands respectively:
+        ```py
+        TODO
+        ```
 
 After this, you can visualize the episodes with rerun visualizer and LeRobot utils:
 ```sh
