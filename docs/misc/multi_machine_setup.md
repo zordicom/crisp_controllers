@@ -6,6 +6,7 @@ We prefer to use CycloneDDS.
 1. Make sure that the Cyclone RMW is installed `ros-$ROS_DISTRO-rmw-cyclonedds-cpp`. If you use the `pixi.toml` provided
     in this repo it should be the case.
 
+
 2. Now you can modify your`scripts/set_env.sh` to include further configuration lines: 
     ```bash hl_lines="4-7" title="scripts/set_env.sh"
     export ROS_DOMAIN_ID=100  # (1)! 
@@ -54,3 +55,13 @@ Enter in the humble shell with `pixi shell -e humble` and if your robot is activ
 - Run `env | grep RMW_IMPLEMENTATION`, if the variable is not set, you need to make sure that the script `scripts/set_env.sh` is being executed!
 - Be sure that the name of the interface is correct!
 
+## References
+
+- iRobot Middleware Config: https://iroboteducation.github.io/create3_docs/setup/xml-config/
+- MoveitPro customize DDS: https://docs.picknik.ai/how_to/configuration_tutorials/customize_dds_configuration/
+
+- Cyclone Run-Time-Configuration: https://github.com/eclipse-cyclonedds/cyclonedds/tree/a10ced3c81cc009e7176912190f710331a4d6caf#run-time-configuration
+- StereoLabs improve performance: https://www.stereolabs.com/docs/ros2/dds_and_network_tuning#change-dds-middleware
+- Husarion DDS setup: https://husarion.com/tutorials/other-tutorials/husarnet-cyclone-dds/
+
+- ROS2 Doctor: https://docs.ros.org/en/kilted/Tutorials/Beginner-Client-Libraries/Getting-Started-With-Ros2doctor.html

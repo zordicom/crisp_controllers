@@ -113,6 +113,7 @@ The cameras that we tested are:
 - and [Orbbec](https://github.com/orbbec/OrbbecSDK_ROS2).
 
 But any camera with [camera_ros](https://github.com/christianrauch/camera_ros) should work.
+Check the [demos](misc/demos.md) to see some examples with cameras
 
 ??? example "Example camera usage:"
     ```py
@@ -198,7 +199,7 @@ In this script you need to add a environment variables:
 - `CRISP_CONFIG_PATH`: which should be the path to a config folder similar to [config path of CRISP_PY](https://github.com/utiasDSL/crisp_py/tree/main/config). The easiest way to do this is to clone CRISP_PY somewhere
 and set this environment variable to point to it.
 
-```sh title="scripts/set_env.sh"
+```sh title="scripts/set_env.sh" hl_lines="2"
 export ROS_DOMAIN_ID=100
 export CRISP_CONFIG_PATH=/path/to/crisp_py/config  # (1)!
 ```

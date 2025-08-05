@@ -9,6 +9,16 @@ Some other manipulators that couldd be added to this list is the ![Open Manipula
 
 [^1]: Untested, but effort interface available.
 
+We also have some examples with cameras
+
+| Robots | Real Sense | Orbecc |  Any webcam | 
+| :--- | :---: | :---: | :---: |
+| Camera demo | ✅ | ❔[^2] | ❔[^2] | 
+
+
+[^2]: TODO, still not available in the demos
+
+
 ## Running a demo
 
 
@@ -54,6 +64,13 @@ docker compose up launch_kinova
     If you work in different machines (using [crisp_py](https://github.com/utiasDSL/crisp_py) or others) you might want to consider using a different RMW.
     Check [how to multi-machine setup](multi_machine_setup.md).
     To use the cyclone version you can call `launch_franka_cyclone` or `launch_dual_franka_cyclone` and setup the ip address of the router of your machine in the setup file.
+
+For the cameras, you can run:
+```bash
+docker compose up launch_realsense
+```
+
+Check the `docker-compose.yaml` to see how to define your own services.
 
 ## Troubleshooting
 
