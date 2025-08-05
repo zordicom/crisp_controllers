@@ -182,4 +182,50 @@ For more information on the controllers, check the [available controllers and br
         ...
         ```
 
-6. Voila! After launching your robot you should see that new controller are being loaded. If you get stuck somewhere in the process feel free to open an issue.
+6. After launching your robot you should see that new controller are being loaded. If you get stuck somewhere in the process feel free to open an issue.
+7. Finally, to use the robots in CRISP_PY, add a configuration file for the new robot and gym environments that use it.
+
+    ??? example "New robot config example"
+
+        ```py title="my_new_robot/robot_config.py"
+        from crisp_py.robot_config import RobotConfig
+
+        @dataclass
+        class MyNewRobotConfig(RobotConfig):
+
+            joint_names: list = field(
+                default_factory=lambda: [
+                    "joint1",
+                    "joint2",
+                    "joint3",
+                    ...
+                ]
+            )
+            home_config: list = field(
+                default_factory=lambda: [
+                    np.pi,
+                    0.0,
+                    0.0,
+                    ...,
+                ]
+            )
+            base_frame: str = "base"
+            target_frame: str = "target_frame"
+        ```
+        You can now use this config for your robot:
+        ```py title="your_test_script.py"
+
+        from crisp_py.robot import Robot
+        from my_new_robot.robot_config import MyNewRobotConfig
+
+        my_new_robot_config = MyNewRobotConfig()
+        my_new_robot = Robot(config=my_new_robot_config, namespace=...)
+
+        my_new_robot.home()
+        ...
+
+        ```
+        In a similar manner, you can add this config to an gym environment to create a gym env with this config!
+
+8. Voila, you are good to go!
+

@@ -1,51 +1,7 @@
-To setup multiple machines, we recommend using a different RMW. Either go with Zenoh or CycloneDDS.
-We prefer to use CycloneDDS.
-
-## Using CycloneDDS for multi-machine setups
-
-1. Make sure that the Cyclone RMW is installed `ros-$ROS_DISTRO-rmw-cyclonedds-cpp`. If you use the `pixi.toml` provided
-    in this repo it should be the case.
-
-
-2. Now you can modify your`scripts/set_env.sh` to include further configuration lines: 
-    ```bash hl_lines="4-7" title="scripts/set_env.sh"
-    export ROS_DOMAIN_ID=100  # (1)! 
-    export CRISP_CONFIG_PATH=/path/to/crisp_py/config  # (1)!
-
-    export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
-    export CYCLONEDDS_URI=file:///path/to/crisp_gym/scripts/cyclone_config.xml  # (2)!
-
-    ros2 daemon stop && ros2 daemon start  # (3)!
-    ```
-
-    1. Check the [getting started](../getting_started.md) to see why we set this.
-    2. __TODO__: this file as well as the path need to be modified!
-    3. The communication daemon needs to be restarted to account for the changes.
-
-3. Update the config for your setup to use the correct network interface:
-    ```bash hl_lines="6" title="scripts/cyclone_config.xml"
-    <CycloneDDS xmlns="https://cdds.io/config">
-    <Domain>
-        <General>
-            <AllowMulticast>true</AllowMulticast>
-            <Interfaces>
-                <NetworkInterface name="enx607d0937fb24" />   # (1)!
-            </Interfaces>
-        </General>
-        <Discovery>
-            <ParticipantIndex>auto</ParticipantIndex>
-            <MaxAutoParticipantIndex>100</MaxAutoParticipantIndex>
-        </Discovery>
-    </Domain>
-    </CycloneDDS>
-
-    ```
-
-    1. Modify this with your network interface: check `ip addr` on your shell.
-
-
-4. Finally, check that everything is working. 
-Enter in the humble shell with `pixi shell -e humble` and if your robot is active, run `ros2 topic list` and you should see some topics listed!
+To setup multiple machines, we recommend using a different RMW. 
+In our demos we provide the option to use Zenoh or CycloneDDS.
+The setup with CycloneDDS uses multicast and might be a problem for your university/enterprise network.
+You might want to try Zenoh in that case, which uses a router for node discovery.
 
 ## Using Zenoh for multi-machine setups
 
@@ -62,14 +18,17 @@ It can be configured with multicast and the avoid using the router but we will a
 ### In the host machine - where controllers run
 
 In the machine running the controllers, make sure that you start one Zenoh router.
-In the demos, we provide a service to start the router:
+In the [demos repository](https://github.com/utiasDSL/crisp_controllers_demos), we provide a service to start the router:
 ```bash
 docker compose up launch_zenoh_router
 ```
 
-This will start a Zenoh router, then all other can be initialized.
-The zenoh versions of the docker services end with `_zenoh` and launch the same nodes with Zenoh instead of the default ROS middleware.
-
+This will start a Zenoh router, then all other nodes can be initialized.
+To use the demos with `zenoh` as a middleware, pass the following environment variable to the services:
+```bash
+RMW=zenoh docker compose up ...
+```
+The setup in the host machine is done!
 
 ### In the remote machine - where the learning policy runs
 
@@ -96,6 +55,45 @@ In this part, we assume that you already installed the [gym or python interface]
 
     3. Finally, check that everything is working. 
     Enter in the humble shell with `pixi shell -e humble` and if your robot is active, run `ros2 topic list` and you should see some topics listed!
+
+## Using CycloneDDS for multi-machine setups
+
+### In the host machine - where controllers run
+
+To use the demos with `cyclone` as a middleware, pass the following environment variable to the services:
+```bash
+RMW=cyclone ROS_NETWORK_INTERFACE=enpXXXXXX docker compose up ...  # (1)!
+```
+
+1. Modify this with your network interface: check `ip addr` on your shell. Otherwise it will just use `lo` as default.
+
+If you are using a custom robot, check the `setup_cyclone.sh` script to see how it is being configured.
+
+### In the remote machine - where the learning policy runs
+
+1. Make sure that the Cyclone RMW is installed `ros-$ROS_DISTRO-rmw-cyclonedds-cpp`. If you use the `pixi.toml` provided
+    in this repo it should be the case.
+
+
+2. Now you can modify your`scripts/set_env.sh` to include further configuration lines: 
+    ```bash hl_lines="4-8" title="scripts/set_env.sh"
+    export ROS_DOMAIN_ID=100  # (1)! 
+    export CRISP_CONFIG_PATH=/path/to/crisp_py/config  # (1)!
+
+    export ROS_NETWORK_INTERFACE=enpXXXXXX  # (2)!
+    export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
+    export CYCLONEDDS_URI=file:///path/to/crisp_gym/scripts/cyclone_config.xml  # (3)!
+
+    ros2 daemon stop && ros2 daemon start  # (4)!
+    ```
+
+    1. Check the [getting started](../getting_started.md) to see why we set this.
+    2. Modify this with your network interface: check `ip addr` on your shell.
+    3. __TODO__: this file as well as the path need to be modified!
+    4. The communication daemon needs to be restarted to account for the changes.
+
+3. Finally, check that everything is working. 
+Enter in the humble shell with `pixi shell -e humble` and if your robot is active, run `ros2 topic list` and you should see some topics listed!
 
 ## Troubleshooting
 

@@ -63,7 +63,12 @@ docker compose up launch_kinova
 !!! WARNING
     If you work in different machines (using [crisp_py](https://github.com/utiasDSL/crisp_py) or others) you might want to consider using a different RMW.
     Check [how to multi-machine setup](multi_machine_setup.md).
-    To use the cyclone version you can call `launch_franka_cyclone` or `launch_dual_franka_cyclone` and setup the ip address of the router of your machine in the setup file.
+    To use a different middleware just pass an extra environment variable:
+    ```bash
+    RMW=<zenoh|cyclone> docker compose up ...
+    ```
+
+
 
 For the cameras, you can run:
 ```bash
