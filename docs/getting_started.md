@@ -6,9 +6,9 @@ Here is an overview of the CRISP framework (please check our paper for details).
 ![Stack overview](media/crisp_overview_dark.png#only-dark)
 
 
-- [ ] 1. The first part is the setup for the low-level controllers, i.e., [crisp_controllers](https://github.com/utiasDSL/crisp_controllers).
-- [ ] 2. Then, you will try to move the robot using [CRISP_PY](https://github.com/utiasDSL/crisp_py).
-- [ ] 3. After that, you can include cameras in the setup and other sensors. 
+- [ ] 1. The first part is the setup for the low-level [crisp_controllers](https://github.com/utiasDSL/crisp_controllers).
+- [ ] 2. Then, you will try moving the robot using [CRISP_PY](https://github.com/utiasDSL/crisp_py) python interface.
+- [ ] 3. Then, you can optionally include additional cameras and other sensors in your setup. 
 - [ ] 4. Finally, you can set up [CRISP_GYM](https://github.com/utiasDSL/crisp_gym) - the Gymnasium interface - and start policy deployment or teleoperation.
 
 ## 1. Getting the low-level C++ [CRISP](https://github.com/utiasDSL/crisp_controllers) controller ready
@@ -220,7 +220,7 @@ python -c "import crisp_gym"
 
 If the previous steps worked, then you are good to go.
 
-### Teleoperation: Record data in LeRobotFormat
+### Teleoperation: Record data in [LeRobotFormat](https://github.com/huggingface/lerobot)
 
 You can record data in `LeRobotFormat` to train a policy directly in [LeRobot](https://github.com/huggingface/lerobot).
 You will need to use teleoperation to record data and we highly recommend using a leader-follower setup to generate episodes. 

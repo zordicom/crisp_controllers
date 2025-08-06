@@ -1,6 +1,6 @@
 ## Available demos
 For now, these are the available demos in this repository. New demos are welcome, in particular if tested with real hardware.
-Some other manipulators that couldd be added to this list is the ![Open Manipulator](https://github.com/ROBOTIS-GIT/open_manipulator) or other dual setups.
+Some other manipulators that could be added to this list is the [Open Manipulator](https://github.com/ROBOTIS-GIT/open_manipulator) or other dual setups.
 
 | Robots | Franka Robotics FR3 | FR Dual FR3 | IIWA 14 | Kinova Gen3 |
 | :--- | :---: | :---: | :---: | :---: |
@@ -9,7 +9,7 @@ Some other manipulators that couldd be added to this list is the ![Open Manipula
 
 [^1]: Untested, but effort interface available.
 
-We also have some examples with cameras
+We also have some examples with cameras.
 
 | Robots | Real Sense | Orbecc |  Any webcam | 
 | :--- | :---: | :---: | :---: |

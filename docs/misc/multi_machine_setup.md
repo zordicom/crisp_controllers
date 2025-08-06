@@ -5,17 +5,15 @@ You might want to try Zenoh in that case, which uses a router for node discovery
 
 ## Using Zenoh for multi-machine setups
 
-> Zenoh /zeno/ is a pub/sub/query protocol unifying data in motion, data at rest and computations. 
+> Zenoh /zeno/ is a pub/sub/query protocol unifying data in motion, data at rest and computations - from [Zenoh's website](https://zenoh.io/).
 
-From [Zenoh's website](https://zenoh.io/).
+[rmw_zenoh](https://github.com/ros2/rmw_zenoh) is a ROS middleware to use Zenoh as a the pub/sub communication instead of DDS developed by Intrinsic.
+To learn more about Zenoh, check their website and learn about the Zenoh middleware in their repository.
 
-On the other-hand [rmw_zenoh](https://github.com/ros2/rmw_zenoh) is a ROS middleware to use Zenoh as a the pub/sub communication instead of DDS developed by Intrinsic.
-To learn more about Zenoh, check their website and learn abour the Zenoh middleware in their repository.
-
-What is important for us to know about Zenoh is that a router is required for discovery similar to how roscore worked in ROS1.
+What's important for us to know is that a router is required for discovery similar to how roscore worked in ROS1.
 It can be configured with multicast and the avoid using the router but we will avoid a multicast setup since it might cause problems in some networks for example in universities.
 
-### In the host machine - where controllers run
+### In the host machine (where the controllers run)
 
 In the machine running the controllers, make sure that you start one Zenoh router.
 In the [demos repository](https://github.com/utiasDSL/crisp_controllers_demos), we provide a service to start the router:
@@ -30,9 +28,9 @@ RMW=zenoh docker compose up ...
 ```
 The setup in the host machine is done!
 
-### In the remote machine - where the learning policy runs
+### In the remote machine (where the learning-based policy runs)
 
-In this part, we assume that you already installed the [gym or python interface](../getting_started.md#4-getting-started-with-crisp_gym)
+In this part, we assume that you already installed the [CRISP_PY or CRISP_GYM](../getting_started.md#4-getting-started-with-crisp_gym).
 
 1. Make sure that the Zenoh RMW is installed `ros-$ROS_DISTRO-rmw-zenoh-cpp`. If you use the `pixi.toml` provided 
     in this repo it should be the case.
@@ -58,7 +56,7 @@ In this part, we assume that you already installed the [gym or python interface]
 
 ## Using CycloneDDS for multi-machine setups
 
-### In the host machine - where controllers run
+### In the host machine (where controllers run)
 
 To use the demos with `cyclone` as a middleware, pass the following environment variable to the services:
 ```bash
@@ -69,7 +67,7 @@ RMW=cyclone ROS_NETWORK_INTERFACE=enpXXXXXX docker compose up ...  # (1)!
 
 If you are using a custom robot, check the `setup_cyclone.sh` script to see how it is being configured.
 
-### In the remote machine - where the learning policy runs
+### In the remote machine (where the learning policy runs)
 
 1. Make sure that the Cyclone RMW is installed `ros-$ROS_DISTRO-rmw-cyclonedds-cpp`. If you use the `pixi.toml` provided
     in this repo it should be the case.

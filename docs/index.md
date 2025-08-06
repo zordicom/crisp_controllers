@@ -18,12 +18,12 @@ Check the [controllers (CRISP controllers) :simple-github:](https://github.com/u
 
 | <video src="media/pap_demo.mp4" playsinline muted controls loop autoplay width="800"/> | <video src="media/policy.mp4" playsinline controls="true" loop="true" autoplay="true" width="800"/> |
 |:--:|:--:|
-| Robot teleoperated using a Follower-Leader system in [CRISP GYM :simple-github:](https://github.com/utiasDSL/crisp_gym) | Diffusion Policy trained and deployed from the same demonstrations. | 
+| Robot teleoperated using a Follower-Leader system in [CRISP_GYM :simple-github:](https://github.com/utiasDSL/crisp_gym) | Diffusion Policy trained and deployed from the same demonstrations | 
 
 
 | ![Franka](media/franka.gif) | ![kinova](media/kinova.gif) | ![iiwa](media/iiwa.gif) |
 |:--:|:--:|:--:|
-| *Robot following a moving target, while base joint follows a sine curve.* | *Simulated kinova robot with continous joints and nullspace control* | *Simulated iiwa robot* |
+| *Robot following a moving target, while base joint follows a sine curve* | *Simulated kinova robot with continous joints and nullspace control* | *Simulated iiwa robot* |
 
 | ![franka_eight_reduced](media/franka_eight_reduced.gif)![franka_ns_reduced](media/franka_ns_reduced.gif) | ![vicon](media/franka_teleop.gif)|
 |:--:|:--:|
@@ -31,7 +31,7 @@ Check the [controllers (CRISP controllers) :simple-github:](https://github.com/u
 
 | <video src="media/teleoperation.mp4" controls="true" loop="true" autoplay="true" playsinline width="800"> |
 |:--:|
-| Teleoperation setup with activated force-torque feedback. |
+| Teleoperation setup with activated force-torque feedback |
 
 
 

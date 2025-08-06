@@ -9,6 +9,5 @@ These configurations are:
 - `default_operational_space_controller.yaml`: A simple config for Operational Space Controller (OSC). Is a slightly stiffer controller. The contact behavior might not be as nice as for CI.
 - `clipped_cartesian_impedance.yaml`: A simple config of a highly clipped error CI (CI-clipped). This offers a highly stiff controller but at the same time safe since the error is highly clipped. Useful for precise manipulation.
 
-Experiments using these sets of parameters can be found in the paper of the framework.
+_Experiments using these sets of parameters can be found in our paper._
 
-## :construction: :construction: :construction: :construction: :construction: :construction: :construction: :construction: :construction: :construction: 
