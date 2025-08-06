@@ -183,7 +183,7 @@ For more information on the controllers, check the [available controllers and br
         ```
 
 6. After launching your robot you should see that new controller are being loaded. If you get stuck somewhere in the process feel free to open an issue.
-7. Finally, to use the robots in CRISP_PY, add a configuration file for the new robot and gym environments that use it.
+7. Finally, to use the robots in CRISP_PY, add a configuration file for the new robot and Gymnasium environments that use it.
 
     ??? example "New robot config example"
 
@@ -225,7 +225,7 @@ For more information on the controllers, check the [available controllers and br
         ...
 
         ```
-        In a similar manner, you can add this config to an gym environment to create a gym env with this config!
+        In a similar manner, you can add this config to an Gymnasium environment to create a Gymnasium env with this config!
 
 8. Voila, you are good to go!
 
