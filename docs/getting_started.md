@@ -1,18 +1,17 @@
 # Getting started
 
-Here is an overview of the framework.
+Here is an overview of the CRISP framework (please check our paper for details).
 
 ![Stack overview](media/crisp_overview.png#only-light)
 ![Stack overview](media/crisp_overview_dark.png#only-dark)
 
-Overview
 
 - [ ] 1. The first part is the setup for the low-level controllers, i.e., [crisp_controllers](https://github.com/utiasDSL/crisp_controllers).
 - [ ] 2. Then, you will try to move the robot using [CRISP_PY](https://github.com/utiasDSL/crisp_py).
 - [ ] 3. After that, you can include cameras in the setup and other sensors. 
 - [ ] 4. Finally, you can set up [CRISP_GYM](https://github.com/utiasDSL/crisp_gym) - the Gymnasium interface - and start policy deployment or teleoperation.
 
-## 1. Getting the low-level C++ CRISP controller ready
+## 1. Getting the low-level C++ [CRISP](https://github.com/utiasDSL/crisp_controllers) controller ready
 
 The computer running the CRISP controller needs a real-time patch for the controller to run smoothly and safely. You can check out the [Franka Robotics guide on how to set up a RT-patch.](https://frankarobotics.github.io/docs/installation_linux.html#setting-up-the-real-time-kernel)
 On newer Ubuntu versions, you can use [Ubuntu Pro](https://ubuntu.com/real-time) for an easy setup.
@@ -21,12 +20,12 @@ Then, check if your robot is already included in one of our demos, check [how to
 
 If your robot is not included in the demos that is not problem. Check out [How to set up a robot that is not available in the demos](misc/new_robot_setup.md). Once you get the controllers running, feel free to open a pull request on our repo to add it to the demos! We highly appreciate that!
 
-## 2. Use the python :snake: interface CRISP_PY to control the robot
+## 2. :snake: Use the python interface [CRISP_PY](https://github.com/utiasDSL/crisp_py) to control the robot
 
 ### Installation
 
 !!! Note
-    If you want to use the gymnasium interface, CRISP_PY will be autonmatically installed in the gym. You can therefore check the installation of [CRISP_GYM](#4-getting-started-with-crisp_gym).
+    If you want to use the gymnasium interface, CRISP_PY will be autonmatically installed in the gym. You can therefore check the installation of [CRISP_GYM](#4-getting-started-with-crisp_gym) directly.
     However, this section still gives you an idea on how to use CRISP_PY with your robot. We do not recommend to skip it.
 
 To use `CRISP_PY`, we recommend using [pixi](https://pixi.sh/latest/) as a package manager, a modern conda-like package manager.
@@ -182,7 +181,7 @@ You can add further sensors (Force Torque Sensor, Tactile Sensor...) by adding a
 Check the examples for more information.
 
 
-## 4. Getting started with CRISP_GYM
+## 4. Getting started with [CRISP_GYM](https://github.com/utiasDSL/crisp_gym)
 
 Similar to `CRISP_PY`, we recommend using `pixi` to install `CRISP_GYM`.
 

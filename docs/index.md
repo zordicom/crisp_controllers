@@ -10,7 +10,7 @@ hide:
 
 *Authors: [Daniel San Jose Pro](https://danielsanjosepro.github.io), [Oliver Hausdörfer](https://oliver.hausdoerfer.de/), [Ralf Römer](https://ralfroemer99.github.io), Maximilian Dösch, [Martin Schuck](https://amacati.github.io/) and Angela Schöllig.*
 
-> A Collection of C++ controllers for compliant torque-based control for manipulators compatible with `ros2_control`, including Operational Space Control and Cartesian Impedance Control. Developed for deploying high-level learning-based policies (VLA, Diffusion, ...) on your manipulator.
+> A collection of real-time, C++ controllers for compliant torque-based control for manipulators compatible with `ros2_control`. Developed for deploying high-level learning-based policies (VLA, Diffusion, ...) and teleoperation on your manipulator. It is compatible with any manipulator offering and effort interface.
 
 _If you use this work, please cite it using the [bibtex](#citing) below._
 
@@ -41,20 +41,20 @@ Learning-based controllers, such as diffusion policies, deep reinforcement learn
 While `ROS2` frameworks like `MoveIt` offer comprehensive motion planning capabilities, they are often unnecessarily complex for tasks requiring simple, real-time pose or joint servoing.
 
 We present a set of lightweight, torque-based Cartesian and joint-space controllers implemented in C++ for `ros2_control`, compatible with any robot exposing an effort interface—a common standard among modern manipulators.
-Our controllers incorporate friction compensation, joint limit avoidance, and error clipping, and have been validated on the Franka Robotics FR3 manipulator.
+Our controllers incorporate friction compensation, joint limit avoidance, and error clipping, and have been validated on the Franka Robotics FR3 on hardware, and on various platforms in simulation.
 
 Designed for fast integration and real-time control, our implementation lowers the barrier to deploying learning-based algorithms on `ROS2`-compatible platforms.
 
-_**On "CRISP"**:_ "CRISP" reflects our design philosophy behind the package: a concise, to-the-point implementation for easy deployment and integration in other software stacks.
+**Why the name "CRISP"**? "CRISP" reflects our design philosophy behind the package: a concise, to-the-point implementation for easy deployment and integration in other software stacks.
 
 ## Features
-
+- 🐍 **Python interface** to move your ROS2 robot around without having to think about topics, spinning, and more ROS2 concepts but without loosing the powerful ROS2 API. Check [CRISP_PY](https://github.com/utiasDSL/crisp_py) for more information and examples.
+- 🔁 **Gymnasium environment** with utilities to deploy learning-based policies and record trajectories in LeRobotFormat. Check [CRISP_GYM](https://github.com/utiasDSL/crisp_gym).
+- ❓ **Demos** showcasing how to use the controller with FR3 of Franka Emika in single and bimanual setup. Check the [crisp_controller_demos](https://github.com/utiasDSL/crisp_controllers_demos).
+- ⚙️ Dynamically and highly parametrizable: powered by the [`generate_parameter_library`](https://github.com/PickNikRobotics/generate_parameter_library) you can modify stiffness and more during operation.  
 - 🤖 Operational Space Controller as well as Cartesian Impedance Controller for torque-based control.  
 - 🚫 No MoveIt or complicated path-planning, just a simple C++ `ros2_controller`. Ready to use.  
-- ⚙️ Dynamically and highly parametrizable: powered by the `generate_parameter_library` you can modify stiffness and more during operation.  
-- 🐍 Python interface to move your ROS2 robot around without having to think about topics, spinning, and more ROS2 concepts but without loosing the powerful ROS2 API. Check [CRISP_PY](https://github.com/utiasDSL/crisp_py) for more information and examples.
-- 🔁 Gymnasium environment with utilities to record trajectories in LeRobotFormat and deploy trained policies. Check [CRISP_GYM](https://github.com/utiasDSL/crisp_gym).
-- ❓ Demos showcasing how to use the controller with FR3 of Franka Emika in single and bimanual setup. Check the [crisp_controller_demos](https://github.com/utiasDSL/crisp_controllers_demos).
+
 
 ## Citing
 
