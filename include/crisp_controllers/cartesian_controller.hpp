@@ -1,8 +1,8 @@
 #pragma once
 
 /**
- * @file cartesian_impedance_controller.hpp
- * @brief Cartesian impedance controller implementation for robot manipulation
+ * @file cartesian_controller.hpp
+ * @brief Cartesian controller implementation for robot manipulation (supports impedance and OSC)
  * @author Your Organization
  */
 
@@ -29,13 +29,14 @@ using CallbackReturn =
 namespace crisp_controllers {
 
 /**
- * @brief Controller implementing Cartesian impedance control
+ * @brief Controller implementing Cartesian control
  *
- * This controller implements Cartesian impedance control for robotic manipulation,
+ * This controller implements Cartesian control for robotic manipulation,
+ * supporting both impedance control and operational space control (OSC),
  * allowing for compliant interaction with the environment while maintaining
  * desired position and orientation targets.
  */
-class CartesianImpedanceController
+class CartesianController
     : public controller_interface::ControllerInterface {
 public:
   /**

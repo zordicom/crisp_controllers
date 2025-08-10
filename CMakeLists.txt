@@ -54,7 +54,7 @@ generate_parameter_library(
 add_library(
         ${PROJECT_NAME}
         SHARED
-        src/cartesian_impedance_controller.cpp
+        src/cartesian_controller.cpp
         src/pose_broadcaster.cpp
         src/torque_feedback_controller.cpp
 )

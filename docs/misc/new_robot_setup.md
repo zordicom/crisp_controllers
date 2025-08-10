@@ -45,13 +45,13 @@ For more information on the controllers, check the [available controllers and br
                 type: crisp_controllers/PoseBroadcaster
 
             gravity_compensation:
-                type: crisp_controllers/CartesianImpedanceController
+                type: crisp_controllers/CartesianController
 
             cartesian_impedance_controller:
-                type: crisp_controllers/CartesianImpedanceController
+                type: crisp_controllers/CartesianController
 
             joint_impedance_controller:
-                type: crisp_controllers/CartesianImpedanceController
+                type: crisp_controllers/CartesianController
 
             # more controllers...
         /**:
