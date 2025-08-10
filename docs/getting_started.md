@@ -50,15 +50,15 @@ To use `CRISP_PY` in an already existing pixi project, you need to make sure tha
 Check the [pixi.toml](https://github.com/utiasDSL/crisp_py/blob/main/pixi.toml) of `CRISP_PY` to see how this looks like.
 Then you can add `CRISP_PY` as a pypi package:
 ```bash
-pixi add --pypi crisp-py
+pixi add --pypi crisp-python
 ```
 or
 ```bash
-uv add crisp-py
+uv add crisp-python
 ```
 or
 ```bash
-pip install crisp-py
+pip install crisp-python
 ```
 Double-check that everything is working by running:
 
