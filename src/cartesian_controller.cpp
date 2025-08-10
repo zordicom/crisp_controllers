@@ -4,7 +4,7 @@
 #include <Eigen/src/Core/Matrix.h>
 #include <cmath>
 #include <controller_interface/controller_interface_base.hpp>
-#include <crisp_controllers/cartesian_impedance_controller.hpp>
+#include <crisp_controllers/cartesian_controller.hpp>
 #include <crisp_controllers/pch.hpp>
 #include <crisp_controllers/utils/friction_model.hpp>
 #include <crisp_controllers/utils/joint_limits.hpp>
@@ -26,7 +26,7 @@
 namespace crisp_controllers {
 
 controller_interface::InterfaceConfiguration
-CartesianImpedanceController::command_interface_configuration() const {
+CartesianController::command_interface_configuration() const {
   controller_interface::InterfaceConfiguration config;
   config.type = controller_interface::interface_configuration_type::INDIVIDUAL;
   for (const auto &joint_name : params_.joints) {
@@ -36,7 +36,7 @@ CartesianImpedanceController::command_interface_configuration() const {
 }
 
 controller_interface::InterfaceConfiguration
-CartesianImpedanceController::state_interface_configuration() const {
+CartesianController::state_interface_configuration() const {
   controller_interface::InterfaceConfiguration config;
   config.type = controller_interface::interface_configuration_type::INDIVIDUAL;
 
@@ -50,7 +50,7 @@ CartesianImpedanceController::state_interface_configuration() const {
 }
 
 controller_interface::return_type
-CartesianImpedanceController::update(const rclcpp::Time &time,
+CartesianController::update(const rclcpp::Time &time,
                                      const rclcpp::Duration & /*period*/) {
 
   size_t num_joints = params_.joints.size();
@@ -218,7 +218,7 @@ CartesianImpedanceController::update(const rclcpp::Time &time,
 }
 
 
-CallbackReturn CartesianImpedanceController::on_init() {
+CallbackReturn CartesianController::on_init() {
   params_listener_ =
       std::make_shared<cartesian_impedance_controller::ParamListener>(
           get_node());
@@ -228,7 +228,7 @@ CallbackReturn CartesianImpedanceController::on_init() {
   return CallbackReturn::SUCCESS;
 }
 
-CallbackReturn CartesianImpedanceController::on_configure(
+CallbackReturn CartesianController::on_configure(
     const rclcpp_lifecycle::State & /*previous_state*/) {
 
   auto parameters_client = std::make_shared<rclcpp::AsyncParametersClient>(
@@ -408,7 +408,7 @@ CallbackReturn CartesianImpedanceController::on_configure(
   return CallbackReturn::SUCCESS;
 }
 
-void CartesianImpedanceController::setStiffnessAndDamping() {
+void CartesianController::setStiffnessAndDamping() {
 
   stiffness.setZero();
   stiffness.diagonal() << params_.task.k_pos_x, params_.task.k_pos_y,
@@ -444,7 +444,7 @@ void CartesianImpedanceController::setStiffnessAndDamping() {
   }
 }
 
-CallbackReturn CartesianImpedanceController::on_activate(
+CallbackReturn CartesianController::on_activate(
     const rclcpp_lifecycle::State & /*previous_state*/) {
   auto num_joints = params_.joints.size();
   for (size_t i = 0; i < num_joints; i++) {
@@ -487,12 +487,12 @@ CallbackReturn CartesianImpedanceController::on_activate(
 }
 
 controller_interface::CallbackReturn
-CartesianImpedanceController::on_deactivate(
+CartesianController::on_deactivate(
     const rclcpp_lifecycle::State & /*previous_state*/) {
   return CallbackReturn::SUCCESS;
 }
 
-void CartesianImpedanceController::parse_target_pose_() {
+void CartesianController::parse_target_pose_() {
   auto msg = *target_pose_buffer_.readFromRT();
   target_position_ << msg->pose.position.x, msg->pose.position.y,
       msg->pose.position.z;
@@ -501,7 +501,7 @@ void CartesianImpedanceController::parse_target_pose_() {
                          msg->pose.orientation.y, msg->pose.orientation.z);
 }
 
-void CartesianImpedanceController::parse_target_joint_() {
+void CartesianController::parse_target_joint_() {
   auto msg = *target_joint_buffer_.readFromRT();
   if (msg->position.size()) {
     for (size_t i = 0; i < msg->position.size(); ++i) {
@@ -517,13 +517,13 @@ void CartesianImpedanceController::parse_target_joint_() {
   }
 }
 
-void CartesianImpedanceController::parse_target_wrench_() {
+void CartesianController::parse_target_wrench_() {
   auto msg = *target_wrench_buffer_.readFromRT();
   target_wrench_ << msg->wrench.force.x, msg->wrench.force.y, msg->wrench.force.z,
                     msg->wrench.torque.x, msg->wrench.torque.y, msg->wrench.torque.z;
 }
 
-void CartesianImpedanceController::log_debug_info(const rclcpp::Time &time) {
+void CartesianController::log_debug_info(const rclcpp::Time &time) {
   if (!params_.log.enabled) {
     return;
   }
@@ -638,7 +638,7 @@ void CartesianImpedanceController::log_debug_info(const rclcpp::Time &time) {
     }
 }
 
-bool CartesianImpedanceController::check_topic_publisher_count(const std::string& topic_name) {
+bool CartesianController::check_topic_publisher_count(const std::string& topic_name) {
   auto topic_info = get_node()->get_publishers_info_by_topic(topic_name);
   size_t publisher_count = topic_info.size();
   
@@ -670,5 +670,5 @@ bool CartesianImpedanceController::check_topic_publisher_count(const std::string
 } // namespace crisp_controllers
 #include "pluginlib/class_list_macros.hpp"
 // NOLINTNEXTLINE
-PLUGINLIB_EXPORT_CLASS(crisp_controllers::CartesianImpedanceController,
+PLUGINLIB_EXPORT_CLASS(crisp_controllers::CartesianController,
                        controller_interface::ControllerInterface)
