@@ -1,6 +1,29 @@
+You can use the demos to start robots and cameras in simulation or real and command them using CRISP_PY and CRISP_GYM.
+For instance, you could run in one terminal shell the container for your robot and different shells the containers for
+the cameras.
+
+??? Example "Example setup in our lab"
+    First we start our robots (FR3s):
+    ```bash
+    docker compose up launch_dual_franka
+    ```
+    Then we start the cameras:
+    ```bash
+    CAMERA_NAMESPACE=right SERIAL_NO=xxxxxxxx docker compose up launch_realsense
+    ```
+    ...and another camera:
+    ```bash
+    CAMERA_NAMESPACE=right docker compose up launch_camera
+    ```
+    We have a zellij/tmux session which starts all of these commands in individual panes, to be able to stop and restart them easily.
+    Then, we are able interact with these containers directly using CRISP_PY or CRISP_GYM.
+    
+    Check "Running a demo" for more information on how to launch the demos.
+
+
 ## Available demos
 For now, these are the available demos in this repository. New demos are welcome, in particular if tested with real hardware.
-Some other manipulators that could be added to this list is the [Open Manipulator](https://github.com/ROBOTIS-GIT/open_manipulator) or other dual setups.
+Some other manipulators that could be added to this list is [Duatic](https://github.com/Duatic/dynaarm_driver) or other dual setups.
 
 | Robots | Franka Robotics FR3 | FR Dual FR3 | IIWA 14 | Kinova Gen3 |
 | :--- | :---: | :---: | :---: | :---: |
@@ -11,9 +34,9 @@ Some other manipulators that could be added to this list is the [Open Manipulato
 
 We also have some examples with cameras.
 
-| Robots | Real Sense | Orbecc |  Any webcam | 
+| Robots | Real Sense | Any Camera / Webcam | Orbecc |
 | :--- | :---: | :---: | :---: |
-| Camera demo | ✅ | ❔[^2] | ❔[^2] | 
+| Camera demo | ✅ | ✅ | ❔[^2] | 
 
 
 [^2]: TODO, still not available in the demos
@@ -71,6 +94,13 @@ docker compose up launch_kinova
 
 
 For the cameras, you can run:
+
+```bash
+docker compose up launch_camera
+```
+
+...and in case you are running a realsense:
+
 ```bash
 docker compose up launch_realsense
 ```
