@@ -257,7 +257,66 @@ There are two recording methods currently available:
         In our lab, we use the buttons of the leader robot as a recording device with the [franka-buttons](https://github.com/nakama-lab/franka-buttons) repository.
         The following script uses the circle, cross, check and up buttons as a record, delete, save and quit commands respectively:
         ```py
-        TODO
+        """Send recording commands for an episode recorder node to start, stop recording, save episodes and quit using the franka pulot buttons."""
+        import rclpy
+        from rclpy.node import Node
+
+        from franka_buttons_interfaces.msg import FrankaPilotButtonEvent
+        from std_msgs.msg import String
+
+
+        class ButtonToRecordMessage(Node):
+            """Node that subscribes to the button event and toggles the gripper when the circle button is pressed."""
+
+            def __init__(self) -> None:
+                super().__init__("button_to_record_message")
+
+                self.create_subscription(
+                    FrankaPilotButtonEvent, "franka_pilot_button_event", self.button_callback, 10
+                )
+
+                self.publisher = self.create_publisher(String, "record_transition", 10)
+
+                # Add a cooldown to avoid multiple toggles
+                self._last_toggle = self.get_clock().now()
+                self._cooldown = 0.5
+
+                self.get_logger().info("ButtonToRecordMessage node started.")
+
+            def button_callback(self, msg: FrankaPilotButtonEvent):
+                """Callback function for the button event.
+
+                If circle pressed, then pass the command to the gripper client to toggle the gripper.
+                """
+                if (self.get_clock().now() - self._last_toggle).nanoseconds < self._cooldown * 1e9:
+                    return
+
+                if msg.pressed:
+                    if msg.pressed[0] == "circle":
+                        self.get_logger().info("Circle button pressed. Sending a record message.")
+                        self.publisher.publish(String(data="record"))
+                    if msg.pressed[0] == "check":
+                        self.get_logger().info("Check button pressed. Sending a save episode message.")
+                        self.publisher.publish(String(data="save"))
+                    if msg.pressed[0] == "cross":
+                        self.get_logger().info("Cross button pressed. Sending a delete episode message.")
+                        self.publisher.publish(String(data="delete"))
+                    if msg.pressed[0] == "up":
+                        self.get_logger().info("UP button pressed. Sending a quit command message.")
+                        self.publisher.publish(String(data="exit"))
+
+                    self._last_toggle = self.get_clock().now()
+
+
+        def main():
+            rclpy.init()
+            node = ButtonToRecordMessage()
+            rclpy.spin(node)
+            rclpy.shutdown()
+
+
+        if __name__ == "__main__":
+            main()
         ```
 
 After this, you can visualize the episodes with rerun visualizer and LeRobot utils:
