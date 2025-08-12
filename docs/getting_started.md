@@ -325,6 +325,7 @@ pixi run -e lerobot python -m lerobot.scripts.visualize_dataset \
         --repo-id <your_account>/<repo_name> \
         --episode-index 0
 ```
+...or use the [online tool for visualization](https://huggingface.co/spaces/lerobot/visualize_dataset).
 
 !!! warning
     LeRobot is subjected to rapid changes. This command might change in future versions.
