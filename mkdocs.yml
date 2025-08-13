@@ -56,7 +56,7 @@ theme:
     - navigation.instant.progress
     - navigation.top
     # - navigation.sections
-    - navigation.expand
+    # - navigation.expand
 
 
   icon:
