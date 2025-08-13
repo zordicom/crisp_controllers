@@ -1,5 +1,9 @@
 # Getting started
 
+!!! Info
+    If anything in the guide seems unclear to you, do not hesitate to open an issue or start discussion in our repositories.
+    Our goal is to make demistify robotics, not make it harder.
+
 Here is an overview of the CRISP framework (please check our paper for details).
 
 ![Stack overview](media/crisp_overview.png#only-light)
@@ -32,18 +36,6 @@ To use `CRISP_PY`, we recommend using [pixi](https://pixi.sh/latest/) as a packa
 It can be used in combination with [robostack](https://robostack.github.io/) to easily install ROS2 in any machine.
 There are a few ways to get you started:
 
-_... install from source:_
-
-```bash
-git clone https://github.com/utiasDSL/crisp_py
-cd crisp_py
-pixi install
-pixi shell -e humble
-python -c "import crisp_py"  # (1)!
-```
-
-1. This should not log anything if everything is fine
-
 _... use in your already existing pixi project:_
 
 To use `CRISP_PY` in an already existing pixi project, you need to make sure that `ROS2` is available.
@@ -63,6 +55,18 @@ pip install crisp-python
 Double-check that everything is working by running:
 
 ```bash
+python -c "import crisp_py"  # (1)!
+```
+
+1. This should not log anything if everything is fine
+
+_... install from source:_
+
+```bash
+git clone https://github.com/utiasDSL/crisp_py
+cd crisp_py
+pixi install
+pixi shell -e humble
 python -c "import crisp_py"  # (1)!
 ```
 
@@ -108,10 +112,10 @@ From now on, you can instantiate `Robot` objects to control the robot.
 To add a camera, you will need to run it in a separate container as well.
 The cameras that we tested are:
 
+- Any usb camera or webcam using the [ROS2 usb-cam](https://github.com/ros-drivers/usb_cam) package,
 - [Real Sense](https://github.com/IntelRealSense/realsense-ros/tree/ros2-master) which gives amazing ROS2 support,
 - and [Orbbec](https://github.com/orbbec/OrbbecSDK_ROS2).
 
-But any camera with [camera_ros](https://github.com/christianrauch/camera_ros) should work.
 Check the [demos](misc/demos.md) to see some examples with cameras
 
 ??? example "Example camera usage:"
@@ -122,8 +126,8 @@ Check the [demos](misc/demos.md) to see some examples with cameras
     camera_config = CameraConfig(
         camera_name="primary",
         resolution=(256, 256),  # (1)!
-        camera_color_image_topic="camera_name/color/image_raw",  # (2)!
-        camera_color_info_topic="camera_name/color/camera_info",
+        camera_color_image_topic="image_raw",  # (2)!
+        camera_color_info_topic="camera_info",
     )
 
     camera = Camera(config=camera_config)  # (3)!
@@ -135,7 +139,7 @@ Check the [demos](misc/demos.md) to see some examples with cameras
     ```
 
     1. You can define a custom resolution, independently of the resolution of the published image.
-    2. Set here the topic of your custom camera name
+    2. Set here the topic of your custom camera name. crisp_py uses compressed images, so make sure that this topic is available as well.
     3. You can also pass `namespace="..."` to give the camera a namespace. This is required for a bimanual setup.
     4. Make sure that we received an image. This will fail with a timeout if the topic is wrong or the camera is not publishing.
     5. This will show you the latest received image!
@@ -194,16 +198,18 @@ Create a file `scripts/set_env.sh` which will be sourced every time that you run
 The script will not be tracked by git.
 In this script you need to add a environment variables:
 
-- `ROS_DOMAIN_ID`: which is used to define nodes that should be able to see each other. In our [demos](misc/demos.md) they are set to 100 as default.
-- `CRISP_CONFIG_PATH`: which should be the path to a config folder similar to [config path of CRISP_PY](https://github.com/utiasDSL/crisp_py/tree/main/config). The easiest way to do this is to clone CRISP_PY somewhere
-and set this environment variable to point to it.
+- `ROS_DOMAIN_ID` **(Required)**: which is used to define nodes that should be able to see each other. In our [demos](misc/demos.md) they are set to 100 as default.
+- `CRISP_CONFIG_PATH` **(Optional)**: which should be the path to a config folder similar to [config path of CRISP_PY](https://github.com/utiasDSL/crisp_py/tree/main/config). 
+    If this environment variable is unset, the default configurations will be used.
+    If the user wants to add configurations, simply create a folder with your own configs and make this environment variable point to that config folder.
 
 ```sh title="scripts/set_env.sh" hl_lines="2"
+export GIT_LFS_SKIP_SMUDGE=1  # (1)!
 export ROS_DOMAIN_ID=100
-export CRISP_CONFIG_PATH=/path/to/crisp_py/config  # (1)!
+export CRISP_CONFIG_PATH=/path/to/config/folder  # optional
 ```
 
-1. Modify this!
+1. Required for now to install LeRobot
 
 If you want to work in a multi-machine setup (e.g. policy runs in a different machine as controllers), then check [how to setup multi-machine in ROS2](misc/multi_machine_setup.md).
 
