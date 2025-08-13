@@ -4,13 +4,15 @@ hide:
   # - toc
 ---
 
-<img src="media/crisp_logo.webp" alt="CRISP Controllers Logo"/>
+<img src="media/crisp_logo_dark.webp#only-dark" alt="CRISP Controllers Logo"/>
+<img src="media/crisp_logo_light.webp#only-light" alt="CRISP Controllers Logo"/>
 
 
 # CRISP - **C**ompliant **R**OS2 Controllers for Learn**i**ng-Ba**s**ed Manipulation **P**olicies
 
-*Authors: [Daniel San Jose Pro](https://danielsanjosepro.github.io), [Oliver Hausdörfer](https://oliver.hausdoerfer.de/), [Ralf Römer](https://ralfroemer99.github.io), Maximilian Dösch, [Martin Schuck](https://amacati.github.io/) and Angela Schöllig.*
+*Authors: [Daniel San Jose Pro](https://danielsanjosepro.github.io)[^1], [Oliver Hausdörfer](https://oliver.hausdoerfer.de/)[^1], [Ralf Römer](https://ralfroemer99.github.io)[^1], Maximilian Dösch[^1], [Martin Schuck](https://amacati.github.io/) [^1] and Angela Schöllig [^1]*.
 
+[^1]: The authors are with Technical University of Munich, Germany; TUM School of Computation, Information and Technology, Department of Computer Engineering, Learning Systems and Robotics Lab; Munich Institute of Robotics and Machine Intelligence.
 
 > A collection of real-time, C++ controllers for compliant torque-based control for manipulators compatible with `ros2_control`. Developed for deploying high-level learning-based policies (VLA, Diffusion, ...) and teleoperation on your manipulator. It is compatible with any manipulator offering and effort interface.
 
