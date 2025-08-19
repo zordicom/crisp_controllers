@@ -205,13 +205,35 @@ In this script you need to add a environment variables:
     If this environment variable is unset, the default configurations will be used.
     If the user wants to add configurations, simply create a folder with your own configs and make this environment variable point to that config folder.
 
-```sh title="scripts/set_env.sh" hl_lines="2"
-export GIT_LFS_SKIP_SMUDGE=1  # (1)!
-export ROS_DOMAIN_ID=100
-export CRISP_CONFIG_PATH=/path/to/config/folder  # optional
-```
+    !!! note
+        For `crisp_gym>=2.0.0` you can have multiple config paths separated by a colon ":" and check the config paths set using the script `scripts/check_config.py`.
+        Check the example below.
 
-1. Required for now to install LeRobot
+=== "crisp_gym >=2.0.0"
+
+    ```sh title="scripts/set_env.sh" hl_lines="2"
+    export GIT_LFS_SKIP_SMUDGE=1  # (1)!
+    export ROS_DOMAIN_ID=100
+    export CRISP_CONFIG_PATH=/path/to/config1/folder:/path/to/config2/folder  # optional
+    ```
+
+    1. Required for now to install LeRobot
+
+    Finally check the config:
+    ```bash
+    pixi run python scripts/check_config.py
+    ```
+
+
+=== "crisp_gym < 2.0.0"
+
+    ```sh title="scripts/set_env.sh" hl_lines="2"
+    export GIT_LFS_SKIP_SMUDGE=1  # (1)!
+    export ROS_DOMAIN_ID=100
+    export CRISP_CONFIG_PATH=/path/to/config/folder  # optional
+    ```
+
+    1. Required for now to install LeRobot
 
 If you want to work in a multi-machine setup (e.g. policy runs in a different machine as controllers), then check [how to setup multi-machine in ROS2](misc/multi_machine_setup.md).
 
