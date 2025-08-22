@@ -62,7 +62,15 @@ PoseBroadcaster::update(const rclcpp::Time &time,
   auto current_quaternion =
       Eigen::Quaterniond(current_pose.rotation());
 
-  if (realtime_pose_publisher_ && realtime_pose_publisher_->trylock())
+  // Decide whether to publish the pose or not
+  bool should_publish = true;
+  if (params_.publish_frequency > 0.0) {
+    auto time_since_last = time - last_publish_time_;
+    auto min_interval = rclcpp::Duration::from_seconds(1.0 / params_.publish_frequency);
+    should_publish = time_since_last >= min_interval;
+  }
+
+  if (should_publish && realtime_pose_publisher_ && realtime_pose_publisher_->trylock())
   {
     auto & pose_msg = realtime_pose_publisher_->msg_;
 
@@ -76,6 +84,7 @@ PoseBroadcaster::update(const rclcpp::Time &time,
     pose_msg.pose.orientation.z = current_quaternion.z();
     pose_msg.pose.orientation.w = current_quaternion.w();
     realtime_pose_publisher_->unlockAndPublish();
+    last_publish_time_ = time;
   }
 
   return controller_interface::return_type::OK;
@@ -158,6 +167,8 @@ CallbackReturn PoseBroadcaster::on_configure(
   realtime_pose_publisher_ =
       std::make_shared<realtime_tools::RealtimePublisher<geometry_msgs::msg::PoseStamped>>(
         pose_publisher_);
+  
+  last_publish_time_ = rclcpp::Time(0);
   return CallbackReturn::SUCCESS;
 }
 

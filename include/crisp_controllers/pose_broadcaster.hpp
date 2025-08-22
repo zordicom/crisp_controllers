@@ -64,6 +64,7 @@ private:
     {"JointModelRUBX", "JointModelRUBY", "JointModelRUBZ"};
 
   Eigen::VectorXd q;
+  rclcpp::Time last_publish_time_;
 };
 
 } // namespace crisp_controllers
