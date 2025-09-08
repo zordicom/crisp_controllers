@@ -17,4 +17,10 @@
             Torque feedback controller for robotic manipulators that responds to external torques with PD control and friction compensation.
         </description>
     </class>
+    <class name="crisp_controllers/TwistBroadcaster"
+           type="crisp_controllers::TwistBroadcaster" base_class_type="controller_interface::ControllerInterface">
+        <description>
+            Simple broadcaster for the twist velocity.
+        </description>
+    </class>
 </library>

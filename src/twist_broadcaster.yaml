@@ -1,4 +1,4 @@
-pose_broadcaster:
+twist_broadcaster:
   joints:
     type: string_array
     default_value: []

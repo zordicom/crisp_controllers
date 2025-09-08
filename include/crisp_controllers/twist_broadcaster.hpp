@@ -2,8 +2,8 @@
 #include <Eigen/Dense>
 
 #include <controller_interface/controller_interface.hpp>
-#include <geometry_msgs/msg/pose_stamped.hpp>
-#include <crisp_controllers/pose_broadcaster_parameters.hpp>
+#include <geometry_msgs/msg/twist_stamped.hpp>
+#include <crisp_controllers/twist_broadcaster_parameters.hpp>
 #include <pinocchio/multibody/fwd.hpp>
 #include <pinocchio/algorithm/kinematics.hpp>
 
@@ -17,7 +17,7 @@ using CallbackReturn =
 
 namespace crisp_controllers {
 
-class PoseBroadcaster
+class TwistBroadcaster
     : public controller_interface::ControllerInterface {
 public:
   [[nodiscard]] controller_interface::InterfaceConfiguration
@@ -35,12 +35,12 @@ public:
   on_deactivate(const rclcpp_lifecycle::State &previous_state) override;
 
 private:
-  std::shared_ptr<pose_broadcaster::ParamListener> params_listener_;
-  pose_broadcaster::Params params_;
+  std::shared_ptr<twist_broadcaster::ParamListener> params_listener_;
+  twist_broadcaster::Params params_;
 
-  rclcpp::Publisher<geometry_msgs::msg::PoseStamped>::SharedPtr pose_publisher_;
-  std::shared_ptr<realtime_tools::RealtimePublisher<geometry_msgs::msg::PoseStamped>>
-    realtime_pose_publisher_;
+  rclcpp::Publisher<geometry_msgs::msg::TwistStamped>::SharedPtr twist_publisher_;
+  std::shared_ptr<realtime_tools::RealtimePublisher<geometry_msgs::msg::TwistStamped>>
+    realtime_twist_publisher_;
 
 
   std::string end_effector_frame_;
@@ -64,6 +64,7 @@ private:
     {"JointModelRUBX", "JointModelRUBY", "JointModelRUBZ"};
 
   Eigen::VectorXd q;
+  Eigen::VectorXd q_dot;
   rclcpp::Time last_publish_time_;
 };
 
