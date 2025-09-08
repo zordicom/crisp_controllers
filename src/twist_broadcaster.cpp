@@ -79,7 +79,7 @@ TwistBroadcaster::update(const rclcpp::Time &time,
         auto & twist_msg = realtime_twist_publisher_->msg_;
 
         twist_msg.header.stamp = time;
-        twist_msg.header.frame_id = params_.base_frame;
+        twist_msg.header.frame_id = params_.end_effector_frame;
         twist_msg.twist.linear.x = current_velocity.linear()[0];
         twist_msg.twist.linear.y = current_velocity.linear()[1];
         twist_msg.twist.linear.z = current_velocity.linear()[2];
@@ -172,7 +172,7 @@ CallbackReturn TwistBroadcaster::on_configure(
         std::make_shared<realtime_tools::RealtimePublisher<geometry_msgs::msg::TwistStamped>>(
             twist_publisher_);
 
-    last_publish_time_ = rclcpp::Time(0);
+    last_publish_time_ = this->get_node()->now();
     return CallbackReturn::SUCCESS;
 }
 

@@ -168,7 +168,7 @@ CallbackReturn PoseBroadcaster::on_configure(
       std::make_shared<realtime_tools::RealtimePublisher<geometry_msgs::msg::PoseStamped>>(
         pose_publisher_);
   
-  last_publish_time_ = rclcpp::Time(0);
+  last_publish_time_ = this->get_node()->now();
   return CallbackReturn::SUCCESS;
 }
 
