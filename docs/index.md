@@ -63,7 +63,13 @@ Designed for fast integration and real-time control, our implementation lowers t
 ## Citing
 
 ```bibtex
-@inproceeding{
-   TODO
+@misc{pro2025crispcompliantros2,
+      title={CRISP - Compliant ROS2 Controllers for Learning-Based Manipulation Policies and Teleoperation}, 
+      author={Daniel San José Pro and Oliver Hausdörfer and Ralf Römer and Maximilian Dösch and Martin Schuck and Angela P. Schöllig},
+      year={2025},
+      eprint={2509.06819},
+      archivePrefix={arXiv},
+      primaryClass={cs.RO},
+      url={https://arxiv.org/abs/2509.06819}, 
 }
 ```
