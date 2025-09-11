@@ -45,11 +45,10 @@ We also have some examples with cameras.
 ## Running a demo
 
 
-1. (TEMPORARY) Clone the crisp controllers to the repo (later it will be part of the Dockerfile)
+1. Clone the repo
 ```bash
 git clone git@github.com:utiasDSL/crisp_controllers_demos.git crisp_controllers_demos
 cd crisp_controllers_demos
-git clone git@github.com:utiasDSL/crisp_controllers.git crisp_controllers
 ```
 
 !!! WARNING
