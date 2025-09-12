@@ -2,7 +2,7 @@
 
 !!! Info
     If anything in the guide seems unclear to you, do not hesitate to open an issue or start discussion in our repositories.
-    Our goal is to make demistify robotics, not make it harder.
+    Our goal is to demistify robotics, not make it harder.
 
 Here is an overview of the CRISP framework (please check our paper for details).
 
@@ -31,10 +31,10 @@ If your robot is not included in the demos that is not problem. Check out [How t
 ### Installation
 
 !!! Note
-    If you want to use the gymnasium interface, CRISP_PY will be autonmatically installed in the gym. You can therefore check the installation of [CRISP_GYM](#4-getting-started-with-crisp_gym) directly.
+    If you want to use the gymnasium interface, CRISP_PY will be automatically installed in the gym. You can therefore check the installation of [CRISP_GYM](#4-getting-started-with-crisp_gym) directly.
     However, this section still gives you an idea on how to use CRISP_PY with your robot. We do not recommend to skip it.
 
-To use `CRISP_PY`, we recommend using [pixi](https://pixi.sh/latest/) as a package manager, a modern conda-like package manager.
+To use `CRISP_PY`, we recommend using [pixi](https://pixi.sh/latest/), a modern conda-like package manager.
 It can be used in combination with [robostack](https://robostack.github.io/) to easily install ROS2 in any machine.
 There are a few ways to get you started:
 
@@ -358,12 +358,12 @@ pixi run -e lerobot python -m lerobot.scripts.visualize_dataset \
 ...or use the [online tool for visualization](https://huggingface.co/spaces/lerobot/visualize_dataset).
 
 !!! warning
-    LeRobot is subjected to rapid changes. This command might change in future versions.
+    LeRobot is subject to frequent changes. This command might change in future versions.
 
 #### Other teleop setups
 
 You can add further teleop options to [`teleop/`](https://github.com/utiasDSL/crisp_gym/blob/main/crisp_gym/teleop) and create 
-a similar record script as [`scripts/record_lerobot_format_leader_follower.py`](https://github.com/utiasDSL/crisp_gym/blob/main/crisp_gym/scripts/record_lerobot_format_leader_follower.py)
+a similar record script to [`scripts/record_lerobot_format_leader_follower.py`](https://github.com/utiasDSL/crisp_gym/blob/main/crisp_gym/scripts/record_lerobot_format_leader_follower.py)
 
 ### Train a policy
 
@@ -376,7 +376,7 @@ pixi run -e lerobot python -m lerobot.scripts.train \
 ```
 
 !!! warning
-    LeRobot is subjected to rapid changes. This command might change in future versions.
+    LeRobot is subject to frequent changes. This command might change in future versions.
 
 They provide the latest implementations of most VLA.
 Check [LeRobot](https://github.com/huggingface/lerobot) for more information.
@@ -391,7 +391,7 @@ pixi run -e humble-lerobot python scripts/deploy_policy.py # (1)!
 1. The script will interactively allow you to choose a model inside `outputs/train`. If you want to explicitly pass a path you can override it with `--path`
 
 !!! warning
-    LeRobot is subjected to rapid changes. This command might change in future versions.
+    LeRobot is subject to frequent changes. This command might change in future versions.
 
 Good job, now you can evaluate your model!
 
