@@ -36,10 +36,10 @@ We also have some examples with cameras.
 
 | Robots | Real Sense | Any Camera / Webcam | Orbecc |
 | :--- | :---: | :---: | :---: |
-| Camera demo | ✅ | ✅ | ❔[^2] | 
+| Camera demo | ✅ | ✅ |  ✅[^2] | 
 
 
-[^2]: TODO, still not available in the demos
+[^2]: Available container at: https://github.com/danielsanjosepro/orbec_container_ros2
 
 
 ## Running a demo
