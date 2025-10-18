@@ -258,6 +258,15 @@ private:
    * @return true if publisher count is safe (<=1), false otherwise
    */
   bool check_topic_publisher_count(const std::string& topic_name);
+
+  /**
+   * @brief End-effector pose expressed in the base frame (base_frame)
+   */
+  pinocchio::SE3 end_effector_pose_b;
+  /**
+   * @brief Pinocchio frame ID for params_.base_frame
+   */
+  int base_frame_id;
 };
 
 } // namespace crisp_controllers

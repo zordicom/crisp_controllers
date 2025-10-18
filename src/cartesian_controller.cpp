@@ -63,20 +63,15 @@ CartesianController::update(const rclcpp::Time &time,
         model_.getJointId(joint_name); // pinocchio joind id might be different
     auto joint = model_.joints[joint_id];
 
-    /*q[i] = exponential_moving_average(q[i], state_interfaces_[i].get_value(),*/
-    /*                                  params_.filter.q);*/
     q[i] = state_interfaces_[i].get_value();
-    if (continous_joint_types.count(
-                   joint.shortname())) { // Then we are handling a continous
-                                         // joint that is SO(2)
+    if (continous_joint_types.count(joint.shortname())) { 
+      // Then we are handling a continous joint that is SO(2)
       q_pin[joint.idx_q()] = std::cos(q[i]);
       q_pin[joint.idx_q() + 1] = std::sin(q[i]);
-    } else {  // simple revolute joint case
+    } else {  
+    // simple revolute joint case
       q_pin[joint.idx_q()] = q[i];
     }
-    /*dq[i] = exponential_moving_average(*/
-    /*    dq[i], state_interfaces_[num_joints + i].get_value(),*/
-    /*    params_.filter.dq);*/
     dq[i] = state_interfaces_[num_joints + i].get_value();
   }
 
@@ -94,24 +89,16 @@ CartesianController::update(const rclcpp::Time &time,
       pinocchio::log6(target_pose_), pinocchio::log6(new_target_pose),
       params_.filter.target_pose));
 
-  /*target_pose_ = pinocchio::SE3(target_orientation_.toRotationMatrix(),
-   * target_position_);*/
   end_effector_pose = data_.oMf[end_effector_frame_id];
+  const pinocchio::SE3 base_frame_pose = data_.oMf[base_frame_id];
+
+  end_effector_pose_b = base_frame_pose.inverse() * end_effector_pose;
 
   // We consider translation and rotation separately to avoid unatural screw
   // motions
-  if (params_.use_local_jacobian) {
-    error.head(3) =
-        end_effector_pose.rotation().transpose() *
-        (target_pose_.translation() - end_effector_pose.translation());
-    error.tail(3) = pinocchio::log3(end_effector_pose.rotation().transpose() *
-                                    target_pose_.rotation());
-  } else {
-    error.head(3) =
-        target_pose_.translation() - end_effector_pose.translation();
-    error.tail(3) = pinocchio::log3(target_pose_.rotation() *
-                                    end_effector_pose.rotation().transpose());
-  }
+  error.head(3) = target_pose_.translation() - end_effector_pose_b.translation();
+  error.tail(3) = pinocchio::log3(target_pose_.rotation() * end_effector_pose_b.rotation().transpose());
+
 
   if (params_.limit_error) {
     max_delta_ << params_.task.error_clip.x, params_.task.error_clip.y, params_.task.error_clip.z, 
@@ -120,11 +107,19 @@ CartesianController::update(const rclcpp::Time &time,
   }
 
   J.setZero();
-  auto reference_frame = params_.use_local_jacobian
-                             ? pinocchio::ReferenceFrame::LOCAL
-                             : pinocchio::ReferenceFrame::WORLD;
-  pinocchio::computeFrameJacobian(model_, data_, q_pin, end_effector_frame_id,
-                                  reference_frame, J);
+  if (params_.use_local_jacobian) {
+    Eigen::MatrixXd J_local(6, model_.nv);
+    pinocchio::computeFrameJacobian(model_, data_, q_pin, end_effector_frame_id,
+                                    pinocchio::ReferenceFrame::LOCAL, J_local);
+    const Eigen::Matrix<double,6,6> Ad_be = end_effector_pose_b.toActionMatrix();
+    J.noalias() = Ad_be * J_local;
+  } else {
+    Eigen::MatrixXd J_world(6, model_.nv);
+    pinocchio::computeFrameJacobian(model_, data_, q_pin, end_effector_frame_id,
+                                    pinocchio::ReferenceFrame::WORLD, J_world);
+    const Eigen::Matrix<double,6,6> Ad_bw = base_frame_pose.inverse().toActionMatrix();
+    J.noalias() = Ad_bw * J_world;
+  }
 
   Eigen::MatrixXd J_pinv(model_.nv, 6);
   J_pinv = pseudo_inverse(J, params_.nullspace.regularization);
@@ -159,7 +154,7 @@ CartesianController::update(const rclcpp::Time &time,
   }
 
   if (model_.nq != model_.nv) {
-    // TODO: Then we have some continouts joints, not being handled for now
+    // TODO: Joint liimits for continous joints not implemented yet
     tau_joint_limits = Eigen::VectorXd::Zero(model_.nv);
   } else {
     tau_joint_limits = get_joint_limit_torque(q, model_.lowerPositionLimit,
@@ -197,8 +192,6 @@ CartesianController::update(const rclcpp::Time &time,
   if (params_.limit_torques) {
     tau_d = saturateTorqueRate(tau_d, tau_previous, params_.max_delta_tau);
   }
-  /*tau_d = exponential_moving_average(tau_d, tau_previous,*/
-  /*                                   params_.filter.output_torque);*/
 
   if (not params_.stop_commands) {
     for (size_t i = 0; i < num_joints; ++i) {
@@ -308,6 +301,7 @@ CallbackReturn CartesianController::on_configure(
   }
 
   end_effector_frame_id = model_.getFrameId(params_.end_effector_frame);
+  base_frame_id = model_.getFrameId(params_.base_frame);
   q = Eigen::VectorXd::Zero(model_.nv);
   q_pin = Eigen::VectorXd::Zero(model_.nq);
   dq = Eigen::VectorXd::Zero(model_.nv);
@@ -477,8 +471,13 @@ CallbackReturn CartesianController::on_activate(
 
   end_effector_pose = data_.oMf[end_effector_frame_id];
 
-  target_position_ = end_effector_pose.translation();
-  target_orientation_ = Eigen::Quaterniond(end_effector_pose.rotation());
+  const pinocchio::SE3 T_wb = data_.oMf[base_frame_id];
+  const pinocchio::SE3 T_bw = T_wb.inverse();
+
+  end_effector_pose_b = T_bw * end_effector_pose;
+
+  target_position_ = end_effector_pose_b.translation();
+  target_orientation_ = Eigen::Quaterniond(end_effector_pose_b.rotation());
   target_pose_ =
       pinocchio::SE3(target_orientation_.toRotationMatrix(), target_position_);
 
