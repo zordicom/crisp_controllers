@@ -10,7 +10,7 @@ hide:
 
 # CRISP - **C**ompliant **R**OS2 Controllers for Learn**i**ng-Ba**s**ed Manipulation **P**olicies
 
-*Authors: [Daniel San Jose Pro](https://danielsanjosepro.github.io)[^1], [Oliver Hausdörfer](https://oliver.hausdoerfer.de/)[^1], [Ralf Römer](https://ralfroemer99.github.io)[^1], Maximilian Dösch[^1], [Martin Schuck](https://amacati.github.io/) [^1] and Angela Schöllig [^1]*.
+*Authors: [Daniel San Jose Pro](https://danielsanjosepro.github.io)[^1], [Oliver Hausdörfer](https://oliver.hausdoerfer.de/)[^1], [Ralf Römer](https://ralfroemer99.github.io)[^1], Maximilian Dösch[^1], [Martin Schuck](https://amacati.github.io/) [^1] and Angela Schoellig [^1]*.
 
 [^1]: The authors are with Technical University of Munich, Germany; TUM School of Computation, Information and Technology, Department of Computer Engineering, Learning Systems and Robotics Lab; Munich Institute of Robotics and Machine Intelligence.
 
@@ -19,6 +19,10 @@ hide:
 _If you use this work, please cite it using the [bibtex](#citing) below._
 
 Check the [controllers (CRISP controllers) :simple-github:](https://github.com/utiasDSL/crisp_controllers) , robot [demos (CRISP controllers demos) :simple-github:](https://github.com/utiasDSL/crisp_controllers_demos), a simple [python interface (CRISP_PY) :simple-github:](https://github.com/utiasDSL/crisp_py), and a [Gymnasium wrapper (CRISP_GYM) :simple-github:](https://github.com/utiasDSL/crisp_gym) for real-world experiments.
+
+!!! info "Aloha gripper for Manipulators"
+    Check out [aloha4franka](https://tum-lsy.github.io/aloha4franka/) for the gripper used in the videos.
+
 
 | <video src="media/pap_demo.mp4" playsinline muted controls loop autoplay width="800"/> | <video src="media/policy.mp4" playsinline controls="true" loop="true" autoplay="true" width="800"/> |
 |:--:|:--:|

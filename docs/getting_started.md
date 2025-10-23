@@ -203,11 +203,8 @@ In this script you need to add a environment variables:
 - `ROS_DOMAIN_ID` **(Required)**: which is used to define nodes that should be able to see each other. In our [demos](misc/demos.md) they are set to 100 as default.
 - `CRISP_CONFIG_PATH` **(Optional)**: which should be the path to a config folder similar to [config path of CRISP_PY](https://github.com/utiasDSL/crisp_py/tree/main/config). 
     If this environment variable is unset, the default configurations will be used.
-    If the user wants to add configurations, simply create a folder with your own configs and make this environment variable point to that config folder.
+    Check [how to create your own config](misc/create_own_config.md) guide for more information.
 
-    !!! note
-        For `crisp_gym>=2.0.0` you can have multiple config paths separated by a colon ":" and check the config paths set using the script `scripts/check_config.py`.
-        Check the example below.
 
 === "crisp_gym >=2.0.0"
 
@@ -219,7 +216,7 @@ In this script you need to add a environment variables:
 
     1. Required for now to install LeRobot
 
-    Finally check the config:
+    Finally check the config (if using one)
     ```bash
     pixi run python scripts/check_config.py
     ```
@@ -284,8 +281,8 @@ There are two recording methods currently available:
     With this you can implement custom recording devices to control the recording workflow
 
     ??? example "Using the FR3 pilot buttons of Franka Robotics as a recording device"
-        In our lab, we use the buttons of the leader robot as a recording device with the [franka-buttons](https://github.com/nakama-lab/franka-buttons) repository.
-        The following script uses the circle, cross, check and up buttons as a record, delete, save and quit commands respectively:
+        In our lab, we use the buttons of the leader robot as a recording device with a for of the [franka-buttons](https://github.com/danielsanjosepro/franka_buttons_ros2/tree/main) repository.
+        The following script uses the circle, cross, check and up buttons as a record, delete, save and quit commands respectively (this is also part of the repository):
         ```py
         """Send recording commands for an episode recorder node to start, stop recording, save episodes and quit using the franka pulot buttons."""
         import rclpy
