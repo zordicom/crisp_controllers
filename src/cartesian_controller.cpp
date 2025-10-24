@@ -130,6 +130,14 @@ CartesianController::update(const rclcpp::Time &time,
     error = error.cwiseMax(-max_delta_).cwiseMin(max_delta_);
   }
 
+  // Log error every 100 cycles (~1Hz at 100Hz update rate)
+  static int log_counter = 0;
+  if (log_counter++ % 100 == 0) {
+    RCLCPP_INFO(get_node()->get_logger(),
+                "Cartesian error: pos=[%.4f, %.4f, %.4f]m, ori=[%.4f, %.4f, %.4f]rad",
+                error[0], error[1], error[2], error[3], error[4], error[5]);
+  }
+
   J.setZero();
   auto reference_frame = params_.use_local_jacobian
                              ? pinocchio::ReferenceFrame::LOCAL
@@ -210,10 +218,22 @@ CartesianController::update(const rclcpp::Time &time,
   /*tau_d = exponential_moving_average(tau_d, tau_previous,*/
   /*                                   params_.filter.output_torque);*/
 
+  // Log commanded torques every 100 cycles (~1Hz at 100Hz update rate)
+  static int torque_log_counter = 0;
+  if (torque_log_counter++ % 100 == 0) {
+    RCLCPP_INFO(get_node()->get_logger(),
+                "Commanded torques: [%.3f, %.3f, %.3f, %.3f, %.3f, %.3f, %.3f] Nm (stop_commands=%s)",
+                tau_d[0], tau_d[1], tau_d[2], tau_d[3], tau_d[4], tau_d[5], tau_d[6],
+                params_.stop_commands ? "TRUE" : "FALSE");
+  }
+
   if (not params_.stop_commands) {
     for (size_t i = 0; i < num_joints; ++i) {
       command_interfaces_[i].set_value(tau_d[i]);
     }
+  } else {
+    RCLCPP_WARN_THROTTLE(get_node()->get_logger(), *get_node()->get_clock(), 5000,
+                         "stop_commands is TRUE - not sending torques to hardware!");
   }
 
   tau_previous = tau_d;
@@ -390,6 +410,12 @@ CallbackReturn CartesianController::on_configure(
           "Ignoring target_pose message due to multiple publishers detected!");
       return;
     }
+    RCLCPP_INFO(get_node()->get_logger(),
+                "Received target pose: frame=%s, pos=[%.3f, %.3f, %.3f], ori=[%.3f, %.3f, %.3f, %.3f]",
+                msg->header.frame_id.c_str(),
+                msg->pose.position.x, msg->pose.position.y, msg->pose.position.z,
+                msg->pose.orientation.w, msg->pose.orientation.x,
+                msg->pose.orientation.y, msg->pose.orientation.z);
     target_pose_buffer_.writeFromNonRT(msg);
     new_target_pose_ = true;
   };
