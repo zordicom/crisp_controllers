@@ -180,9 +180,13 @@ CartesianController::update(const rclcpp::Time &time,
   if (model_.nq != model_.nv) {
     // TODO: Then we have some continouts joints, not being handled for now
     tau_joint_limits = Eigen::VectorXd::Zero(model_.nv);
+  } else if (params_.joint_limit_avoidance.enable) {
+    tau_joint_limits = get_joint_limit_torque(
+        q, model_.lowerPositionLimit, model_.upperPositionLimit,
+        params_.joint_limit_avoidance.safe_range,
+        params_.joint_limit_avoidance.max_torque);
   } else {
-    tau_joint_limits = get_joint_limit_torque(q, model_.lowerPositionLimit,
-                                              model_.upperPositionLimit);
+    tau_joint_limits = Eigen::VectorXd::Zero(model_.nv);
   }
 
   tau_secondary << nullspace_stiffness * (q_ref - q) +
@@ -582,6 +586,10 @@ CallbackReturn CartesianController::on_activate(
   target_orientation_ = Eigen::Quaterniond(end_effector_pose.rotation());
   target_pose_ =
       pinocchio::SE3(target_orientation_.toRotationMatrix(), target_position_);
+
+  // Initialize commanded torques to zero to prevent jumps at startup
+  tau_previous = Eigen::VectorXd::Zero(model_.nv);
+  tau_d = Eigen::VectorXd::Zero(model_.nv);
 
   RCLCPP_INFO(get_node()->get_logger(), "Controller activated.");
   return CallbackReturn::SUCCESS;

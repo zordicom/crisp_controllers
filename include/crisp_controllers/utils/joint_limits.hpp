@@ -5,8 +5,8 @@ using namespace Eigen;
 inline Eigen::VectorXd get_joint_limit_torque(const VectorXd &joint_positions,
                                               const VectorXd &lower_limits,
                                               const VectorXd &upper_limits,
-                                              double safe_range = 0.3, // [rad]
-                                              double max_torque = 5.0  // [Nm]
+                                              double safe_range,  // [rad]
+                                              double max_torque   // [Nm]
 ) {
 
   VectorXd torques = VectorXd::Zero(joint_positions.size());
