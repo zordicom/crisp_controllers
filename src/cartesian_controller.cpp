@@ -593,7 +593,14 @@ CallbackReturn CartesianController::on_activate(
 
   // Open CSV log file if logging is enabled
   if (params_.log.enabled) {
-    std::string log_dir = "/tmp/crisp_controller_logs";
+    // Get user workspace directory
+    const char* user_ws = std::getenv("USER_WS");
+    if (!user_ws) {
+      RCLCPP_ERROR(get_node()->get_logger(), "USER_WS environment variable not set. Cannot create log directory.");
+      return CallbackReturn::ERROR;
+    }
+
+    std::string log_dir = std::string(user_ws) + "/crisp_controller_logs";
     std::string log_filename = log_dir + "/" + get_node()->get_name() + "_" +
                               std::to_string(get_node()->now().seconds()) + ".csv";
 
