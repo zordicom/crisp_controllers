@@ -54,6 +54,13 @@ CartesianController::update(const rclcpp::Time &time,
                             const rclcpp::Duration & /*period*/) {
 
   size_t num_joints = params_.joints.size();
+
+  // Log first update to compare with on_activate values
+  static bool first_update = true;
+  if (first_update) {
+    RCLCPP_INFO(get_node()->get_logger(), "First update() call - checking joint positions...");
+  }
+
   for (size_t i = 0; i < num_joints; i++) {
 
     // TODO: later it might be better to get this thing prepared in the
@@ -107,6 +114,22 @@ CartesianController::update(const rclcpp::Time &time,
   /*target_pose_ = pinocchio::SE3(target_orientation_.toRotationMatrix(),
    * target_position_);*/
   end_effector_pose = data_.oMf[end_effector_frame_id];
+
+  // Log first update to verify state interface data
+  if (first_update) {
+    RCLCPP_INFO(get_node()->get_logger(),
+                "First update: Joint positions: [%.3f, %.3f, %.3f, %.3f, %.3f, %.3f, %.3f]",
+                q[0], q[1], q[2], q[3], q[4], q[5], q[6]);
+    Eigen::Vector3d current_pos = end_effector_pose.translation();
+    Eigen::Quaterniond current_quat(end_effector_pose.rotation());
+    RCLCPP_INFO(get_node()->get_logger(),
+                "First update: Current end-effector position: [%.3f, %.3f, %.3f]",
+                current_pos.x(), current_pos.y(), current_pos.z());
+    RCLCPP_INFO(get_node()->get_logger(),
+                "First update: Target end-effector position: [%.3f, %.3f, %.3f]",
+                target_position_.x(), target_position_.y(), target_position_.z());
+    first_update = false;
+  }
 
   // We consider translation and rotation separately to avoid unatural screw
   // motions
@@ -586,6 +609,18 @@ CallbackReturn CartesianController::on_activate(
   target_orientation_ = Eigen::Quaterniond(end_effector_pose.rotation());
   target_pose_ =
       pinocchio::SE3(target_orientation_.toRotationMatrix(), target_position_);
+
+  // Log initial state to verify data quality
+  RCLCPP_INFO(get_node()->get_logger(),
+              "on_activate: Initial joint positions: [%.3f, %.3f, %.3f, %.3f, %.3f, %.3f, %.3f]",
+              q[0], q[1], q[2], q[3], q[4], q[5], q[6]);
+  RCLCPP_INFO(get_node()->get_logger(),
+              "on_activate: Computed initial end-effector position: [%.3f, %.3f, %.3f]",
+              target_position_.x(), target_position_.y(), target_position_.z());
+  RCLCPP_INFO(get_node()->get_logger(),
+              "on_activate: Computed initial end-effector orientation (quat): [%.3f, %.3f, %.3f, %.3f]",
+              target_orientation_.w(), target_orientation_.x(),
+              target_orientation_.y(), target_orientation_.z());
 
   // Initialize commanded torques to zero to prevent jumps at startup
   tau_previous = Eigen::VectorXd::Zero(model_.nv);
