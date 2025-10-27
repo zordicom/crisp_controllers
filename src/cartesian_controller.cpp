@@ -591,12 +591,58 @@ CallbackReturn CartesianController::on_activate(
   tau_previous = Eigen::VectorXd::Zero(model_.nv);
   tau_d = Eigen::VectorXd::Zero(model_.nv);
 
+  // Open CSV log file if logging is enabled
+  if (params_.log.enabled) {
+    std::string log_dir = "/tmp/crisp_controller_logs";
+    std::string log_filename = log_dir + "/" + get_node()->get_name() + "_" +
+                              std::to_string(get_node()->now().seconds()) + ".csv";
+
+    // Create directory if it doesn't exist
+    std::filesystem::create_directories(log_dir);
+
+    csv_log_file_.open(log_filename, std::ios::out);
+    if (csv_log_file_.is_open()) {
+      csv_logging_enabled_ = true;
+
+      // Write CSV header
+      csv_log_file_ << "timestamp";
+
+      // Add torque columns for each joint
+      for (auto i = 0u; i < num_joints; ++i) {
+        csv_log_file_ << ",tau_task_" << i
+                      << ",tau_nullspace_" << i
+                      << ",tau_joint_limits_" << i
+                      << ",tau_friction_" << i
+                      << ",tau_coriolis_" << i
+                      << ",tau_gravity_" << i
+                      << ",tau_wrench_" << i
+                      << ",tau_total_" << i;
+      }
+
+      // Add error columns (6 DOF: x, y, z, rx, ry, rz)
+      csv_log_file_ << ",error_x,error_y,error_z,error_rx,error_ry,error_rz,error_xyz_norm";
+
+      csv_log_file_ << std::endl;
+
+      RCLCPP_INFO(get_node()->get_logger(), "CSV logging enabled: %s", log_filename.c_str());
+    } else {
+      csv_logging_enabled_ = false;
+      RCLCPP_WARN(get_node()->get_logger(), "Failed to open CSV log file: %s", log_filename.c_str());
+    }
+  }
+
   RCLCPP_INFO(get_node()->get_logger(), "Controller activated.");
   return CallbackReturn::SUCCESS;
 }
 
 controller_interface::CallbackReturn CartesianController::on_deactivate(
     const rclcpp_lifecycle::State & /*previous_state*/) {
+  // Close CSV log file if it was opened
+  if (csv_logging_enabled_ && csv_log_file_.is_open()) {
+    csv_log_file_.close();
+    csv_logging_enabled_ = false;
+    RCLCPP_INFO(get_node()->get_logger(), "CSV log file closed.");
+  }
   return CallbackReturn::SUCCESS;
 }
 
@@ -744,6 +790,35 @@ void CartesianController::log_debug_info(const rclcpp::Time &time) {
         get_node()->get_logger(), *get_node()->get_clock(), 2000,
         "Control loop needed: "
             << (t_end.nanoseconds() - time.nanoseconds()) * 1e-6 << " ms");
+  }
+
+  // Write CSV data if logging is enabled
+  if (csv_logging_enabled_ && csv_log_file_.is_open()) {
+    // Write timestamp in seconds
+    csv_log_file_ << time.seconds();
+
+    // Write torque components for each joint
+    for (auto i = 0; i < tau_task.size(); ++i) {
+      csv_log_file_ << "," << tau_task[i]
+                    << "," << tau_nullspace[i]
+                    << "," << tau_joint_limits[i]
+                    << "," << tau_friction[i]
+                    << "," << tau_coriolis[i]
+                    << "," << tau_gravity[i]
+                    << "," << tau_wrench[i]
+                    << "," << tau_d[i];
+    }
+
+    // Write error (6 DOF: x, y, z, rx, ry, rz)
+    for (auto i = 0; i < 6; ++i) {
+      csv_log_file_ << "," << error[i];
+    }
+
+    // Write xyz error norm
+    double error_xyz_norm = std::sqrt(error[0]*error[0] + error[1]*error[1] + error[2]*error[2]);
+    csv_log_file_ << "," << error_xyz_norm;
+
+    csv_log_file_ << std::endl;
   }
 }
 

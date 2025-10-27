@@ -22,6 +22,8 @@
 #include <sensor_msgs/msg/joint_state.hpp>
 #include <string>
 #include <unordered_set>
+#include <fstream>
+#include <filesystem>
 
 using CallbackReturn =
     rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn;
@@ -258,6 +260,11 @@ private:
    * @return true if publisher count is safe (<=1), false otherwise
    */
   bool check_topic_publisher_count(const std::string& topic_name);
+
+  /** @brief CSV log file stream for controller diagnostics */
+  std::ofstream csv_log_file_;
+  /** @brief Flag to track if CSV logging is enabled */
+  bool csv_logging_enabled_ = false;
 };
 
 } // namespace crisp_controllers
