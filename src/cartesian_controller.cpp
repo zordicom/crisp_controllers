@@ -601,8 +601,13 @@ CallbackReturn CartesianController::on_activate(
     }
 
     std::string log_dir = std::string(user_ws) + "/crisp_controller_logs";
+
+    // Get timestamp with millisecond precision
+    auto now = get_node()->now();
+    int64_t timestamp_ms = now.seconds() * 1000 + now.nanoseconds() / 1000000;
+
     std::string log_filename = log_dir + "/" + get_node()->get_name() + "_" +
-                              std::to_string(get_node()->now().seconds()) + ".csv";
+                              std::to_string(timestamp_ms) + ".csv";
 
     // Create directory if it doesn't exist
     std::filesystem::create_directories(log_dir);
