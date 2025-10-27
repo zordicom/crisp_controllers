@@ -615,6 +615,7 @@ CallbackReturn CartesianController::on_activate(
     csv_log_file_.open(log_filename, std::ios::out);
     if (csv_log_file_.is_open()) {
       csv_logging_enabled_ = true;
+      csv_log_start_time_ = get_node()->now();
 
       // Write CSV header
       csv_log_file_ << "timestamp";
@@ -806,8 +807,9 @@ void CartesianController::log_debug_info(const rclcpp::Time &time) {
 
   // Write CSV data if logging is enabled
   if (csv_logging_enabled_ && csv_log_file_.is_open()) {
-    // Write timestamp in seconds
-    csv_log_file_ << time.seconds();
+    // Write relative timestamp in seconds (from start of logging)
+    double relative_time = (time - csv_log_start_time_).seconds();
+    csv_log_file_ << relative_time;
 
     // Write torque components for each joint
     for (auto i = 0; i < tau_task.size(); ++i) {

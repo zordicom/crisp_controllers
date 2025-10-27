@@ -265,6 +265,8 @@ private:
   std::ofstream csv_log_file_;
   /** @brief Flag to track if CSV logging is enabled */
   bool csv_logging_enabled_ = false;
+  /** @brief Start time for CSV logging (to compute relative timestamps) */
+  rclcpp::Time csv_log_start_time_;
 };
 
 } // namespace crisp_controllers
