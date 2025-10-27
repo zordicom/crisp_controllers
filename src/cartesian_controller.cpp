@@ -635,6 +635,10 @@ CallbackReturn CartesianController::on_activate(
       // Add error columns (6 DOF: x, y, z, rx, ry, rz)
       csv_log_file_ << ",error_x,error_y,error_z,error_rx,error_ry,error_rz,error_xyz_norm";
 
+      // Add pose columns (current and target)
+      csv_log_file_ << ",current_x,current_y,current_z,current_qw,current_qx,current_qy,current_qz";
+      csv_log_file_ << ",target_x,target_y,target_z,target_qw,target_qx,target_qy,target_qz";
+
       csv_log_file_ << std::endl;
 
       RCLCPP_INFO(get_node()->get_logger(), "CSV logging enabled: %s", log_filename.c_str());
@@ -831,6 +835,20 @@ void CartesianController::log_debug_info(const rclcpp::Time &time) {
     // Write xyz error norm
     double error_xyz_norm = std::sqrt(error[0]*error[0] + error[1]*error[1] + error[2]*error[2]);
     csv_log_file_ << "," << error_xyz_norm;
+
+    // Write current pose (position and orientation as quaternion)
+    Eigen::Vector3d current_pos = end_effector_pose.translation();
+    Eigen::Quaterniond current_quat(end_effector_pose.rotation());
+    csv_log_file_ << "," << current_pos.x() << "," << current_pos.y() << "," << current_pos.z()
+                  << "," << current_quat.w() << "," << current_quat.x()
+                  << "," << current_quat.y() << "," << current_quat.z();
+
+    // Write target pose (position and orientation as quaternion)
+    Eigen::Vector3d target_pos = target_pose_.translation();
+    Eigen::Quaterniond target_quat(target_pose_.rotation());
+    csv_log_file_ << "," << target_pos.x() << "," << target_pos.y() << "," << target_pos.z()
+                  << "," << target_quat.w() << "," << target_quat.x()
+                  << "," << target_quat.y() << "," << target_quat.z();
 
     csv_log_file_ << std::endl;
   }
