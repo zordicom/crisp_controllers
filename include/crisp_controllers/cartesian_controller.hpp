@@ -267,6 +267,11 @@ private:
   bool csv_logging_enabled_ = false;
   /** @brief Start time for CSV logging (to compute relative timestamps) */
   rclcpp::Time csv_log_start_time_;
+
+  /** @brief CSV log file stream for tau_task diagnostics */
+  std::ofstream tau_task_log_file_;
+  /** @brief Flag to track if tau_task logging is enabled */
+  bool tau_task_logging_enabled_ = false;
 };
 
 } // namespace crisp_controllers
