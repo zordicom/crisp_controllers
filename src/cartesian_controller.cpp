@@ -756,9 +756,34 @@ CallbackReturn CartesianController::on_activate(
               target_orientation_.w(), target_orientation_.x(),
               target_orientation_.y(), target_orientation_.z());
 
-  // Initialize commanded torques to zero to prevent jumps at startup
-  tau_previous = Eigen::VectorXd::Zero(model_.nv);
-  tau_d = Eigen::VectorXd::Zero(model_.nv);
+  // Compute initial control torques to hold current position when switching to MIT mode
+  // This prevents the arm from falling by computing the full control law at activation
+  Eigen::VectorXd tau_init = computeControlTorques(
+      end_effector_pose,  // current pose
+      target_pose_,       // target pose (same as current)
+      q,                  // joint positions
+      q_pin,              // pinocchio joint positions
+      dq,                 // joint velocities (should be near zero)
+      get_node()->get_clock()->now()  // current time
+  );
+
+  // Apply torque rate limiting and safety limits
+  if (params_.limit_torques && tau_previous.size() > 0) {
+    tau_init = saturateTorqueRate(tau_init, tau_previous, params_.max_delta_tau);
+  }
+
+  // Apply torque limits if configured
+  if (tau_limits.size() > 0) {
+    tau_init = tau_init.cwiseMin(tau_limits).cwiseMax(-tau_limits);
+  }
+
+  tau_previous = tau_init;
+  tau_d = tau_init;
+
+  RCLCPP_INFO(get_node()->get_logger(),
+              "on_activate: Initialized with holding torques: [%.3f, %.3f, %.3f, %.3f, %.3f, %.3f, %.3f]",
+              tau_init[0], tau_init[1], tau_init[2], tau_init[3],
+              tau_init[4], tau_init[5], tau_init[6]);
 
   // Open CSV log file if logging is enabled
   if (params_.log.enabled) {
@@ -1141,6 +1166,123 @@ bool CartesianController::check_topic_publisher_count(
   }
 
   return true;
+}
+
+Eigen::VectorXd CartesianController::computeControlTorques(
+    const pinocchio::SE3& current_pose,
+    const pinocchio::SE3& target_pose,
+    const Eigen::VectorXd& q,
+    const Eigen::VectorXd& q_pin,
+    const Eigen::VectorXd& dq,
+    const rclcpp::Time& time) {
+
+  // Compute pose error
+  Eigen::VectorXd error = Eigen::VectorXd::Zero(6);
+  if (params_.use_local_jacobian) {
+    error.head(3) = current_pose.rotation().transpose() *
+                   (target_pose.translation() - current_pose.translation());
+    error.tail(3) = pinocchio::log3(current_pose.rotation().transpose() *
+                                   target_pose.rotation());
+  } else {
+    error.head(3) = target_pose.translation() - current_pose.translation();
+    error.tail(3) = pinocchio::log3(target_pose.rotation() *
+                                   current_pose.rotation().transpose());
+  }
+
+  // Apply error limits if configured
+  if (params_.limit_error) {
+    Eigen::VectorXd max_delta(6);
+    max_delta << params_.task.error_clip.x, params_.task.error_clip.y,
+                 params_.task.error_clip.z, params_.task.error_clip.rx,
+                 params_.task.error_clip.ry, params_.task.error_clip.rz;
+    error = error.cwiseMax(-max_delta).cwiseMin(max_delta);
+  }
+
+  // Compute Jacobian
+  Eigen::MatrixXd J_local = Eigen::MatrixXd::Zero(6, model_.nv);
+  auto reference_frame = params_.use_local_jacobian
+                            ? pinocchio::ReferenceFrame::LOCAL
+                            : pinocchio::ReferenceFrame::WORLD;
+  pinocchio::computeFrameJacobian(model_, data_, q_pin, end_effector_frame_id,
+                                  reference_frame, J_local);
+
+  // Compute nullspace projection
+  Eigen::MatrixXd J_pinv = pseudo_inverse(J_local, params_.nullspace.regularization);
+  Eigen::MatrixXd Id_nv = Eigen::MatrixXd::Identity(model_.nv, model_.nv);
+  Eigen::MatrixXd nullspace_proj;
+
+  if (params_.nullspace.projector_type == "dynamic") {
+    pinocchio::computeMinverse(model_, data_, q_pin);
+    auto Mx_inv = J_local * data_.Minv * J_local.transpose();
+    auto Mx = pseudo_inverse(Mx_inv);
+    auto J_bar = data_.Minv * J_local.transpose() * Mx;
+    nullspace_proj = Id_nv - J_local.transpose() * J_bar.transpose();
+  } else if (params_.nullspace.projector_type == "kinematic") {
+    nullspace_proj = Id_nv - J_pinv * J_local;
+  } else {
+    nullspace_proj = Eigen::MatrixXd::Identity(model_.nv, model_.nv);
+  }
+
+  // Compute task-space control torques
+  Eigen::Vector<double, 6> task_force_P = stiffness * error;
+  Eigen::Vector<double, 6> task_velocity = J_local * dq;
+  Eigen::Vector<double, 6> task_force_D = damping * task_velocity;
+  Eigen::Vector<double, 6> task_force_total;
+
+  Eigen::VectorXd tau_task_local;
+  if (params_.use_operational_space) {
+    pinocchio::computeMinverse(model_, data_, q_pin);
+    auto Mx_inv = J_local * data_.Minv * J_local.transpose();
+    auto Mx = pseudo_inverse(Mx_inv);
+    task_force_total = Mx * (task_force_P - task_force_D);
+    tau_task_local = J_local.transpose() * task_force_total;
+  } else {
+    task_force_total = task_force_P - task_force_D;
+    tau_task_local = J_local.transpose() * task_force_total;
+  }
+
+  // Compute nullspace torques
+  Eigen::VectorXd tau_secondary = nullspace_stiffness * (q_ref - q) +
+                                  nullspace_damping * (dq_ref - dq);
+  Eigen::VectorXd tau_nullspace_local = nullspace_proj * tau_secondary;
+  tau_nullspace_local = tau_nullspace_local.cwiseMin(params_.nullspace.max_tau)
+                                           .cwiseMax(-params_.nullspace.max_tau);
+
+  // Compute gravity compensation
+  Eigen::VectorXd tau_gravity_local = params_.use_gravity_compensation
+                                         ? pinocchio::computeGeneralizedGravity(model_, data_, q_pin)
+                                         : Eigen::VectorXd::Zero(model_.nv);
+
+  // Compute Coriolis compensation
+  Eigen::VectorXd tau_coriolis_local = Eigen::VectorXd::Zero(model_.nv);
+  if (params_.use_coriolis_compensation) {
+    pinocchio::computeAllTerms(model_, data_, q_pin, dq);
+    tau_coriolis_local = pinocchio::computeCoriolisMatrix(model_, data_, q_pin, dq) * dq;
+  }
+
+  // Compute friction compensation
+  Eigen::VectorXd tau_friction_local = params_.use_friction
+                                         ? get_friction(dq, fp1, fp2, fp3)
+                                         : Eigen::VectorXd::Zero(model_.nv);
+
+  // Compute joint limit avoidance
+  Eigen::VectorXd tau_joint_limits_local = Eigen::VectorXd::Zero(model_.nv);
+  if (model_.nq == model_.nv && params_.joint_limit_avoidance.enable) {
+    tau_joint_limits_local = get_joint_limit_torque(
+        q, model_.lowerPositionLimit, model_.upperPositionLimit,
+        params_.joint_limit_avoidance.safe_range,
+        params_.joint_limit_avoidance.max_torque);
+  }
+
+  // Compute wrench contribution
+  Eigen::VectorXd tau_wrench_local = J_local.transpose() * target_wrench_;
+
+  // Combine all torque components
+  Eigen::VectorXd tau_total = tau_task_local + tau_nullspace_local + tau_friction_local +
+                              tau_coriolis_local + tau_gravity_local +
+                              tau_joint_limits_local + tau_wrench_local;
+
+  return tau_total;
 }
 
 } // namespace crisp_controllers

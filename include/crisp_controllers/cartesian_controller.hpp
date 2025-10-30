@@ -97,6 +97,24 @@ public:
   /*CartesianImpedanceController();*/
 
 private:
+  /**
+   * @brief Compute control torques based on current state
+   * @param current_pose Current end-effector pose
+   * @param target_pose Target end-effector pose
+   * @param q Current joint positions
+   * @param q_pin Current joint positions in Pinocchio format
+   * @param dq Current joint velocities
+   * @param time Current time for logging
+   * @return Computed control torques
+   */
+  Eigen::VectorXd computeControlTorques(
+      const pinocchio::SE3& current_pose,
+      const pinocchio::SE3& target_pose,
+      const Eigen::VectorXd& q,
+      const Eigen::VectorXd& q_pin,
+      const Eigen::VectorXd& dq,
+      const rclcpp::Time& time);
+
   /** @brief Subscription for target pose messages */
   rclcpp::Subscription<geometry_msgs::msg::PoseStamped>::SharedPtr pose_sub_;
   /** @brief Subscription for target joint state messages */
