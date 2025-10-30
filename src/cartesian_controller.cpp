@@ -298,6 +298,14 @@ CartesianController::update(const rclcpp::Time &time,
   if (params_.limit_torques) {
     tau_d = saturateTorqueRate(tau_d, tau_previous, params_.max_delta_tau);
   }
+
+  // Apply absolute torque limits from URDF/Pinocchio model
+  // This ensures we never exceed motor torque capabilities
+  // Using pre-calculated limits with safety factor for efficiency
+  Eigen::VectorXd tau_d_unclamped = tau_d;
+
+  // Vectorized clamping: tau_d = min(max(tau_d, -limits), limits)
+  tau_d = tau_d.cwiseMin(tau_limits).cwiseMax(-tau_limits);
   /*tau_d = exponential_moving_average(tau_d, tau_previous,*/
   /*                                   params_.filter.output_torque);*/
 
@@ -308,6 +316,22 @@ CartesianController::update(const rclcpp::Time &time,
                 "Commanded torques: [%.3f, %.3f, %.3f, %.3f, %.3f, %.3f, %.3f] Nm (stop_commands=%s)",
                 tau_d[0], tau_d[1], tau_d[2], tau_d[3], tau_d[4], tau_d[5], tau_d[6],
                 params_.stop_commands ? "TRUE" : "FALSE");
+
+    // Log if any torques were saturated
+    bool saturated = false;
+    for (size_t i = 0; i < num_joints; ++i) {
+      if (std::abs(tau_d_unclamped[i] - tau_d[i]) > 0.01) {
+        saturated = true;
+        break;
+      }
+    }
+    if (saturated) {
+      RCLCPP_WARN(get_node()->get_logger(),
+                  "Torque saturation active! Unclamped: [%.3f, %.3f, %.3f, %.3f, %.3f, %.3f, %.3f] Nm",
+                  tau_d_unclamped[0], tau_d_unclamped[1], tau_d_unclamped[2],
+                  tau_d_unclamped[3], tau_d_unclamped[4], tau_d_unclamped[5],
+                  tau_d_unclamped[6]);
+    }
   }
 
   if (not params_.stop_commands) {
@@ -496,6 +520,11 @@ CallbackReturn CartesianController::on_configure(
   tau_previous = Eigen::VectorXd::Zero(model_.nv);
   J = Eigen::MatrixXd::Zero(6, model_.nv);
 
+  // Pre-calculate torque limits with safety factor
+  tau_limits = model_.effortLimit * params_.torque_safety_factor;
+  RCLCPP_INFO_STREAM(get_node()->get_logger(),
+                     "Torque limits initialized (safety factor=" << params_.torque_safety_factor << "): " << tau_limits.transpose());
+
   // Map the friction parameters to Eigen vectors
   fp1 = Eigen::Map<Eigen::VectorXd>(params_.friction.fp1.data(), model_.nv);
   fp2 = Eigen::Map<Eigen::VectorXd>(params_.friction.fp2.data(), model_.nv);
@@ -629,6 +658,9 @@ CallbackReturn CartesianController::on_configure(
 }
 
 void CartesianController::setStiffnessAndDamping() {
+
+  // Update torque limits if safety factor changed
+  tau_limits = model_.effortLimit * params_.torque_safety_factor;
 
   stiffness.setZero();
   stiffness.diagonal() << params_.task.k_pos_x, params_.task.k_pos_y,

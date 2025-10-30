@@ -263,6 +263,14 @@ cartesian_impedance_controller:
     default_value: 0.5
     description: "Max allowed change in torque per joint per control loop."
 
+  torque_safety_factor:
+    type: double
+    default_value: 1.0
+    description: "Safety factor for torque limits (0.0-1.0). E.g., 0.8 means use 80% of URDF effort limits."
+    read_only: false
+    validation:
+      bounds<>: [0.0, 1.0]
+
   stop_commands:
     type: bool
     default_value: False

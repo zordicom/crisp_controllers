@@ -195,6 +195,9 @@ private:
   /** @brief Previously computed torque */
   Eigen::VectorXd tau_previous;
 
+  /** @brief Pre-calculated torque limits with safety factor applied */
+  Eigen::VectorXd tau_limits;
+
   /** @brief Current end effector pose */
   pinocchio::SE3 end_effector_pose;
   /** @brief End effector Jacobian matrix */
