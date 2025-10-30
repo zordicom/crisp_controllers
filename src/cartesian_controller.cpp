@@ -46,6 +46,9 @@ CartesianController::state_interface_configuration() const {
   for (const auto &joint_name : params_.joints) {
     config.names.push_back(joint_name + "/velocity");
   }
+  for (const auto &joint_name : params_.joints) {
+    config.names.push_back(joint_name + "/effort");
+  }
   return config;
 }
 
@@ -756,16 +759,38 @@ CallbackReturn CartesianController::on_activate(
               target_orientation_.w(), target_orientation_.x(),
               target_orientation_.y(), target_orientation_.z());
 
-  // Compute initial control torques to hold current position when switching to MIT mode
-  // This prevents the arm from falling by computing the full control law at activation
-  Eigen::VectorXd tau_init = computeControlTorques(
-      end_effector_pose,  // current pose
-      target_pose_,       // target pose (same as current)
-      q,                  // joint positions
-      q_pin,              // pinocchio joint positions
-      dq,                 // joint velocities (should be near zero)
-      get_node()->get_clock()->now()  // current time
-  );
+  // Read current effort state from hardware for bumpless transfer
+  Eigen::VectorXd current_effort = Eigen::VectorXd::Zero(num_joints);
+  bool has_nonzero_effort = false;
+  for (size_t i = 0; i < num_joints; ++i) {
+    current_effort[i] = state_interfaces_[2 * num_joints + i].get_value();
+    if (std::abs(current_effort[i]) > 0.01) {  // Threshold for detecting active torques
+      has_nonzero_effort = true;
+    }
+  }
+
+  Eigen::VectorXd tau_init;
+
+  // If switching from position mode (non-zero effort), seed with current effort
+  // Otherwise compute holding torques from dynamics
+  if (has_nonzero_effort) {
+    RCLCPP_INFO(get_node()->get_logger(),
+                "on_activate: Detected active torques from previous mode, using for bumpless transfer");
+    tau_init = current_effort;
+  } else {
+    RCLCPP_INFO(get_node()->get_logger(),
+                "on_activate: Computing holding torques from dynamics");
+    // Compute initial control torques to hold current position when switching to MIT mode
+    // This prevents the arm from falling by computing the full control law at activation
+    tau_init = computeControlTorques(
+        end_effector_pose,  // current pose
+        target_pose_,       // target pose (same as current)
+        q,                  // joint positions
+        q_pin,              // pinocchio joint positions
+        dq,                 // joint velocities (should be near zero)
+        get_node()->get_clock()->now()  // current time
+    );
+  }
 
   // Apply torque rate limiting and safety limits
   if (params_.limit_torques && tau_previous.size() > 0) {
@@ -781,7 +806,8 @@ CallbackReturn CartesianController::on_activate(
   tau_d = tau_init;
 
   RCLCPP_INFO(get_node()->get_logger(),
-              "on_activate: Initialized with holding torques: [%.3f, %.3f, %.3f, %.3f, %.3f, %.3f, %.3f]",
+              "on_activate: Initialized with%s torques: [%.3f, %.3f, %.3f, %.3f, %.3f, %.3f, %.3f]",
+              has_nonzero_effort ? " current effort" : " computed holding",
               tau_init[0], tau_init[1], tau_init[2], tau_init[3],
               tau_init[4], tau_init[5], tau_init[6]);
 
