@@ -160,6 +160,8 @@ private:
 
   /** @brief Frame ID of the end effector in the robot model */
   int end_effector_frame_id;
+  /** @brief Frame ID of the base frame in the robot model */
+  int base_frame_id;
 
   /** @brief Pinocchio robot model */
   pinocchio::Model model_;

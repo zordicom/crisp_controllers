@@ -58,7 +58,13 @@ PoseBroadcaster::update(const rclcpp::Time &time,
   pinocchio::forwardKinematics(model_, data_, q_pin);
   pinocchio::updateFramePlacements(model_, data_);
 
-  auto current_pose = data_.oMf[end_effector_frame_id];
+  // Get poses in world frame
+  pinocchio::SE3 ee_pose_world = data_.oMf[end_effector_frame_id];    // World -> EE
+  pinocchio::SE3 base_pose_world = data_.oMf[base_frame_id];          // World -> Base
+
+  // Transform to base frame: Base -> EE = (World -> Base)^-1 * (World -> EE)
+  pinocchio::SE3 current_pose = base_pose_world.inverse() * ee_pose_world;
+
   auto current_quaternion =
       Eigen::Quaterniond(current_pose.rotation());
 
@@ -160,6 +166,33 @@ CallbackReturn PoseBroadcaster::on_configure(
   }
 
   end_effector_frame_id = model_.getFrameId(params_.end_effector_frame);
+
+  // Base frame is required for proper operation
+  if (params_.base_frame.empty()) {
+    RCLCPP_ERROR(get_node()->get_logger(),
+                 "base_frame parameter is required but not specified!");
+    RCLCPP_ERROR(get_node()->get_logger(),
+                 "Please set the base_frame parameter in the controller configuration.");
+    return CallbackReturn::ERROR;
+  }
+
+  // Check if base frame exists in the model
+  if (!model_.existFrame(params_.base_frame)) {
+    RCLCPP_ERROR_STREAM(get_node()->get_logger(),
+                        "Base frame '" << params_.base_frame << "' not found in model!");
+    RCLCPP_ERROR(get_node()->get_logger(), "Available frames:");
+    for (size_t i = 0; i < model_.frames.size(); i++) {
+      RCLCPP_ERROR_STREAM(get_node()->get_logger(), "  - " << model_.frames[i].name);
+    }
+    return CallbackReturn::ERROR;
+  }
+
+  base_frame_id = model_.getFrameId(params_.base_frame);
+  RCLCPP_INFO_STREAM(get_node()->get_logger(),
+                     "Found base frame '" << params_.base_frame << "' with ID: " << base_frame_id);
+  RCLCPP_INFO_STREAM(get_node()->get_logger(),
+                     "Pose broadcaster will publish end-effector poses relative to: " << params_.base_frame);
+
   q = Eigen::VectorXd::Zero(model_.nv);
 
   pose_publisher_ = get_node()->create_publisher<geometry_msgs::msg::PoseStamped>(

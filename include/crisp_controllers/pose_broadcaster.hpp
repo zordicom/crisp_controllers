@@ -45,6 +45,7 @@ private:
 
   std::string end_effector_frame_;
   int end_effector_frame_id;
+  int base_frame_id;
 
   pinocchio::Model model_;
   pinocchio::Data data_;

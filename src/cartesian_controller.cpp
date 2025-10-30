@@ -113,6 +113,8 @@ CartesianController::update(const rclcpp::Time &time,
 
   /*target_pose_ = pinocchio::SE3(target_orientation_.toRotationMatrix(),
    * target_position_);*/
+
+  // Get end-effector pose in world frame (as Pinocchio provides it)
   end_effector_pose = data_.oMf[end_effector_frame_id];
 
   // Log first update to verify state interface data
@@ -377,6 +379,9 @@ CallbackReturn CartesianController::on_configure(
 
   RCLCPP_INFO(get_node()->get_logger(), "Building Pinocchio model from URDF...");
   pinocchio::Model raw_model_;
+
+  // Build model with explicit root joint (fixed to world)
+  // This doesn't change the reference frame but makes the root explicit
   pinocchio::urdf::buildModelFromXML(robot_description_, raw_model_);
   RCLCPP_INFO(get_node()->get_logger(), "Pinocchio model built successfully!");
 
@@ -457,6 +462,32 @@ CallbackReturn CartesianController::on_configure(
   RCLCPP_INFO_STREAM(get_node()->get_logger(),
                      "Found end effector frame with ID: " << end_effector_frame_id);
 
+  // Base frame is required for proper operation
+  if (params_.base_frame.empty()) {
+    RCLCPP_ERROR(get_node()->get_logger(),
+                 "base_frame parameter is required but not specified!");
+    RCLCPP_ERROR(get_node()->get_logger(),
+                 "Please set the base_frame parameter in the controller configuration.");
+    return CallbackReturn::ERROR;
+  }
+
+  // Check if base frame exists in the model
+  if (!model_.existFrame(params_.base_frame)) {
+    RCLCPP_ERROR_STREAM(get_node()->get_logger(),
+                        "Base frame '" << params_.base_frame << "' not found in model!");
+    RCLCPP_ERROR(get_node()->get_logger(), "Available frames:");
+    for (size_t i = 0; i < model_.frames.size(); i++) {
+      RCLCPP_ERROR_STREAM(get_node()->get_logger(), "  - " << model_.frames[i].name);
+    }
+    return CallbackReturn::ERROR;
+  }
+
+  base_frame_id = model_.getFrameId(params_.base_frame);
+  RCLCPP_INFO_STREAM(get_node()->get_logger(),
+                     "Found base frame '" << params_.base_frame << "' with ID: " << base_frame_id);
+  RCLCPP_INFO_STREAM(get_node()->get_logger(),
+                     "Expecting target poses in frame: " << params_.base_frame);
+
   q = Eigen::VectorXd::Zero(model_.nv);
   q_pin = Eigen::VectorXd::Zero(model_.nq);
   dq = Eigen::VectorXd::Zero(model_.nv);
@@ -491,12 +522,27 @@ CallbackReturn CartesianController::on_configure(
           "Ignoring target_pose message due to multiple publishers detected!");
       return;
     }
+
+    // Validate frame_id if base_frame is specified
+    if (!params_.base_frame.empty() && msg->header.frame_id != params_.base_frame) {
+      RCLCPP_ERROR(get_node()->get_logger(),
+                   "Rejecting target pose: frame_id '%s' does not match expected base_frame '%s'",
+                   msg->header.frame_id.c_str(), params_.base_frame.c_str());
+      RCLCPP_ERROR(get_node()->get_logger(),
+                   "Please ensure the target pose is published in the '%s' frame",
+                   params_.base_frame.c_str());
+      return;
+    }
+
     RCLCPP_INFO(get_node()->get_logger(),
-                "Received target pose: frame=%s, pos=[%.3f, %.3f, %.3f], ori=[%.3f, %.3f, %.3f, %.3f]",
+                "Received target pose in %s frame: pos=[%.3f, %.3f, %.3f], ori=[%.3f, %.3f, %.3f, %.3f]",
                 msg->header.frame_id.c_str(),
                 msg->pose.position.x, msg->pose.position.y, msg->pose.position.z,
                 msg->pose.orientation.w, msg->pose.orientation.x,
                 msg->pose.orientation.y, msg->pose.orientation.z);
+    RCLCPP_DEBUG(get_node()->get_logger(),
+                 "Target pose will be transformed from %s to world frame",
+                 params_.base_frame.c_str());
     target_pose_buffer_.writeFromNonRT(msg);
     new_target_pose_ = true;
   };
@@ -657,8 +703,10 @@ CallbackReturn CartesianController::on_activate(
   pinocchio::forwardKinematics(model_, data_, q_pin, dq);
   pinocchio::updateFramePlacements(model_, data_);
 
+  // Get end-effector pose in world frame (as Pinocchio provides it)
   end_effector_pose = data_.oMf[end_effector_frame_id];
 
+  // Initialize target to current pose (in world frame)
   target_position_ = end_effector_pose.translation();
   target_orientation_ = Eigen::Quaterniond(end_effector_pose.rotation());
   target_pose_ =
@@ -724,9 +772,11 @@ CallbackReturn CartesianController::on_activate(
       // Add error columns (6 DOF: x, y, z, rx, ry, rz)
       csv_log_file_ << ",error_x,error_y,error_z,error_rx,error_ry,error_rz,error_xyz_norm";
 
-      // Add pose columns (current and target)
+      // Add pose columns (current and target) - both quaternion and RPY
       csv_log_file_ << ",current_x,current_y,current_z,current_qw,current_qx,current_qy,current_qz";
+      csv_log_file_ << ",current_roll,current_pitch,current_yaw";
       csv_log_file_ << ",target_x,target_y,target_z,target_qw,target_qx,target_qy,target_qz";
+      csv_log_file_ << ",target_roll,target_pitch,target_yaw";
 
       csv_log_file_ << std::endl;
 
@@ -814,11 +864,25 @@ controller_interface::CallbackReturn CartesianController::on_deactivate(
 
 void CartesianController::parse_target_pose_() {
   auto msg = *target_pose_buffer_.readFromRT();
-  target_position_ << msg->pose.position.x, msg->pose.position.y,
-      msg->pose.position.z;
-  target_orientation_ =
-      Eigen::Quaterniond(msg->pose.orientation.w, msg->pose.orientation.x,
-                         msg->pose.orientation.y, msg->pose.orientation.z);
+
+  // Create SE3 from incoming pose (in base_frame coordinates)
+  Eigen::Vector3d pose_in_base;
+  pose_in_base << msg->pose.position.x, msg->pose.position.y, msg->pose.position.z;
+
+  Eigen::Quaterniond quat_in_base(msg->pose.orientation.w, msg->pose.orientation.x,
+                                   msg->pose.orientation.y, msg->pose.orientation.z);
+
+  pinocchio::SE3 target_in_base(quat_in_base.toRotationMatrix(), pose_in_base);
+
+  // Get base frame pose in world coordinates
+  pinocchio::SE3 base_in_world = data_.oMf[base_frame_id];
+
+  // Transform target pose to world frame: World->Target = (World->Base) * (Base->Target)
+  pinocchio::SE3 target_in_world = base_in_world * target_in_base;
+
+  // Extract position and orientation in world frame
+  target_position_ = target_in_world.translation();
+  target_orientation_ = Eigen::Quaterniond(target_in_world.rotation());
 }
 
 void CartesianController::parse_target_joint_() {
@@ -992,12 +1056,20 @@ void CartesianController::log_debug_info(const rclcpp::Time &time) {
                   << "," << current_quat.w() << "," << current_quat.x()
                   << "," << current_quat.y() << "," << current_quat.z();
 
+    // Write current orientation as RPY (roll, pitch, yaw)
+    Eigen::Vector3d current_rpy = end_effector_pose.rotation().eulerAngles(0, 1, 2);  // Roll, Pitch, Yaw
+    csv_log_file_ << "," << current_rpy[0] << "," << current_rpy[1] << "," << current_rpy[2];
+
     // Write target pose (position and orientation as quaternion)
     Eigen::Vector3d target_pos = target_pose_.translation();
     Eigen::Quaterniond target_quat(target_pose_.rotation());
     csv_log_file_ << "," << target_pos.x() << "," << target_pos.y() << "," << target_pos.z()
                   << "," << target_quat.w() << "," << target_quat.x()
                   << "," << target_quat.y() << "," << target_quat.z();
+
+    // Write target orientation as RPY (roll, pitch, yaw)
+    Eigen::Vector3d target_rpy = target_pose_.rotation().eulerAngles(0, 1, 2);  // Roll, Pitch, Yaw
+    csv_log_file_ << "," << target_rpy[0] << "," << target_rpy[1] << "," << target_rpy[2];
 
     csv_log_file_ << std::endl;
   }
