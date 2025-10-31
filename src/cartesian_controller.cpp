@@ -270,7 +270,7 @@ CartesianController::update(const rclcpp::Time &time,
   }
 
   tau_gravity = params_.use_gravity_compensation
-                    ? params_.gravity_scale * pinocchio::computeGeneralizedGravity(model_, data_, q_pin)
+                    ? Eigen::VectorXd(params_.gravity_scale * pinocchio::computeGeneralizedGravity(model_, data_, q_pin))
                     : Eigen::VectorXd::Zero(model_.nv);
 
   tau_wrench << J.transpose() * target_wrench_;
@@ -1329,7 +1329,7 @@ Eigen::VectorXd CartesianController::computeControlTorques(
   // Compute gravity compensation
   Eigen::VectorXd tau_gravity_local =
       params_.use_gravity_compensation
-          ? params_.gravity_scale * pinocchio::computeGeneralizedGravity(model_, data_, q_pin)
+          ? Eigen::VectorXd(params_.gravity_scale * pinocchio::computeGeneralizedGravity(model_, data_, q_pin))
           : Eigen::VectorXd::Zero(model_.nv);
 
   // Compute Coriolis compensation
