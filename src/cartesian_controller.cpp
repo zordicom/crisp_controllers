@@ -211,19 +211,16 @@ CartesianController::update(const rclcpp::Time &time,
   }
 
   // Compute task space forces separately for logging
-  Eigen::Vector<double, 6> task_force_P =
-      stiffness * error;                           // Proportional term
+  task_force_P_ = stiffness * error;                           // Proportional term
   Eigen::Vector<double, 6> task_velocity = J * dq; // Task space velocity
-  Eigen::Vector<double, 6> task_force_D =
-      damping * task_velocity; // Damping term
-  Eigen::Vector<double, 6> task_force_total;
+  task_force_D_ = damping * task_velocity; // Damping term
 
   // Log damping force computation to verify filtering effect
   static int damping_log_counter = 0;
   if (damping_log_counter++ % 100 == 0) {
     RCLCPP_INFO(get_node()->get_logger(),
                 "Damping: task_vel_x=%.4f, d_pos=%.2f, force_D_x=%.4f (P=%.4f)",
-                task_velocity[0], damping(0,0), task_force_D[0], task_force_P[0]);
+                task_velocity[0], damping(0,0), task_force_D_[0], task_force_P_[0]);
   }
 
   if (params_.use_operational_space) {
@@ -232,87 +229,15 @@ CartesianController::update(const rclcpp::Time &time,
     auto Mx_inv = J * data_.Minv * J.transpose();
     auto Mx = pseudo_inverse(Mx_inv);
 
-    task_force_total = Mx * (task_force_P - task_force_D);
-    tau_task << J.transpose() * task_force_total;
+    task_force_total_ = Mx * (task_force_P_ - task_force_D_);
+    tau_task << J.transpose() * task_force_total_;
   } else {
-    task_force_total = task_force_P - task_force_D;
-    tau_task << J.transpose() * task_force_total;
+    task_force_total_ = task_force_P_ - task_force_D_;
+    tau_task << J.transpose() * task_force_total_;
   }
 
-  // Log tau_task components to dedicated CSV file
-  if (tau_task_logging_enabled_ && tau_task_log_file_.is_open()) {
-    double relative_time = (time - csv_log_start_time_).seconds();
-    tau_task_log_file_ << relative_time;
-
-    // Task space forces P (proportional)
-    for (int i = 0; i < 6; ++i) {
-      tau_task_log_file_ << "," << task_force_P[i];
-    }
-
-    // Task space forces D (damping)
-    for (int i = 0; i < 6; ++i) {
-      tau_task_log_file_ << "," << task_force_D[i];
-    }
-
-    // Task space forces total
-    for (int i = 0; i < 6; ++i) {
-      tau_task_log_file_ << "," << task_force_total[i];
-    }
-
-    // tau_task for each joint
-    for (int i = 0; i < tau_task.size(); ++i) {
-      tau_task_log_file_ << "," << tau_task[i];
-    }
-
-    // Error components
-    for (int i = 0; i < 6; ++i) {
-      tau_task_log_file_ << "," << error[i];
-    }
-
-    // Error magnitudes
-    double error_rot_magnitude = error.tail(3).norm();
-    double error_pos_magnitude = error.head(3).norm();
-    tau_task_log_file_ << "," << error_rot_magnitude << ","
-                       << error_pos_magnitude;
-
-    // Stiffness values (diagonal elements)
-    tau_task_log_file_ << "," << stiffness(0, 0) << "," << stiffness(1, 1)
-                       << "," << stiffness(2, 2);
-    tau_task_log_file_ << "," << stiffness(3, 3) << "," << stiffness(4, 4)
-                       << "," << stiffness(5, 5);
-
-    // Damping values (diagonal elements)
-    tau_task_log_file_ << "," << damping(0, 0) << "," << damping(1, 1) << ","
-                       << damping(2, 2);
-    tau_task_log_file_ << "," << damping(3, 3) << "," << damping(4, 4) << ","
-                       << damping(5, 5);
-
-    // Raw joint positions
-    for (int i = 0; i < q_raw.size(); ++i) {
-      tau_task_log_file_ << "," << q_raw[i];
-    }
-
-    // Filtered joint positions
-    for (int i = 0; i < q.size(); ++i) {
-      tau_task_log_file_ << "," << q[i];
-    }
-
-    // Raw joint velocities
-    for (int i = 0; i < dq_raw.size(); ++i) {
-      tau_task_log_file_ << "," << dq_raw[i];
-    }
-
-    // Filtered joint velocities
-    for (int i = 0; i < dq.size(); ++i) {
-      tau_task_log_file_ << "," << dq[i];
-    }
-
-    // Filter parameters
-    tau_task_log_file_ << "," << params_.filter.q << "," << params_.filter.dq
-                       << "," << params_.filter.output_torque;
-
-    tau_task_log_file_ << std::endl;
-  }
+  // Store task space forces for CSV logging later in log_debug_info
+  // (These are temporary variables that will be accessed in log_debug_info)
 
   if (model_.nq != model_.nv) {
     // TODO: Then we have some continouts joints, not being handled for now
@@ -929,8 +854,17 @@ CallbackReturn CartesianController::on_activate(
       csv_logging_enabled_ = true;
       csv_log_start_time_ = get_node()->now();
 
-      // Write CSV header
+      // Write CSV header with all data merged from both original files
       csv_log_file_ << "timestamp";
+
+      // Task space forces (6 DOF: x, y, z, rx, ry, rz)
+      csv_log_file_ << ",task_force_P_x,task_force_P_y,task_force_P_z,task_"
+                       "force_P_rx,task_force_P_ry,task_force_P_rz";
+      csv_log_file_ << ",task_force_D_x,task_force_D_y,task_force_D_z,task_"
+                       "force_D_rx,task_force_D_ry,task_force_D_rz";
+      csv_log_file_
+          << ",task_force_total_x,task_force_total_y,task_force_total_z,task_"
+             "force_total_rx,task_force_total_ry,task_force_total_rz";
 
       // Add torque columns for each joint
       for (auto i = 0u; i < num_joints; ++i) {
@@ -941,8 +875,8 @@ CallbackReturn CartesianController::on_activate(
       }
 
       // Add error columns (6 DOF: x, y, z, rx, ry, rz)
-      csv_log_file_ << ",error_x,error_y,error_z,error_rx,error_ry,error_rz,"
-                       "error_xyz_norm";
+      csv_log_file_ << ",error_x,error_y,error_z,error_rx,error_ry,error_rz";
+      csv_log_file_ << ",error_rot_magnitude,error_pos_magnitude,error_xyz_norm";
 
       // Add pose columns (current and target) - both quaternion and RPY
       csv_log_file_ << ",current_x,current_y,current_z,current_qw,current_qx,"
@@ -951,6 +885,33 @@ CallbackReturn CartesianController::on_activate(
       csv_log_file_ << ",target_x,target_y,target_z,target_qw,target_qx,target_"
                        "qy,target_qz";
       csv_log_file_ << ",target_roll,target_pitch,target_yaw";
+
+      // Stiffness and damping values
+      csv_log_file_ << ",k_pos_x,k_pos_y,k_pos_z,k_rot_x,k_rot_y,k_rot_z";
+      csv_log_file_ << ",d_pos_x,d_pos_y,d_pos_z,d_rot_x,d_rot_y,d_rot_z";
+
+      // Raw joint positions (before filtering)
+      for (auto i = 0u; i < num_joints; ++i) {
+        csv_log_file_ << ",q_raw_" << i;
+      }
+
+      // Filtered joint positions
+      for (auto i = 0u; i < num_joints; ++i) {
+        csv_log_file_ << ",q_filtered_" << i;
+      }
+
+      // Raw joint velocities (before filtering)
+      for (auto i = 0u; i < num_joints; ++i) {
+        csv_log_file_ << ",dq_raw_" << i;
+      }
+
+      // Filtered joint velocities
+      for (auto i = 0u; i < num_joints; ++i) {
+        csv_log_file_ << ",dq_filtered_" << i;
+      }
+
+      // Filter parameters
+      csv_log_file_ << ",filter_q,filter_dq,filter_output_torque";
 
       csv_log_file_ << std::endl;
 
@@ -961,91 +922,6 @@ CallbackReturn CartesianController::on_activate(
       RCLCPP_WARN(get_node()->get_logger(), "Failed to open CSV log file: %s",
                   log_filename.c_str());
     }
-  }
-
-  // Always enable tau_task detailed logging (separate from general logging)
-  // Get user workspace directory
-  const char *user_ws_tau = std::getenv("USER_WS");
-  if (!user_ws_tau) {
-    RCLCPP_ERROR(get_node()->get_logger(),
-                 "USER_WS environment variable not set for tau_task logging.");
-    return CallbackReturn::ERROR;
-  }
-
-  std::string tau_log_dir = std::string(user_ws_tau) + "/crisp_controller_logs";
-
-  // Get timestamp with millisecond precision
-  auto now_tau = get_node()->now();
-  int64_t timestamp_ms_tau =
-      now_tau.seconds() * 1000 + now_tau.nanoseconds() / 1000000;
-
-  std::string tau_log_filename = tau_log_dir + "/" + get_node()->get_name() +
-                                 "_tau_task_" +
-                                 std::to_string(timestamp_ms_tau) + ".csv";
-
-  // Create directory if it doesn't exist
-  std::filesystem::create_directories(tau_log_dir);
-
-  tau_task_log_file_.open(tau_log_filename, std::ios::out);
-  if (tau_task_log_file_.is_open()) {
-    tau_task_logging_enabled_ = true;
-
-    // Write CSV header for tau_task components
-    tau_task_log_file_ << "timestamp";
-
-    // Task space forces (6 DOF: x, y, z, rx, ry, rz)
-    tau_task_log_file_ << ",task_force_P_x,task_force_P_y,task_force_P_z,task_"
-                          "force_P_rx,task_force_P_ry,task_force_P_rz";
-    tau_task_log_file_ << ",task_force_D_x,task_force_D_y,task_force_D_z,task_"
-                          "force_D_rx,task_force_D_ry,task_force_D_rz";
-    tau_task_log_file_
-        << ",task_force_total_x,task_force_total_y,task_force_total_z,task_"
-           "force_total_rx,task_force_total_ry,task_force_total_rz";
-
-    // tau_task for each joint
-    for (auto i = 0u; i < num_joints; ++i) {
-      tau_task_log_file_ << ",tau_task_" << i;
-    }
-
-    // Error components
-    tau_task_log_file_ << ",error_x,error_y,error_z,error_rx,error_ry,error_rz";
-    tau_task_log_file_ << ",error_rot_magnitude,error_pos_magnitude";
-
-    // Stiffness and damping values
-    tau_task_log_file_ << ",k_pos_x,k_pos_y,k_pos_z,k_rot_x,k_rot_y,k_rot_z";
-    tau_task_log_file_ << ",d_pos_x,d_pos_y,d_pos_z,d_rot_x,d_rot_y,d_rot_z";
-
-    // Raw joint positions (before filtering)
-    for (auto i = 0u; i < num_joints; ++i) {
-      tau_task_log_file_ << ",q_raw_" << i;
-    }
-
-    // Filtered joint positions
-    for (auto i = 0u; i < num_joints; ++i) {
-      tau_task_log_file_ << ",q_filtered_" << i;
-    }
-
-    // Raw joint velocities (before filtering)
-    for (auto i = 0u; i < num_joints; ++i) {
-      tau_task_log_file_ << ",dq_raw_" << i;
-    }
-
-    // Filtered joint velocities
-    for (auto i = 0u; i < num_joints; ++i) {
-      tau_task_log_file_ << ",dq_filtered_" << i;
-    }
-
-    // Filter parameters
-    tau_task_log_file_ << ",filter_q,filter_dq,filter_output_torque";
-
-    tau_task_log_file_ << std::endl;
-
-    RCLCPP_INFO(get_node()->get_logger(), "tau_task CSV logging enabled: %s",
-                tau_log_filename.c_str());
-  } else {
-    RCLCPP_ERROR(get_node()->get_logger(),
-                 "Failed to open tau_task log file: %s",
-                 tau_log_filename.c_str());
   }
 
   RCLCPP_INFO(get_node()->get_logger(), "Controller activated.");
@@ -1059,13 +935,6 @@ controller_interface::CallbackReturn CartesianController::on_deactivate(
     csv_log_file_.close();
     csv_logging_enabled_ = false;
     RCLCPP_INFO(get_node()->get_logger(), "CSV log file closed.");
-  }
-
-  // Close tau_task log file if it was opened
-  if (tau_task_logging_enabled_ && tau_task_log_file_.is_open()) {
-    tau_task_log_file_.close();
-    tau_task_logging_enabled_ = false;
-    RCLCPP_INFO(get_node()->get_logger(), "tau_task CSV log file closed.");
   }
 
   return CallbackReturn::SUCCESS;
@@ -1240,6 +1109,21 @@ void CartesianController::log_debug_info(const rclcpp::Time &time) {
     double relative_time = (time - csv_log_start_time_).seconds();
     csv_log_file_ << relative_time;
 
+    // Task space forces P (proportional)
+    for (int i = 0; i < 6; ++i) {
+      csv_log_file_ << "," << task_force_P_[i];
+    }
+
+    // Task space forces D (damping)
+    for (int i = 0; i < 6; ++i) {
+      csv_log_file_ << "," << task_force_D_[i];
+    }
+
+    // Task space forces total
+    for (int i = 0; i < 6; ++i) {
+      csv_log_file_ << "," << task_force_total_[i];
+    }
+
     // Write torque components for each joint
     for (auto i = 0; i < tau_task.size(); ++i) {
       csv_log_file_ << "," << tau_task[i] << "," << tau_nullspace[i] << ","
@@ -1253,10 +1137,12 @@ void CartesianController::log_debug_info(const rclcpp::Time &time) {
       csv_log_file_ << "," << error[i];
     }
 
-    // Write xyz error norm
-    double error_xyz_norm = std::sqrt(
-        error[0] * error[0] + error[1] * error[1] + error[2] * error[2]);
-    csv_log_file_ << "," << error_xyz_norm;
+    // Error magnitudes
+    double error_rot_magnitude = error.tail(3).norm();
+    double error_pos_magnitude = error.head(3).norm();
+    double error_xyz_norm = error.head(3).norm();
+    csv_log_file_ << "," << error_rot_magnitude << "," << error_pos_magnitude
+                  << "," << error_xyz_norm;
 
     // Write current pose (position and orientation as quaternion)
     Eigen::Vector3d current_pos = end_effector_pose.translation();
@@ -1285,6 +1171,42 @@ void CartesianController::log_debug_info(const rclcpp::Time &time) {
         target_pose_.rotation().eulerAngles(0, 1, 2); // Roll, Pitch, Yaw
     csv_log_file_ << "," << target_rpy[0] << "," << target_rpy[1] << ","
                   << target_rpy[2];
+
+    // Stiffness values (diagonal elements)
+    csv_log_file_ << "," << stiffness(0, 0) << "," << stiffness(1, 1)
+                  << "," << stiffness(2, 2);
+    csv_log_file_ << "," << stiffness(3, 3) << "," << stiffness(4, 4)
+                  << "," << stiffness(5, 5);
+
+    // Damping values (diagonal elements)
+    csv_log_file_ << "," << damping(0, 0) << "," << damping(1, 1) << ","
+                  << damping(2, 2);
+    csv_log_file_ << "," << damping(3, 3) << "," << damping(4, 4) << ","
+                  << damping(5, 5);
+
+    // Raw joint positions
+    for (int i = 0; i < q_raw.size(); ++i) {
+      csv_log_file_ << "," << q_raw[i];
+    }
+
+    // Filtered joint positions
+    for (int i = 0; i < q.size(); ++i) {
+      csv_log_file_ << "," << q[i];
+    }
+
+    // Raw joint velocities
+    for (int i = 0; i < dq_raw.size(); ++i) {
+      csv_log_file_ << "," << dq_raw[i];
+    }
+
+    // Filtered joint velocities
+    for (int i = 0; i < dq.size(); ++i) {
+      csv_log_file_ << "," << dq[i];
+    }
+
+    // Filter parameters
+    csv_log_file_ << "," << params_.filter.q << "," << params_.filter.dq
+                  << "," << params_.filter.output_torque;
 
     csv_log_file_ << std::endl;
   }
@@ -1380,21 +1302,21 @@ Eigen::VectorXd CartesianController::computeControlTorques(
   }
 
   // Compute task-space control torques
-  Eigen::Vector<double, 6> task_force_P = stiffness * error;
+  Eigen::Vector<double, 6> task_force_P_local = stiffness * error;
   Eigen::Vector<double, 6> task_velocity = J_local * dq;
-  Eigen::Vector<double, 6> task_force_D = damping * task_velocity;
-  Eigen::Vector<double, 6> task_force_total;
+  Eigen::Vector<double, 6> task_force_D_local = damping * task_velocity;
+  Eigen::Vector<double, 6> task_force_total_local;
 
   Eigen::VectorXd tau_task_local;
   if (params_.use_operational_space) {
     pinocchio::computeMinverse(model_, data_, q_pin);
     auto Mx_inv = J_local * data_.Minv * J_local.transpose();
     auto Mx = pseudo_inverse(Mx_inv);
-    task_force_total = Mx * (task_force_P - task_force_D);
-    tau_task_local = J_local.transpose() * task_force_total;
+    task_force_total_local = Mx * (task_force_P_local - task_force_D_local);
+    tau_task_local = J_local.transpose() * task_force_total_local;
   } else {
-    task_force_total = task_force_P - task_force_D;
-    tau_task_local = J_local.transpose() * task_force_total;
+    task_force_total_local = task_force_P_local - task_force_D_local;
+    tau_task_local = J_local.transpose() * task_force_total_local;
   }
 
   // Compute nullspace torques
