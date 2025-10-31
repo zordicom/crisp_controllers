@@ -74,9 +74,14 @@ CartesianController::update(const rclcpp::Time &time,
         model_.getJointId(joint_name); // pinocchio joind id might be different
     auto joint = model_.joints[joint_id];
 
-    q[i] = exponential_moving_average(q[i],
-                                      state_interfaces_[i].get_value(),
-                                      params_.filter.q);
+    // Store raw values from hardware for logging
+    q_raw[i] = state_interfaces_[i].get_value();
+    dq_raw[i] = state_interfaces_[num_joints + i].get_value();
+
+    // Apply exponential moving average filtering
+    q[i] = exponential_moving_average(q[i], q_raw[i], params_.filter.q);
+    dq[i] = exponential_moving_average(dq[i], dq_raw[i], params_.filter.dq);
+
     if (continous_joint_types.count(
             joint.shortname())) { // Then we are handling a continous
                                   // joint that is SO(2)
@@ -85,9 +90,17 @@ CartesianController::update(const rclcpp::Time &time,
     } else { // simple revolute joint case
       q_pin[joint.idx_q()] = q[i];
     }
-    dq[i] = exponential_moving_average(
-        dq[i], state_interfaces_[num_joints + i].get_value(),
-        params_.filter.dq);
+
+    // Log velocity filtering for first joint to verify it's working
+    if (i == 0) {
+      // Throttle logging to every 100 cycles (~1Hz at 100Hz update rate)
+      static int vel_log_counter = 0;
+      if (vel_log_counter++ % 100 == 0) {
+        RCLCPP_INFO(get_node()->get_logger(),
+                    "Joint0: q_raw=%.4f q_filt=%.4f dq_raw=%.4f dq_filt=%.4f alpha_dq=%.3f",
+                    q_raw[i], q[i], dq_raw[i], dq[i], params_.filter.dq);
+      }
+    }
   }
 
   if (new_target_pose_) {
@@ -205,6 +218,14 @@ CartesianController::update(const rclcpp::Time &time,
       damping * task_velocity; // Damping term
   Eigen::Vector<double, 6> task_force_total;
 
+  // Log damping force computation to verify filtering effect
+  static int damping_log_counter = 0;
+  if (damping_log_counter++ % 100 == 0) {
+    RCLCPP_INFO(get_node()->get_logger(),
+                "Damping: task_vel_x=%.4f, d_pos=%.2f, force_D_x=%.4f (P=%.4f)",
+                task_velocity[0], damping(0,0), task_force_D[0], task_force_P[0]);
+  }
+
   if (params_.use_operational_space) {
 
     pinocchio::computeMinverse(model_, data_, q_pin);
@@ -265,6 +286,30 @@ CartesianController::update(const rclcpp::Time &time,
                        << damping(2, 2);
     tau_task_log_file_ << "," << damping(3, 3) << "," << damping(4, 4) << ","
                        << damping(5, 5);
+
+    // Raw joint positions
+    for (int i = 0; i < q_raw.size(); ++i) {
+      tau_task_log_file_ << "," << q_raw[i];
+    }
+
+    // Filtered joint positions
+    for (int i = 0; i < q.size(); ++i) {
+      tau_task_log_file_ << "," << q[i];
+    }
+
+    // Raw joint velocities
+    for (int i = 0; i < dq_raw.size(); ++i) {
+      tau_task_log_file_ << "," << dq_raw[i];
+    }
+
+    // Filtered joint velocities
+    for (int i = 0; i < dq.size(); ++i) {
+      tau_task_log_file_ << "," << dq[i];
+    }
+
+    // Filter parameters
+    tau_task_log_file_ << "," << params_.filter.q << "," << params_.filter.dq
+                       << "," << params_.filter.output_torque;
 
     tau_task_log_file_ << std::endl;
   }
@@ -544,8 +589,10 @@ CallbackReturn CartesianController::on_configure(
                      "Expecting target poses in frame: " << params_.base_frame);
 
   q = Eigen::VectorXd::Zero(model_.nv);
+  q_raw = Eigen::VectorXd::Zero(model_.nv);
   q_pin = Eigen::VectorXd::Zero(model_.nq);
   dq = Eigen::VectorXd::Zero(model_.nv);
+  dq_raw = Eigen::VectorXd::Zero(model_.nv);
   q_ref = Eigen::VectorXd::Zero(model_.nv);
   dq_ref = Eigen::VectorXd::Zero(model_.nv);
   tau_previous = Eigen::VectorXd::Zero(model_.nv);
@@ -967,6 +1014,29 @@ CallbackReturn CartesianController::on_activate(
     // Stiffness and damping values
     tau_task_log_file_ << ",k_pos_x,k_pos_y,k_pos_z,k_rot_x,k_rot_y,k_rot_z";
     tau_task_log_file_ << ",d_pos_x,d_pos_y,d_pos_z,d_rot_x,d_rot_y,d_rot_z";
+
+    // Raw joint positions (before filtering)
+    for (auto i = 0u; i < num_joints; ++i) {
+      tau_task_log_file_ << ",q_raw_" << i;
+    }
+
+    // Filtered joint positions
+    for (auto i = 0u; i < num_joints; ++i) {
+      tau_task_log_file_ << ",q_filtered_" << i;
+    }
+
+    // Raw joint velocities (before filtering)
+    for (auto i = 0u; i < num_joints; ++i) {
+      tau_task_log_file_ << ",dq_raw_" << i;
+    }
+
+    // Filtered joint velocities
+    for (auto i = 0u; i < num_joints; ++i) {
+      tau_task_log_file_ << ",dq_filtered_" << i;
+    }
+
+    // Filter parameters
+    tau_task_log_file_ << ",filter_q,filter_dq,filter_output_torque";
 
     tau_task_log_file_ << std::endl;
 

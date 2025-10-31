@@ -198,13 +198,17 @@ private:
 
   /** @brief Current joint positions with dimension nv. */
   Eigen::VectorXd q;
+  /** @brief Raw joint positions from hardware (before filtering) */
+  Eigen::VectorXd q_raw;
   /** @brief Current joint positions with dimension nq.
-   This is size might be different than the actuated dimension of the joint type is different! 
+   This is size might be different than the actuated dimension of the joint type is different!
    Check https://github.com/stack-of-tasks/pinocchio/issues/1127
   */
   Eigen::VectorXd q_pin;
   /** @brief Current joint velocities */
   Eigen::VectorXd dq;
+  /** @brief Raw joint velocities from hardware (before filtering) */
+  Eigen::VectorXd dq_raw;
   /** @brief Reference joint positions for posture task */
   Eigen::VectorXd q_ref;
   /** @brief Reference joint velocities */
