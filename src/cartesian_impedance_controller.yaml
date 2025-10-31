@@ -182,6 +182,13 @@ cartesian_impedance_controller:
     default_value: false
     description: "Add use_gravity_compensation. Double check that your robot is not already doing this behind the scenes (which is the case for Franka Robotics). In this case you should leave this parameter to false!"
 
+  gravity_scale:
+    type: double
+    default_value: 1.0
+    description: "Scale factor for gravity compensation torques. Use this to tune gravity compensation if URDF masses are not perfectly accurate. Values < 1.0 reduce gravity compensation, > 1.0 increase it."
+    validation:
+      bounds<>: [0.0, 2.0]
+
   use_local_jacobian:
     type: bool
     default_value: false
