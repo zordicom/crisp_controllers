@@ -61,7 +61,8 @@ CartesianController::update(const rclcpp::Time &time,
   // Log first update to compare with on_activate values
   static bool first_update = true;
   if (first_update) {
-    RCLCPP_INFO(get_node()->get_logger(), "First update() call - checking joint positions...");
+    RCLCPP_INFO(get_node()->get_logger(),
+                "First update() call - checking joint positions...");
   }
 
   for (size_t i = 0; i < num_joints; i++) {
@@ -73,10 +74,9 @@ CartesianController::update(const rclcpp::Time &time,
         model_.getJointId(joint_name); // pinocchio joind id might be different
     auto joint = model_.joints[joint_id];
 
-    /*q[i] = exponential_moving_average(q[i],
-     * state_interfaces_[i].get_value(),*/
-    /*                                  params_.filter.q);*/
-    q[i] = state_interfaces_[i].get_value();
+    q[i] = exponential_moving_average(q[i],
+                                      state_interfaces_[i].get_value(),
+                                      params_.filter.q);
     if (continous_joint_types.count(
             joint.shortname())) { // Then we are handling a continous
                                   // joint that is SO(2)
@@ -85,10 +85,9 @@ CartesianController::update(const rclcpp::Time &time,
     } else { // simple revolute joint case
       q_pin[joint.idx_q()] = q[i];
     }
-    /*dq[i] = exponential_moving_average(*/
-    /*    dq[i], state_interfaces_[num_joints + i].get_value(),*/
-    /*    params_.filter.dq);*/
-    dq[i] = state_interfaces_[num_joints + i].get_value();
+    dq[i] = exponential_moving_average(
+        dq[i], state_interfaces_[num_joints + i].get_value(),
+        params_.filter.dq);
   }
 
   if (new_target_pose_) {
@@ -123,16 +122,19 @@ CartesianController::update(const rclcpp::Time &time,
   // Log first update to verify state interface data
   if (first_update) {
     RCLCPP_INFO(get_node()->get_logger(),
-                "First update: Joint positions: [%.3f, %.3f, %.3f, %.3f, %.3f, %.3f, %.3f]",
+                "First update: Joint positions: [%.3f, %.3f, %.3f, %.3f, %.3f, "
+                "%.3f, %.3f]",
                 q[0], q[1], q[2], q[3], q[4], q[5], q[6]);
     Eigen::Vector3d current_pos = end_effector_pose.translation();
     Eigen::Quaterniond current_quat(end_effector_pose.rotation());
-    RCLCPP_INFO(get_node()->get_logger(),
-                "First update: Current end-effector position: [%.3f, %.3f, %.3f]",
-                current_pos.x(), current_pos.y(), current_pos.z());
-    RCLCPP_INFO(get_node()->get_logger(),
-                "First update: Target end-effector position: [%.3f, %.3f, %.3f]",
-                target_position_.x(), target_position_.y(), target_position_.z());
+    RCLCPP_INFO(
+        get_node()->get_logger(),
+        "First update: Current end-effector position: [%.3f, %.3f, %.3f]",
+        current_pos.x(), current_pos.y(), current_pos.z());
+    RCLCPP_INFO(
+        get_node()->get_logger(),
+        "First update: Target end-effector position: [%.3f, %.3f, %.3f]",
+        target_position_.x(), target_position_.y(), target_position_.z());
     first_update = false;
   }
 
@@ -161,9 +163,10 @@ CartesianController::update(const rclcpp::Time &time,
   // Log error every 100 cycles (~1Hz at 100Hz update rate)
   static int log_counter = 0;
   if (log_counter++ % 100 == 0) {
-    RCLCPP_INFO(get_node()->get_logger(),
-                "Cartesian error: pos=[%.4f, %.4f, %.4f]m, ori=[%.4f, %.4f, %.4f]rad",
-                error[0], error[1], error[2], error[3], error[4], error[5]);
+    RCLCPP_INFO(
+        get_node()->get_logger(),
+        "Cartesian error: pos=[%.4f, %.4f, %.4f]m, ori=[%.4f, %.4f, %.4f]rad",
+        error[0], error[1], error[2], error[3], error[4], error[5]);
   }
 
   J.setZero();
@@ -195,9 +198,11 @@ CartesianController::update(const rclcpp::Time &time,
   }
 
   // Compute task space forces separately for logging
-  Eigen::Vector<double, 6> task_force_P = stiffness * error;  // Proportional term
-  Eigen::Vector<double, 6> task_velocity = J * dq;             // Task space velocity
-  Eigen::Vector<double, 6> task_force_D = damping * task_velocity; // Damping term
+  Eigen::Vector<double, 6> task_force_P =
+      stiffness * error;                           // Proportional term
+  Eigen::Vector<double, 6> task_velocity = J * dq; // Task space velocity
+  Eigen::Vector<double, 6> task_force_D =
+      damping * task_velocity; // Damping term
   Eigen::Vector<double, 6> task_force_total;
 
   if (params_.use_operational_space) {
@@ -246,15 +251,20 @@ CartesianController::update(const rclcpp::Time &time,
     // Error magnitudes
     double error_rot_magnitude = error.tail(3).norm();
     double error_pos_magnitude = error.head(3).norm();
-    tau_task_log_file_ << "," << error_rot_magnitude << "," << error_pos_magnitude;
+    tau_task_log_file_ << "," << error_rot_magnitude << ","
+                       << error_pos_magnitude;
 
     // Stiffness values (diagonal elements)
-    tau_task_log_file_ << "," << stiffness(0,0) << "," << stiffness(1,1) << "," << stiffness(2,2);
-    tau_task_log_file_ << "," << stiffness(3,3) << "," << stiffness(4,4) << "," << stiffness(5,5);
+    tau_task_log_file_ << "," << stiffness(0, 0) << "," << stiffness(1, 1)
+                       << "," << stiffness(2, 2);
+    tau_task_log_file_ << "," << stiffness(3, 3) << "," << stiffness(4, 4)
+                       << "," << stiffness(5, 5);
 
     // Damping values (diagonal elements)
-    tau_task_log_file_ << "," << damping(0,0) << "," << damping(1,1) << "," << damping(2,2);
-    tau_task_log_file_ << "," << damping(3,3) << "," << damping(4,4) << "," << damping(5,5);
+    tau_task_log_file_ << "," << damping(0, 0) << "," << damping(1, 1) << ","
+                       << damping(2, 2);
+    tau_task_log_file_ << "," << damping(3, 3) << "," << damping(4, 4) << ","
+                       << damping(5, 5);
 
     tau_task_log_file_ << std::endl;
   }
@@ -316,9 +326,10 @@ CartesianController::update(const rclcpp::Time &time,
   static int torque_log_counter = 0;
   if (torque_log_counter++ % 100 == 0) {
     RCLCPP_INFO(get_node()->get_logger(),
-                "Commanded torques: [%.3f, %.3f, %.3f, %.3f, %.3f, %.3f, %.3f] Nm (stop_commands=%s)",
-                tau_d[0], tau_d[1], tau_d[2], tau_d[3], tau_d[4], tau_d[5], tau_d[6],
-                params_.stop_commands ? "TRUE" : "FALSE");
+                "Commanded torques: [%.3f, %.3f, %.3f, %.3f, %.3f, %.3f, %.3f] "
+                "Nm (stop_commands=%s)",
+                tau_d[0], tau_d[1], tau_d[2], tau_d[3], tau_d[4], tau_d[5],
+                tau_d[6], params_.stop_commands ? "TRUE" : "FALSE");
 
     // Log if any torques were saturated
     bool saturated = false;
@@ -330,7 +341,8 @@ CartesianController::update(const rclcpp::Time &time,
     }
     if (saturated) {
       RCLCPP_WARN(get_node()->get_logger(),
-                  "Torque saturation active! Unclamped: [%.3f, %.3f, %.3f, %.3f, %.3f, %.3f, %.3f] Nm",
+                  "Torque saturation active! Unclamped: [%.3f, %.3f, %.3f, "
+                  "%.3f, %.3f, %.3f, %.3f] Nm",
                   tau_d_unclamped[0], tau_d_unclamped[1], tau_d_unclamped[2],
                   tau_d_unclamped[3], tau_d_unclamped[4], tau_d_unclamped[5],
                   tau_d_unclamped[6]);
@@ -342,8 +354,9 @@ CartesianController::update(const rclcpp::Time &time,
       command_interfaces_[i].set_value(tau_d[i]);
     }
   } else {
-    RCLCPP_WARN_THROTTLE(get_node()->get_logger(), *get_node()->get_clock(), 5000,
-                         "stop_commands is TRUE - not sending torques to hardware!");
+    RCLCPP_WARN_THROTTLE(
+        get_node()->get_logger(), *get_node()->get_clock(), 5000,
+        "stop_commands is TRUE - not sending torques to hardware!");
   }
 
   tau_previous = tau_d;
@@ -370,25 +383,31 @@ CallbackReturn CartesianController::on_init() {
 CallbackReturn CartesianController::on_configure(
     const rclcpp_lifecycle::State & /*previous_state*/) {
 
-  RCLCPP_INFO(get_node()->get_logger(), "Starting CartesianController configuration...");
+  RCLCPP_INFO(get_node()->get_logger(),
+              "Starting CartesianController configuration...");
 
-  // Create a separate node and executor to avoid deadlock with controller_manager's executor
+  // Create a separate node and executor to avoid deadlock with
+  // controller_manager's executor
   auto param_node = std::make_shared<rclcpp::Node>(
       "cartesian_controller_param_client",
-      rclcpp::NodeOptions().automatically_declare_parameters_from_overrides(false));
+      rclcpp::NodeOptions().automatically_declare_parameters_from_overrides(
+          false));
 
   auto parameters_client = std::make_shared<rclcpp::AsyncParametersClient>(
       param_node, "robot_state_publisher");
 
-  RCLCPP_INFO(get_node()->get_logger(), "Waiting for robot_state_publisher service...");
+  RCLCPP_INFO(get_node()->get_logger(),
+              "Waiting for robot_state_publisher service...");
   parameters_client->wait_for_service();
   RCLCPP_INFO(get_node()->get_logger(), "robot_state_publisher service found!");
 
-  RCLCPP_INFO(get_node()->get_logger(), "Getting robot_description parameter...");
+  RCLCPP_INFO(get_node()->get_logger(),
+              "Getting robot_description parameter...");
   auto future = parameters_client->get_parameters({"robot_description"});
 
   // Spin the separate node to process the async response
-  while (rclcpp::ok() && future.wait_for(std::chrono::milliseconds(100)) != std::future_status::ready) {
+  while (rclcpp::ok() && future.wait_for(std::chrono::milliseconds(100)) !=
+                             std::future_status::ready) {
     rclcpp::spin_some(param_node);
   }
 
@@ -404,7 +423,8 @@ CallbackReturn CartesianController::on_configure(
     return CallbackReturn::ERROR;
   }
 
-  RCLCPP_INFO(get_node()->get_logger(), "Building Pinocchio model from URDF...");
+  RCLCPP_INFO(get_node()->get_logger(),
+              "Building Pinocchio model from URDF...");
   pinocchio::Model raw_model_;
 
   // Build model with explicit root joint (fixed to world)
@@ -472,46 +492,54 @@ CallbackReturn CartesianController::on_configure(
     }
   }
 
-  RCLCPP_INFO_STREAM(get_node()->get_logger(),
-                     "Looking for end effector frame: " << params_.end_effector_frame);
+  RCLCPP_INFO_STREAM(
+      get_node()->get_logger(),
+      "Looking for end effector frame: " << params_.end_effector_frame);
 
   if (!model_.existFrame(params_.end_effector_frame)) {
     RCLCPP_ERROR_STREAM(get_node()->get_logger(),
-                        "End effector frame '" << params_.end_effector_frame << "' not found in model!");
+                        "End effector frame '" << params_.end_effector_frame
+                                               << "' not found in model!");
     RCLCPP_ERROR(get_node()->get_logger(), "Available frames:");
     for (size_t i = 0; i < model_.frames.size(); i++) {
-      RCLCPP_ERROR_STREAM(get_node()->get_logger(), "  - " << model_.frames[i].name);
+      RCLCPP_ERROR_STREAM(get_node()->get_logger(),
+                          "  - " << model_.frames[i].name);
     }
     return CallbackReturn::ERROR;
   }
 
   end_effector_frame_id = model_.getFrameId(params_.end_effector_frame);
-  RCLCPP_INFO_STREAM(get_node()->get_logger(),
-                     "Found end effector frame with ID: " << end_effector_frame_id);
+  RCLCPP_INFO_STREAM(
+      get_node()->get_logger(),
+      "Found end effector frame with ID: " << end_effector_frame_id);
 
   // Base frame is required for proper operation
   if (params_.base_frame.empty()) {
     RCLCPP_ERROR(get_node()->get_logger(),
                  "base_frame parameter is required but not specified!");
-    RCLCPP_ERROR(get_node()->get_logger(),
-                 "Please set the base_frame parameter in the controller configuration.");
+    RCLCPP_ERROR(
+        get_node()->get_logger(),
+        "Please set the base_frame parameter in the controller configuration.");
     return CallbackReturn::ERROR;
   }
 
   // Check if base frame exists in the model
   if (!model_.existFrame(params_.base_frame)) {
     RCLCPP_ERROR_STREAM(get_node()->get_logger(),
-                        "Base frame '" << params_.base_frame << "' not found in model!");
+                        "Base frame '" << params_.base_frame
+                                       << "' not found in model!");
     RCLCPP_ERROR(get_node()->get_logger(), "Available frames:");
     for (size_t i = 0; i < model_.frames.size(); i++) {
-      RCLCPP_ERROR_STREAM(get_node()->get_logger(), "  - " << model_.frames[i].name);
+      RCLCPP_ERROR_STREAM(get_node()->get_logger(),
+                          "  - " << model_.frames[i].name);
     }
     return CallbackReturn::ERROR;
   }
 
   base_frame_id = model_.getFrameId(params_.base_frame);
   RCLCPP_INFO_STREAM(get_node()->get_logger(),
-                     "Found base frame '" << params_.base_frame << "' with ID: " << base_frame_id);
+                     "Found base frame '" << params_.base_frame
+                                          << "' with ID: " << base_frame_id);
   RCLCPP_INFO_STREAM(get_node()->get_logger(),
                      "Expecting target poses in frame: " << params_.base_frame);
 
@@ -526,7 +554,9 @@ CallbackReturn CartesianController::on_configure(
   // Pre-calculate torque limits with safety factor
   tau_limits = model_.effortLimit * params_.torque_safety_factor;
   RCLCPP_INFO_STREAM(get_node()->get_logger(),
-                     "Torque limits initialized (safety factor=" << params_.torque_safety_factor << "): " << tau_limits.transpose());
+                     "Torque limits initialized (safety factor="
+                         << params_.torque_safety_factor
+                         << "): " << tau_limits.transpose());
 
   // Map the friction parameters to Eigen vectors
   fp1 = Eigen::Map<Eigen::VectorXd>(params_.friction.fp1.data(), model_.nv);
@@ -556,20 +586,24 @@ CallbackReturn CartesianController::on_configure(
     }
 
     // Validate frame_id if base_frame is specified
-    if (!params_.base_frame.empty() && msg->header.frame_id != params_.base_frame) {
+    if (!params_.base_frame.empty() &&
+        msg->header.frame_id != params_.base_frame) {
       RCLCPP_ERROR(get_node()->get_logger(),
-                   "Rejecting target pose: frame_id '%s' does not match expected base_frame '%s'",
+                   "Rejecting target pose: frame_id '%s' does not match "
+                   "expected base_frame '%s'",
                    msg->header.frame_id.c_str(), params_.base_frame.c_str());
-      RCLCPP_ERROR(get_node()->get_logger(),
-                   "Please ensure the target pose is published in the '%s' frame",
-                   params_.base_frame.c_str());
+      RCLCPP_ERROR(
+          get_node()->get_logger(),
+          "Please ensure the target pose is published in the '%s' frame",
+          params_.base_frame.c_str());
       return;
     }
 
     RCLCPP_INFO(get_node()->get_logger(),
-                "Received target pose in %s frame: pos=[%.3f, %.3f, %.3f], ori=[%.3f, %.3f, %.3f, %.3f]",
-                msg->header.frame_id.c_str(),
-                msg->pose.position.x, msg->pose.position.y, msg->pose.position.z,
+                "Received target pose in %s frame: pos=[%.3f, %.3f, %.3f], "
+                "ori=[%.3f, %.3f, %.3f, %.3f]",
+                msg->header.frame_id.c_str(), msg->pose.position.x,
+                msg->pose.position.y, msg->pose.position.z,
                 msg->pose.orientation.w, msg->pose.orientation.x,
                 msg->pose.orientation.y, msg->pose.orientation.z);
     RCLCPP_DEBUG(get_node()->get_logger(),
@@ -721,11 +755,12 @@ CallbackReturn CartesianController::on_activate(
 
     q[i] = state_interfaces_[i].get_value();
     if (continous_joint_types.count(
-                   joint.shortname())) { // Then we are handling a continous
-                                         // joint that is SO(2)
+            joint.shortname())) { // Then we are handling a continous
+                                  // joint that is SO(2)
       q_pin[joint.idx_q()] = std::cos(q[i]);
       q_pin[joint.idx_q() + 1] = std::sin(q[i]);
-    } else { // simple revolute joint case (handles ALL revolute types: RX, RY, RZ, RevoluteUnaligned, etc.)
+    } else { // simple revolute joint case (handles ALL revolute types: RX, RY,
+             // RZ, RevoluteUnaligned, etc.)
       q_pin[joint.idx_q()] = q[i];
     }
 
@@ -749,13 +784,16 @@ CallbackReturn CartesianController::on_activate(
 
   // Log initial state to verify data quality
   RCLCPP_INFO(get_node()->get_logger(),
-              "on_activate: Initial joint positions: [%.3f, %.3f, %.3f, %.3f, %.3f, %.3f, %.3f]",
+              "on_activate: Initial joint positions: [%.3f, %.3f, %.3f, %.3f, "
+              "%.3f, %.3f, %.3f]",
               q[0], q[1], q[2], q[3], q[4], q[5], q[6]);
+  RCLCPP_INFO(
+      get_node()->get_logger(),
+      "on_activate: Computed initial end-effector position: [%.3f, %.3f, %.3f]",
+      target_position_.x(), target_position_.y(), target_position_.z());
   RCLCPP_INFO(get_node()->get_logger(),
-              "on_activate: Computed initial end-effector position: [%.3f, %.3f, %.3f]",
-              target_position_.x(), target_position_.y(), target_position_.z());
-  RCLCPP_INFO(get_node()->get_logger(),
-              "on_activate: Computed initial end-effector orientation (quat): [%.3f, %.3f, %.3f, %.3f]",
+              "on_activate: Computed initial end-effector orientation (quat): "
+              "[%.3f, %.3f, %.3f, %.3f]",
               target_orientation_.w(), target_orientation_.x(),
               target_orientation_.y(), target_orientation_.z());
 
@@ -764,7 +802,8 @@ CallbackReturn CartesianController::on_activate(
   bool has_nonzero_effort = false;
   for (size_t i = 0; i < num_joints; ++i) {
     current_effort[i] = state_interfaces_[2 * num_joints + i].get_value();
-    if (std::abs(current_effort[i]) > 0.01) {  // Threshold for detecting active torques
+    if (std::abs(current_effort[i]) >
+        0.01) { // Threshold for detecting active torques
       has_nonzero_effort = true;
     }
   }
@@ -775,26 +814,29 @@ CallbackReturn CartesianController::on_activate(
   // Otherwise compute holding torques from dynamics
   if (has_nonzero_effort) {
     RCLCPP_INFO(get_node()->get_logger(),
-                "on_activate: Detected active torques from previous mode, using for bumpless transfer");
+                "on_activate: Detected active torques from previous mode, "
+                "using for bumpless transfer");
     tau_init = current_effort;
   } else {
     RCLCPP_INFO(get_node()->get_logger(),
                 "on_activate: Computing holding torques from dynamics");
-    // Compute initial control torques to hold current position when switching to MIT mode
-    // This prevents the arm from falling by computing the full control law at activation
-    tau_init = computeControlTorques(
-        end_effector_pose,  // current pose
-        target_pose_,       // target pose (same as current)
-        q,                  // joint positions
-        q_pin,              // pinocchio joint positions
-        dq,                 // joint velocities (should be near zero)
-        get_node()->get_clock()->now()  // current time
-    );
+    // Compute initial control torques to hold current position when switching
+    // to MIT mode This prevents the arm from falling by computing the full
+    // control law at activation
+    tau_init =
+        computeControlTorques(end_effector_pose, // current pose
+                              target_pose_, // target pose (same as current)
+                              q,            // joint positions
+                              q_pin,        // pinocchio joint positions
+                              dq, // joint velocities (should be near zero)
+                              get_node()->get_clock()->now() // current time
+        );
   }
 
   // Apply torque rate limiting and safety limits
   if (params_.limit_torques && tau_previous.size() > 0) {
-    tau_init = saturateTorqueRate(tau_init, tau_previous, params_.max_delta_tau);
+    tau_init =
+        saturateTorqueRate(tau_init, tau_previous, params_.max_delta_tau);
   }
 
   // Apply torque limits if configured
@@ -806,17 +848,20 @@ CallbackReturn CartesianController::on_activate(
   tau_d = tau_init;
 
   RCLCPP_INFO(get_node()->get_logger(),
-              "on_activate: Initialized with%s torques: [%.3f, %.3f, %.3f, %.3f, %.3f, %.3f, %.3f]",
+              "on_activate: Initialized with%s torques: [%.3f, %.3f, %.3f, "
+              "%.3f, %.3f, %.3f, %.3f]",
               has_nonzero_effort ? " current effort" : " computed holding",
-              tau_init[0], tau_init[1], tau_init[2], tau_init[3],
-              tau_init[4], tau_init[5], tau_init[6]);
+              tau_init[0], tau_init[1], tau_init[2], tau_init[3], tau_init[4],
+              tau_init[5], tau_init[6]);
 
   // Open CSV log file if logging is enabled
   if (params_.log.enabled) {
     // Get user workspace directory
-    const char* user_ws = std::getenv("USER_WS");
+    const char *user_ws = std::getenv("USER_WS");
     if (!user_ws) {
-      RCLCPP_ERROR(get_node()->get_logger(), "USER_WS environment variable not set. Cannot create log directory.");
+      RCLCPP_ERROR(
+          get_node()->get_logger(),
+          "USER_WS environment variable not set. Cannot create log directory.");
       return CallbackReturn::ERROR;
     }
 
@@ -827,7 +872,7 @@ CallbackReturn CartesianController::on_activate(
     int64_t timestamp_ms = now.seconds() * 1000 + now.nanoseconds() / 1000000;
 
     std::string log_filename = log_dir + "/" + get_node()->get_name() + "_" +
-                              std::to_string(timestamp_ms) + ".csv";
+                               std::to_string(timestamp_ms) + ".csv";
 
     // Create directory if it doesn't exist
     std::filesystem::create_directories(log_dir);
@@ -842,39 +887,41 @@ CallbackReturn CartesianController::on_activate(
 
       // Add torque columns for each joint
       for (auto i = 0u; i < num_joints; ++i) {
-        csv_log_file_ << ",tau_task_" << i
-                      << ",tau_nullspace_" << i
-                      << ",tau_joint_limits_" << i
-                      << ",tau_friction_" << i
-                      << ",tau_coriolis_" << i
-                      << ",tau_gravity_" << i
-                      << ",tau_wrench_" << i
-                      << ",tau_total_" << i;
+        csv_log_file_ << ",tau_task_" << i << ",tau_nullspace_" << i
+                      << ",tau_joint_limits_" << i << ",tau_friction_" << i
+                      << ",tau_coriolis_" << i << ",tau_gravity_" << i
+                      << ",tau_wrench_" << i << ",tau_total_" << i;
       }
 
       // Add error columns (6 DOF: x, y, z, rx, ry, rz)
-      csv_log_file_ << ",error_x,error_y,error_z,error_rx,error_ry,error_rz,error_xyz_norm";
+      csv_log_file_ << ",error_x,error_y,error_z,error_rx,error_ry,error_rz,"
+                       "error_xyz_norm";
 
       // Add pose columns (current and target) - both quaternion and RPY
-      csv_log_file_ << ",current_x,current_y,current_z,current_qw,current_qx,current_qy,current_qz";
+      csv_log_file_ << ",current_x,current_y,current_z,current_qw,current_qx,"
+                       "current_qy,current_qz";
       csv_log_file_ << ",current_roll,current_pitch,current_yaw";
-      csv_log_file_ << ",target_x,target_y,target_z,target_qw,target_qx,target_qy,target_qz";
+      csv_log_file_ << ",target_x,target_y,target_z,target_qw,target_qx,target_"
+                       "qy,target_qz";
       csv_log_file_ << ",target_roll,target_pitch,target_yaw";
 
       csv_log_file_ << std::endl;
 
-      RCLCPP_INFO(get_node()->get_logger(), "CSV logging enabled: %s", log_filename.c_str());
+      RCLCPP_INFO(get_node()->get_logger(), "CSV logging enabled: %s",
+                  log_filename.c_str());
     } else {
       csv_logging_enabled_ = false;
-      RCLCPP_WARN(get_node()->get_logger(), "Failed to open CSV log file: %s", log_filename.c_str());
+      RCLCPP_WARN(get_node()->get_logger(), "Failed to open CSV log file: %s",
+                  log_filename.c_str());
     }
   }
 
   // Always enable tau_task detailed logging (separate from general logging)
   // Get user workspace directory
-  const char* user_ws_tau = std::getenv("USER_WS");
+  const char *user_ws_tau = std::getenv("USER_WS");
   if (!user_ws_tau) {
-    RCLCPP_ERROR(get_node()->get_logger(), "USER_WS environment variable not set for tau_task logging.");
+    RCLCPP_ERROR(get_node()->get_logger(),
+                 "USER_WS environment variable not set for tau_task logging.");
     return CallbackReturn::ERROR;
   }
 
@@ -882,10 +929,12 @@ CallbackReturn CartesianController::on_activate(
 
   // Get timestamp with millisecond precision
   auto now_tau = get_node()->now();
-  int64_t timestamp_ms_tau = now_tau.seconds() * 1000 + now_tau.nanoseconds() / 1000000;
+  int64_t timestamp_ms_tau =
+      now_tau.seconds() * 1000 + now_tau.nanoseconds() / 1000000;
 
-  std::string tau_log_filename = tau_log_dir + "/" + get_node()->get_name() + "_tau_task_" +
-                                std::to_string(timestamp_ms_tau) + ".csv";
+  std::string tau_log_filename = tau_log_dir + "/" + get_node()->get_name() +
+                                 "_tau_task_" +
+                                 std::to_string(timestamp_ms_tau) + ".csv";
 
   // Create directory if it doesn't exist
   std::filesystem::create_directories(tau_log_dir);
@@ -898,9 +947,13 @@ CallbackReturn CartesianController::on_activate(
     tau_task_log_file_ << "timestamp";
 
     // Task space forces (6 DOF: x, y, z, rx, ry, rz)
-    tau_task_log_file_ << ",task_force_P_x,task_force_P_y,task_force_P_z,task_force_P_rx,task_force_P_ry,task_force_P_rz";
-    tau_task_log_file_ << ",task_force_D_x,task_force_D_y,task_force_D_z,task_force_D_rx,task_force_D_ry,task_force_D_rz";
-    tau_task_log_file_ << ",task_force_total_x,task_force_total_y,task_force_total_z,task_force_total_rx,task_force_total_ry,task_force_total_rz";
+    tau_task_log_file_ << ",task_force_P_x,task_force_P_y,task_force_P_z,task_"
+                          "force_P_rx,task_force_P_ry,task_force_P_rz";
+    tau_task_log_file_ << ",task_force_D_x,task_force_D_y,task_force_D_z,task_"
+                          "force_D_rx,task_force_D_ry,task_force_D_rz";
+    tau_task_log_file_
+        << ",task_force_total_x,task_force_total_y,task_force_total_z,task_"
+           "force_total_rx,task_force_total_ry,task_force_total_rz";
 
     // tau_task for each joint
     for (auto i = 0u; i < num_joints; ++i) {
@@ -917,9 +970,12 @@ CallbackReturn CartesianController::on_activate(
 
     tau_task_log_file_ << std::endl;
 
-    RCLCPP_INFO(get_node()->get_logger(), "tau_task CSV logging enabled: %s", tau_log_filename.c_str());
+    RCLCPP_INFO(get_node()->get_logger(), "tau_task CSV logging enabled: %s",
+                tau_log_filename.c_str());
   } else {
-    RCLCPP_ERROR(get_node()->get_logger(), "Failed to open tau_task log file: %s", tau_log_filename.c_str());
+    RCLCPP_ERROR(get_node()->get_logger(),
+                 "Failed to open tau_task log file: %s",
+                 tau_log_filename.c_str());
   }
 
   RCLCPP_INFO(get_node()->get_logger(), "Controller activated.");
@@ -950,17 +1006,20 @@ void CartesianController::parse_target_pose_() {
 
   // Create SE3 from incoming pose (in base_frame coordinates)
   Eigen::Vector3d pose_in_base;
-  pose_in_base << msg->pose.position.x, msg->pose.position.y, msg->pose.position.z;
+  pose_in_base << msg->pose.position.x, msg->pose.position.y,
+      msg->pose.position.z;
 
-  Eigen::Quaterniond quat_in_base(msg->pose.orientation.w, msg->pose.orientation.x,
-                                   msg->pose.orientation.y, msg->pose.orientation.z);
+  Eigen::Quaterniond quat_in_base(
+      msg->pose.orientation.w, msg->pose.orientation.x, msg->pose.orientation.y,
+      msg->pose.orientation.z);
 
   pinocchio::SE3 target_in_base(quat_in_base.toRotationMatrix(), pose_in_base);
 
   // Get base frame pose in world coordinates
   pinocchio::SE3 base_in_world = data_.oMf[base_frame_id];
 
-  // Transform target pose to world frame: World->Target = (World->Base) * (Base->Target)
+  // Transform target pose to world frame: World->Target = (World->Base) *
+  // (Base->Target)
   pinocchio::SE3 target_in_world = base_in_world * target_in_base;
 
   // Extract position and orientation in world frame
@@ -1113,14 +1172,10 @@ void CartesianController::log_debug_info(const rclcpp::Time &time) {
 
     // Write torque components for each joint
     for (auto i = 0; i < tau_task.size(); ++i) {
-      csv_log_file_ << "," << tau_task[i]
-                    << "," << tau_nullspace[i]
-                    << "," << tau_joint_limits[i]
-                    << "," << tau_friction[i]
-                    << "," << tau_coriolis[i]
-                    << "," << tau_gravity[i]
-                    << "," << tau_wrench[i]
-                    << "," << tau_d[i];
+      csv_log_file_ << "," << tau_task[i] << "," << tau_nullspace[i] << ","
+                    << tau_joint_limits[i] << "," << tau_friction[i] << ","
+                    << tau_coriolis[i] << "," << tau_gravity[i] << ","
+                    << tau_wrench[i] << "," << tau_d[i];
     }
 
     // Write error (6 DOF: x, y, z, rx, ry, rz)
@@ -1129,30 +1184,37 @@ void CartesianController::log_debug_info(const rclcpp::Time &time) {
     }
 
     // Write xyz error norm
-    double error_xyz_norm = std::sqrt(error[0]*error[0] + error[1]*error[1] + error[2]*error[2]);
+    double error_xyz_norm = std::sqrt(
+        error[0] * error[0] + error[1] * error[1] + error[2] * error[2]);
     csv_log_file_ << "," << error_xyz_norm;
 
     // Write current pose (position and orientation as quaternion)
     Eigen::Vector3d current_pos = end_effector_pose.translation();
     Eigen::Quaterniond current_quat(end_effector_pose.rotation());
-    csv_log_file_ << "," << current_pos.x() << "," << current_pos.y() << "," << current_pos.z()
-                  << "," << current_quat.w() << "," << current_quat.x()
-                  << "," << current_quat.y() << "," << current_quat.z();
+    csv_log_file_ << "," << current_pos.x() << "," << current_pos.y() << ","
+                  << current_pos.z() << "," << current_quat.w() << ","
+                  << current_quat.x() << "," << current_quat.y() << ","
+                  << current_quat.z();
 
     // Write current orientation as RPY (roll, pitch, yaw)
-    Eigen::Vector3d current_rpy = end_effector_pose.rotation().eulerAngles(0, 1, 2);  // Roll, Pitch, Yaw
-    csv_log_file_ << "," << current_rpy[0] << "," << current_rpy[1] << "," << current_rpy[2];
+    Eigen::Vector3d current_rpy =
+        end_effector_pose.rotation().eulerAngles(0, 1, 2); // Roll, Pitch, Yaw
+    csv_log_file_ << "," << current_rpy[0] << "," << current_rpy[1] << ","
+                  << current_rpy[2];
 
     // Write target pose (position and orientation as quaternion)
     Eigen::Vector3d target_pos = target_pose_.translation();
     Eigen::Quaterniond target_quat(target_pose_.rotation());
-    csv_log_file_ << "," << target_pos.x() << "," << target_pos.y() << "," << target_pos.z()
-                  << "," << target_quat.w() << "," << target_quat.x()
-                  << "," << target_quat.y() << "," << target_quat.z();
+    csv_log_file_ << "," << target_pos.x() << "," << target_pos.y() << ","
+                  << target_pos.z() << "," << target_quat.w() << ","
+                  << target_quat.x() << "," << target_quat.y() << ","
+                  << target_quat.z();
 
     // Write target orientation as RPY (roll, pitch, yaw)
-    Eigen::Vector3d target_rpy = target_pose_.rotation().eulerAngles(0, 1, 2);  // Roll, Pitch, Yaw
-    csv_log_file_ << "," << target_rpy[0] << "," << target_rpy[1] << "," << target_rpy[2];
+    Eigen::Vector3d target_rpy =
+        target_pose_.rotation().eulerAngles(0, 1, 2); // Roll, Pitch, Yaw
+    csv_log_file_ << "," << target_rpy[0] << "," << target_rpy[1] << ","
+                  << target_rpy[2];
 
     csv_log_file_ << std::endl;
   }
@@ -1195,45 +1257,43 @@ bool CartesianController::check_topic_publisher_count(
 }
 
 Eigen::VectorXd CartesianController::computeControlTorques(
-    const pinocchio::SE3& current_pose,
-    const pinocchio::SE3& target_pose,
-    const Eigen::VectorXd& q,
-    const Eigen::VectorXd& q_pin,
-    const Eigen::VectorXd& dq,
-    const rclcpp::Time& time) {
+    const pinocchio::SE3 &current_pose, const pinocchio::SE3 &target_pose,
+    const Eigen::VectorXd &q, const Eigen::VectorXd &q_pin,
+    const Eigen::VectorXd &dq, const rclcpp::Time &time) {
 
   // Compute pose error
   Eigen::VectorXd error = Eigen::VectorXd::Zero(6);
   if (params_.use_local_jacobian) {
     error.head(3) = current_pose.rotation().transpose() *
-                   (target_pose.translation() - current_pose.translation());
+                    (target_pose.translation() - current_pose.translation());
     error.tail(3) = pinocchio::log3(current_pose.rotation().transpose() *
-                                   target_pose.rotation());
+                                    target_pose.rotation());
   } else {
     error.head(3) = target_pose.translation() - current_pose.translation();
     error.tail(3) = pinocchio::log3(target_pose.rotation() *
-                                   current_pose.rotation().transpose());
+                                    current_pose.rotation().transpose());
   }
 
   // Apply error limits if configured
   if (params_.limit_error) {
     Eigen::VectorXd max_delta(6);
     max_delta << params_.task.error_clip.x, params_.task.error_clip.y,
-                 params_.task.error_clip.z, params_.task.error_clip.rx,
-                 params_.task.error_clip.ry, params_.task.error_clip.rz;
+        params_.task.error_clip.z, params_.task.error_clip.rx,
+        params_.task.error_clip.ry, params_.task.error_clip.rz;
     error = error.cwiseMax(-max_delta).cwiseMin(max_delta);
   }
 
   // Compute Jacobian
   Eigen::MatrixXd J_local = Eigen::MatrixXd::Zero(6, model_.nv);
   auto reference_frame = params_.use_local_jacobian
-                            ? pinocchio::ReferenceFrame::LOCAL
-                            : pinocchio::ReferenceFrame::WORLD;
+                             ? pinocchio::ReferenceFrame::LOCAL
+                             : pinocchio::ReferenceFrame::WORLD;
   pinocchio::computeFrameJacobian(model_, data_, q_pin, end_effector_frame_id,
                                   reference_frame, J_local);
 
   // Compute nullspace projection
-  Eigen::MatrixXd J_pinv = pseudo_inverse(J_local, params_.nullspace.regularization);
+  Eigen::MatrixXd J_pinv =
+      pseudo_inverse(J_local, params_.nullspace.regularization);
   Eigen::MatrixXd Id_nv = Eigen::MatrixXd::Identity(model_.nv, model_.nv);
   Eigen::MatrixXd nullspace_proj;
 
@@ -1268,28 +1328,30 @@ Eigen::VectorXd CartesianController::computeControlTorques(
   }
 
   // Compute nullspace torques
-  Eigen::VectorXd tau_secondary = nullspace_stiffness * (q_ref - q) +
-                                  nullspace_damping * (dq_ref - dq);
+  Eigen::VectorXd tau_secondary =
+      nullspace_stiffness * (q_ref - q) + nullspace_damping * (dq_ref - dq);
   Eigen::VectorXd tau_nullspace_local = nullspace_proj * tau_secondary;
   tau_nullspace_local = tau_nullspace_local.cwiseMin(params_.nullspace.max_tau)
-                                           .cwiseMax(-params_.nullspace.max_tau);
+                            .cwiseMax(-params_.nullspace.max_tau);
 
   // Compute gravity compensation
-  Eigen::VectorXd tau_gravity_local = params_.use_gravity_compensation
-                                         ? pinocchio::computeGeneralizedGravity(model_, data_, q_pin)
-                                         : Eigen::VectorXd::Zero(model_.nv);
+  Eigen::VectorXd tau_gravity_local =
+      params_.use_gravity_compensation
+          ? pinocchio::computeGeneralizedGravity(model_, data_, q_pin)
+          : Eigen::VectorXd::Zero(model_.nv);
 
   // Compute Coriolis compensation
   Eigen::VectorXd tau_coriolis_local = Eigen::VectorXd::Zero(model_.nv);
   if (params_.use_coriolis_compensation) {
     pinocchio::computeAllTerms(model_, data_, q_pin, dq);
-    tau_coriolis_local = pinocchio::computeCoriolisMatrix(model_, data_, q_pin, dq) * dq;
+    tau_coriolis_local =
+        pinocchio::computeCoriolisMatrix(model_, data_, q_pin, dq) * dq;
   }
 
   // Compute friction compensation
   Eigen::VectorXd tau_friction_local = params_.use_friction
-                                         ? get_friction(dq, fp1, fp2, fp3)
-                                         : Eigen::VectorXd::Zero(model_.nv);
+                                           ? get_friction(dq, fp1, fp2, fp3)
+                                           : Eigen::VectorXd::Zero(model_.nv);
 
   // Compute joint limit avoidance
   Eigen::VectorXd tau_joint_limits_local = Eigen::VectorXd::Zero(model_.nv);
@@ -1304,9 +1366,10 @@ Eigen::VectorXd CartesianController::computeControlTorques(
   Eigen::VectorXd tau_wrench_local = J_local.transpose() * target_wrench_;
 
   // Combine all torque components
-  Eigen::VectorXd tau_total = tau_task_local + tau_nullspace_local + tau_friction_local +
-                              tau_coriolis_local + tau_gravity_local +
-                              tau_joint_limits_local + tau_wrench_local;
+  Eigen::VectorXd tau_total = tau_task_local + tau_nullspace_local +
+                              tau_friction_local + tau_coriolis_local +
+                              tau_gravity_local + tau_joint_limits_local +
+                              tau_wrench_local;
 
   return tau_total;
 }
