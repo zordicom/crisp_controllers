@@ -195,12 +195,20 @@ CallbackReturn PoseBroadcaster::on_configure(
 
   q = Eigen::VectorXd::Zero(model_.nv);
 
+  // Create node-private topic using explicit namespacing
+  // This ensures each broadcaster instance has its own topic namespace
+  std::string node_name = get_node()->get_name();
+  std::string pose_topic = node_name + "/current_pose";
+
+  RCLCPP_INFO_STREAM(get_node()->get_logger(),
+                     "Publishing current pose to: " << pose_topic);
+
   pose_publisher_ = get_node()->create_publisher<geometry_msgs::msg::PoseStamped>(
-          "current_pose", rclcpp::SystemDefaultsQoS());
+          pose_topic, rclcpp::SystemDefaultsQoS());
   realtime_pose_publisher_ =
       std::make_shared<realtime_tools::RealtimePublisher<geometry_msgs::msg::PoseStamped>>(
         pose_publisher_);
-  
+
   last_publish_time_ = this->get_node()->now();
   return CallbackReturn::SUCCESS;
 }

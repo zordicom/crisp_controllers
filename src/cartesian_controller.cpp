@@ -275,8 +275,13 @@ CartesianController::update(const rclcpp::Time &time,
 
   tau_wrench << J.transpose() * target_wrench_;
 
-  tau_d << tau_task + tau_nullspace + tau_friction + tau_coriolis +
-               tau_gravity + tau_joint_limits + tau_wrench;
+  // Gravity-only mode: only apply gravity compensation (safe for gain tuning)
+  if (params_.gravity_only_mode) {
+    tau_d << tau_gravity;
+  } else {
+    tau_d << tau_task + tau_nullspace + tau_friction + tau_coriolis +
+                 tau_gravity + tau_joint_limits + tau_wrench;
+  }
 
   if (params_.limit_torques) {
     tau_d = saturateTorqueRate(tau_d, tau_previous, params_.max_delta_tau);
@@ -297,9 +302,10 @@ CartesianController::update(const rclcpp::Time &time,
   if (torque_log_counter++ % 100 == 0) {
     RCLCPP_INFO(get_node()->get_logger(),
                 "Commanded torques: [%.3f, %.3f, %.3f, %.3f, %.3f, %.3f, %.3f] "
-                "Nm (stop_commands=%s)",
+                "Nm (stop_commands=%s, gravity_only=%s)",
                 tau_d[0], tau_d[1], tau_d[2], tau_d[3], tau_d[4], tau_d[5],
-                tau_d[6], params_.stop_commands ? "TRUE" : "FALSE");
+                tau_d[6], params_.stop_commands ? "TRUE" : "FALSE",
+                params_.gravity_only_mode ? "TRUE" : "FALSE");
 
     // Log if any torques were saturated
     bool saturated = false;

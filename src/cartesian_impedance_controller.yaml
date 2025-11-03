@@ -283,6 +283,12 @@ cartesian_impedance_controller:
     default_value: False
     description: "If set to true, we will stop sending commands to the robot. This is mainly for debugging useful."
 
+  gravity_only_mode:
+    type: bool
+    default_value: False
+    description: "If true, only gravity compensation is applied (no task/nullspace control). Safe for gain tuning - robot holds position under gravity but doesn't track targets."
+    read_only: false
+
   joint_limit_avoidance:
     enable:
       type: bool
