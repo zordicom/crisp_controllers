@@ -340,19 +340,90 @@ CartesianController::update(const rclcpp::Time &time,
   // Secondary task: Move toward preferred posture in nullspace
   // (nullspace_projection * (q_ref - q)) This gives joint positions that
   // satisfy both Cartesian goal and posture objective
-  q_goal = q + J_pinv * error + nullspace_projection * (q_ref - q);
+
+  // Compute goal position components
+  Eigen::VectorXd q_task = J_pinv * error;
+  Eigen::VectorXd q_nullspace_update = nullspace_projection * (q_ref - q);
+  Eigen::VectorXd q_goal_new = q + q_task + q_nullspace_update;
+
+  // Check for discontinuities in q_goal (warn if jump > 1 radian)
+  static int goal_discontinuity_counter = 0;
+  if (goal_discontinuity_counter++ % 10 == 0) {  // Check every 10 cycles
+    Eigen::VectorXd q_goal_delta = q_goal_new - q_goal;
+    double max_jump = q_goal_delta.cwiseAbs().maxCoeff();
+    if (max_jump > 1.0) {
+      RCLCPP_WARN(get_node()->get_logger(),
+                  "Large q_goal discontinuity detected: %.2f rad (max safe: 1.0 rad)",
+                  max_jump);
+      // Log which joint and the components
+      for (int i = 0; i < model_.nv; ++i) {
+        if (std::abs(q_goal_delta[i]) > 1.0) {
+          RCLCPP_WARN(get_node()->get_logger(),
+                      "  Joint %d: delta=%.2f rad (q_task=%.2f, q_null=%.2f)",
+                      i, q_goal_delta[i], q_task[i], q_nullspace_update[i]);
+        }
+      }
+    }
+  }
+
+  q_goal = q_goal_new;
 
   // Calculate dq_goal using Cartesian velocity approach
-  // Task space velocity: x_dot = D^{-1} * K * error (critically damped velocity
-  // field)
-  Eigen::VectorXd x_dot_desired = damping.inverse() * stiffness * error;
+  // Task space velocity: x_dot = K * error / D (avoid matrix inverse for numerical stability)
+  // Use element-wise division to handle zero damping gracefully
+  Eigen::VectorXd x_dot_desired = Eigen::VectorXd::Zero(6);
+  for (int i = 0; i < 6; ++i) {
+    if (std::abs(damping(i, i)) > 1e-6) {
+      x_dot_desired[i] = stiffness(i, i) * error[i] / damping(i, i);
+    }
+    // else: leave as zero when damping is zero (no velocity command)
+  }
 
-  // Nullspace velocity: dq_null = (D_null)^{-1} * K_null * (q_ref - q)
-  Eigen::VectorXd dq_nullspace =
-      nullspace_damping.inverse() * nullspace_stiffness * (q_ref - q);
+  // Nullspace velocity: dq_null = K_null * (q_ref - q) / D_null
+  // Use element-wise division to handle zero damping gracefully
+  Eigen::VectorXd q_error_nullspace = q_ref - q;
+  Eigen::VectorXd dq_nullspace = Eigen::VectorXd::Zero(model_.nv);
+  for (int i = 0; i < model_.nv; ++i) {
+    if (std::abs(nullspace_damping(i, i)) > 1e-6) {
+      dq_nullspace[i] = nullspace_stiffness(i, i) * q_error_nullspace[i] / nullspace_damping(i, i);
+    }
+    // else: leave as zero when nullspace damping is zero
+  }
 
   // Map to joint space with nullspace projection
   dq_goal = J_pinv * x_dot_desired + nullspace_projection * dq_nullspace;
+
+  // Check for NaN or unreasonable values in dq_goal
+  static int dq_goal_check_counter = 0;
+  if (dq_goal_check_counter++ % 10 == 0) {  // Check every 10 cycles
+    bool has_nan = false;
+    bool has_large = false;
+    double max_dq = 0.0;
+
+    for (int i = 0; i < model_.nv; ++i) {
+      if (std::isnan(dq_goal[i]) || std::isinf(dq_goal[i])) {
+        has_nan = true;
+      }
+      double abs_dq = std::abs(dq_goal[i]);
+      if (abs_dq > 10.0) {  // 10 rad/s is very high for most joints
+        has_large = true;
+      }
+      max_dq = std::max(max_dq, abs_dq);
+    }
+
+    if (has_nan) {
+      RCLCPP_ERROR(get_node()->get_logger(),
+                   "NaN or Inf detected in dq_goal! This indicates numerical instability.");
+      RCLCPP_ERROR(get_node()->get_logger(),
+                   "  dq_goal: [%.3f, %.3f, %.3f, %.3f, %.3f, %.3f, %.3f]",
+                   dq_goal[0], dq_goal[1], dq_goal[2], dq_goal[3],
+                   dq_goal[4], dq_goal[5], dq_goal[6]);
+    } else if (has_large) {
+      RCLCPP_WARN(get_node()->get_logger(),
+                  "Large dq_goal detected: max=%.2f rad/s (consider if this is reasonable)",
+                  max_dq);
+    }
+  }
 
   if (not params_.stop_commands) {
     for (size_t i = 0; i < num_joints; ++i) {
@@ -894,6 +965,7 @@ CallbackReturn CartesianController::on_activate(
     if (csv_log_file_.is_open()) {
       csv_logging_enabled_ = true;
       csv_log_start_time_ = get_node()->now();
+      csv_flush_counter_ = 0;
 
       // Write CSV header with all data merged from both original files
       csv_log_file_ << "timestamp";
@@ -984,6 +1056,8 @@ controller_interface::CallbackReturn CartesianController::on_deactivate(
     const rclcpp_lifecycle::State & /*previous_state*/) {
   // Close CSV log file if it was opened
   if (csv_logging_enabled_ && csv_log_file_.is_open()) {
+    // Flush any remaining buffered data before closing
+    csv_log_file_.flush();
     csv_log_file_.close();
     csv_logging_enabled_ = false;
     RCLCPP_INFO(get_node()->get_logger(), "CSV log file closed.");
@@ -1270,7 +1344,15 @@ void CartesianController::log_debug_info(const rclcpp::Time &time) {
     csv_log_file_ << "," << params_.filter.q << "," << params_.filter.dq << ","
                   << params_.filter.output_torque;
 
-    csv_log_file_ << std::endl;
+    // Use '\n' instead of std::endl to avoid flushing every cycle
+    csv_log_file_ << '\n';
+
+    // Flush every 50 cycles for better performance
+    csv_flush_counter_++;
+    if (csv_flush_counter_ >= 50) {
+      csv_log_file_.flush();
+      csv_flush_counter_ = 0;
+    }
   }
 }
 
@@ -1313,7 +1395,7 @@ bool CartesianController::check_topic_publisher_count(
 Eigen::VectorXd CartesianController::computeControlTorques(
     const pinocchio::SE3 &current_pose, const pinocchio::SE3 &target_pose,
     const Eigen::VectorXd &q, const Eigen::VectorXd &q_pin,
-    const Eigen::VectorXd &dq, const rclcpp::Time &time) {
+    const Eigen::VectorXd &dq, [[maybe_unused]] const rclcpp::Time &time) {
 
   // Compute pose error
   Eigen::VectorXd error = Eigen::VectorXd::Zero(6);

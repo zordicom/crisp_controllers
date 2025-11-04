@@ -18,7 +18,7 @@
 #include <rclcpp/rclcpp.hpp>
 
 #include "realtime_tools/realtime_buffer.hpp"
-#include <cartesian_impedance_controller_parameters.hpp>
+#include <crisp_controllers/cartesian_impedance_controller_parameters.hpp>
 #include <sensor_msgs/msg/joint_state.hpp>
 #include <string>
 #include <unordered_set>
@@ -305,6 +305,8 @@ private:
   bool csv_logging_enabled_ = false;
   /** @brief Start time for CSV logging (to compute relative timestamps) */
   rclcpp::Time csv_log_start_time_;
+  /** @brief Counter to track cycles for periodic CSV flushing */
+  size_t csv_flush_counter_ = 0;
 };
 
 } // namespace crisp_controllers
