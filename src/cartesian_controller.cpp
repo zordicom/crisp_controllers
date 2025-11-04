@@ -30,6 +30,12 @@ CartesianController::command_interface_configuration() const {
   controller_interface::InterfaceConfiguration config;
   config.type = controller_interface::interface_configuration_type::INDIVIDUAL;
   for (const auto &joint_name : params_.joints) {
+    config.names.push_back(joint_name + "/position");
+  }
+  for (const auto &joint_name : params_.joints) {
+    config.names.push_back(joint_name + "/velocity");
+  }
+  for (const auto &joint_name : params_.joints) {
     config.names.push_back(joint_name + "/effort");
   }
   return config;
@@ -97,7 +103,8 @@ CartesianController::update(const rclcpp::Time &time,
       static int vel_log_counter = 0;
       if (vel_log_counter++ % 100 == 0) {
         RCLCPP_INFO(get_node()->get_logger(),
-                    "Joint0: q_raw=%.4f q_filt=%.4f dq_raw=%.4f dq_filt=%.4f alpha_dq=%.3f",
+                    "Joint0: q_raw=%.4f q_filt=%.4f dq_raw=%.4f dq_filt=%.4f "
+                    "alpha_dq=%.3f",
                     q_raw[i], q[i], dq_raw[i], dq[i], params_.filter.dq);
       }
     }
@@ -211,16 +218,17 @@ CartesianController::update(const rclcpp::Time &time,
   }
 
   // Compute task space forces separately for logging
-  task_force_P_ = stiffness * error;                           // Proportional term
+  task_force_P_ = stiffness * error;               // Proportional term
   Eigen::Vector<double, 6> task_velocity = J * dq; // Task space velocity
-  task_force_D_ = damping * task_velocity; // Damping term
+  task_force_D_ = damping * task_velocity;         // Damping term
 
   // Log damping force computation to verify filtering effect
   static int damping_log_counter = 0;
   if (damping_log_counter++ % 100 == 0) {
     RCLCPP_INFO(get_node()->get_logger(),
                 "Damping: task_vel_x=%.4f, d_pos=%.2f, force_D_x=%.4f (P=%.4f)",
-                task_velocity[0], damping(0,0), task_force_D_[0], task_force_P_[0]);
+                task_velocity[0], damping(0, 0), task_force_D_[0],
+                task_force_P_[0]);
   }
 
   if (params_.use_operational_space) {
@@ -270,7 +278,9 @@ CartesianController::update(const rclcpp::Time &time,
   }
 
   tau_gravity = params_.use_gravity_compensation
-                    ? Eigen::VectorXd(params_.gravity_scale * pinocchio::computeGeneralizedGravity(model_, data_, q_pin))
+                    ? Eigen::VectorXd(params_.gravity_scale *
+                                      pinocchio::computeGeneralizedGravity(
+                                          model_, data_, q_pin))
                     : Eigen::VectorXd::Zero(model_.nv);
 
   tau_wrench << J.transpose() * target_wrench_;
@@ -325,9 +335,30 @@ CartesianController::update(const rclcpp::Time &time,
     }
   }
 
+  // Calculate q_goal using differential IK with nullspace projection
+  // Primary task: Move toward target end-effector pose (J_pinv * error)
+  // Secondary task: Move toward preferred posture in nullspace
+  // (nullspace_projection * (q_ref - q)) This gives joint positions that
+  // satisfy both Cartesian goal and posture objective
+  q_goal = q + J_pinv * error + nullspace_projection * (q_ref - q);
+
+  // Calculate dq_goal using Cartesian velocity approach
+  // Task space velocity: x_dot = D^{-1} * K * error (critically damped velocity
+  // field)
+  Eigen::VectorXd x_dot_desired = damping.inverse() * stiffness * error;
+
+  // Nullspace velocity: dq_null = (D_null)^{-1} * K_null * (q_ref - q)
+  Eigen::VectorXd dq_nullspace =
+      nullspace_damping.inverse() * nullspace_stiffness * (q_ref - q);
+
+  // Map to joint space with nullspace projection
+  dq_goal = J_pinv * x_dot_desired + nullspace_projection * dq_nullspace;
+
   if (not params_.stop_commands) {
     for (size_t i = 0; i < num_joints; ++i) {
-      command_interfaces_[i].set_value(tau_d[i]);
+      command_interfaces_[i].set_value(q_goal[i]);
+      command_interfaces_[num_joints + i].set_value(dq_goal[i]);
+      command_interfaces_[2 * num_joints + i].set_value(tau_d[i]);
     }
   } else {
     RCLCPP_WARN_THROTTLE(
@@ -526,6 +557,8 @@ CallbackReturn CartesianController::on_configure(
   dq_raw = Eigen::VectorXd::Zero(model_.nv);
   q_ref = Eigen::VectorXd::Zero(model_.nv);
   dq_ref = Eigen::VectorXd::Zero(model_.nv);
+  q_goal = Eigen::VectorXd::Zero(model_.nv);
+  dq_goal = Eigen::VectorXd::Zero(model_.nv);
   tau_previous = Eigen::VectorXd::Zero(model_.nv);
   J = Eigen::MatrixXd::Zero(6, model_.nv);
 
@@ -743,9 +776,11 @@ CallbackReturn CartesianController::on_activate(
     }
 
     q_ref[i] = state_interfaces_[i].get_value();
+    q_goal[i] = state_interfaces_[i].get_value();
 
     dq[i] = state_interfaces_[num_joints + i].get_value();
     dq_ref[i] = state_interfaces_[num_joints + i].get_value();
+    dq_goal[i] = state_interfaces_[num_joints + i].get_value();
   }
 
   pinocchio::forwardKinematics(model_, data_, q_pin, dq);
@@ -882,7 +917,8 @@ CallbackReturn CartesianController::on_activate(
 
       // Add error columns (6 DOF: x, y, z, rx, ry, rz)
       csv_log_file_ << ",error_x,error_y,error_z,error_rx,error_ry,error_rz";
-      csv_log_file_ << ",error_rot_magnitude,error_pos_magnitude,error_xyz_norm";
+      csv_log_file_
+          << ",error_rot_magnitude,error_pos_magnitude,error_xyz_norm";
 
       // Add pose columns (current and target) - both quaternion and RPY
       csv_log_file_ << ",current_x,current_y,current_z,current_qw,current_qx,"
@@ -914,6 +950,16 @@ CallbackReturn CartesianController::on_activate(
       // Filtered joint velocities
       for (auto i = 0u; i < num_joints; ++i) {
         csv_log_file_ << ",dq_filtered_" << i;
+      }
+
+      // Goal joint positions (desired configuration)
+      for (auto i = 0u; i < num_joints; ++i) {
+        csv_log_file_ << ",q_goal_" << i;
+      }
+
+      // Goal joint velocities (desired velocity)
+      for (auto i = 0u; i < num_joints; ++i) {
+        csv_log_file_ << ",dq_goal_" << i;
       }
 
       // Filter parameters
@@ -1179,10 +1225,10 @@ void CartesianController::log_debug_info(const rclcpp::Time &time) {
                   << target_rpy[2];
 
     // Stiffness values (diagonal elements)
-    csv_log_file_ << "," << stiffness(0, 0) << "," << stiffness(1, 1)
-                  << "," << stiffness(2, 2);
-    csv_log_file_ << "," << stiffness(3, 3) << "," << stiffness(4, 4)
-                  << "," << stiffness(5, 5);
+    csv_log_file_ << "," << stiffness(0, 0) << "," << stiffness(1, 1) << ","
+                  << stiffness(2, 2);
+    csv_log_file_ << "," << stiffness(3, 3) << "," << stiffness(4, 4) << ","
+                  << stiffness(5, 5);
 
     // Damping values (diagonal elements)
     csv_log_file_ << "," << damping(0, 0) << "," << damping(1, 1) << ","
@@ -1210,9 +1256,19 @@ void CartesianController::log_debug_info(const rclcpp::Time &time) {
       csv_log_file_ << "," << dq[i];
     }
 
+    // Goal joint positions
+    for (int i = 0; i < q_goal.size(); ++i) {
+      csv_log_file_ << "," << q_goal[i];
+    }
+
+    // Goal joint velocities
+    for (int i = 0; i < dq_goal.size(); ++i) {
+      csv_log_file_ << "," << dq_goal[i];
+    }
+
     // Filter parameters
-    csv_log_file_ << "," << params_.filter.q << "," << params_.filter.dq
-                  << "," << params_.filter.output_torque;
+    csv_log_file_ << "," << params_.filter.q << "," << params_.filter.dq << ","
+                  << params_.filter.output_torque;
 
     csv_log_file_ << std::endl;
   }
@@ -1335,7 +1391,9 @@ Eigen::VectorXd CartesianController::computeControlTorques(
   // Compute gravity compensation
   Eigen::VectorXd tau_gravity_local =
       params_.use_gravity_compensation
-          ? Eigen::VectorXd(params_.gravity_scale * pinocchio::computeGeneralizedGravity(model_, data_, q_pin))
+          ? Eigen::VectorXd(
+                params_.gravity_scale *
+                pinocchio::computeGeneralizedGravity(model_, data_, q_pin))
           : Eigen::VectorXd::Zero(model_.nv);
 
   // Compute Coriolis compensation

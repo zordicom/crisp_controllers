@@ -213,6 +213,10 @@ private:
   Eigen::VectorXd q_ref;
   /** @brief Reference joint velocities */
   Eigen::VectorXd dq_ref;
+  /** @brief Desired goal joint positions sent to position interface */
+  Eigen::VectorXd q_goal;
+  /** @brief Desired goal joint velocities sent to velocity interface */
+  Eigen::VectorXd dq_goal;
 
   /** @brief Previously computed torque */
   Eigen::VectorXd tau_previous;
