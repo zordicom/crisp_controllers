@@ -341,32 +341,37 @@ CartesianController::update(const rclcpp::Time &time,
   // (nullspace_projection * (q_ref - q)) This gives joint positions that
   // satisfy both Cartesian goal and posture objective
 
-  // Compute goal position components
-  Eigen::VectorXd q_task = J_pinv * error;
-  Eigen::VectorXd q_nullspace_update = nullspace_projection * (q_ref - q);
-  Eigen::VectorXd q_goal_new = q + q_task + q_nullspace_update;
+  // In gravity-only mode, set q_goal to current position (no position control)
+  if (params_.gravity_only_mode) {
+    q_goal = q;
+  } else {
+    // Compute goal position components
+    Eigen::VectorXd q_task = J_pinv * error;
+    Eigen::VectorXd q_nullspace_update = nullspace_projection * (q_ref - q);
+    Eigen::VectorXd q_goal_new = q + q_task + q_nullspace_update;
 
-  // Check for discontinuities in q_goal (warn if jump > 1 radian)
-  static int goal_discontinuity_counter = 0;
-  if (goal_discontinuity_counter++ % 10 == 0) {  // Check every 10 cycles
-    Eigen::VectorXd q_goal_delta = q_goal_new - q_goal;
-    double max_jump = q_goal_delta.cwiseAbs().maxCoeff();
-    if (max_jump > 1.0) {
-      RCLCPP_WARN(get_node()->get_logger(),
-                  "Large q_goal discontinuity detected: %.2f rad (max safe: 1.0 rad)",
-                  max_jump);
-      // Log which joint and the components
-      for (int i = 0; i < model_.nv; ++i) {
-        if (std::abs(q_goal_delta[i]) > 1.0) {
-          RCLCPP_WARN(get_node()->get_logger(),
-                      "  Joint %d: delta=%.2f rad (q_task=%.2f, q_null=%.2f)",
-                      i, q_goal_delta[i], q_task[i], q_nullspace_update[i]);
+    // Check for discontinuities in q_goal (warn if jump > 1 radian)
+    static int goal_discontinuity_counter = 0;
+    if (goal_discontinuity_counter++ % 10 == 0) {  // Check every 10 cycles
+      Eigen::VectorXd q_goal_delta = q_goal_new - q_goal;
+      double max_jump = q_goal_delta.cwiseAbs().maxCoeff();
+      if (max_jump > 1.0) {
+        RCLCPP_WARN(get_node()->get_logger(),
+                    "Large q_goal discontinuity detected: %.2f rad (max safe: 1.0 rad)",
+                    max_jump);
+        // Log which joint and the components
+        for (int i = 0; i < model_.nv; ++i) {
+          if (std::abs(q_goal_delta[i]) > 1.0) {
+            RCLCPP_WARN(get_node()->get_logger(),
+                        "  Joint %d: delta=%.2f rad (q_task=%.2f, q_null=%.2f)",
+                        i, q_goal_delta[i], q_task[i], q_nullspace_update[i]);
+          }
         }
       }
     }
-  }
 
-  q_goal = q_goal_new;
+    q_goal = q_goal_new;
+  }
 
   // Set dq_goal to zero - we're doing position control, not velocity tracking
   // The old calculation was producing unrealistically large velocities (>1000 rad/s)
