@@ -368,30 +368,36 @@ CartesianController::update(const rclcpp::Time &time,
 
   q_goal = q_goal_new;
 
+  // Set dq_goal to zero - we're doing position control, not velocity tracking
+  // The old calculation was producing unrealistically large velocities (>1000 rad/s)
+  // due to low damping values and Jacobian singularities
+  dq_goal = Eigen::VectorXd::Zero(model_.nv);
+
+  // OLD CODE (removed):
   // Calculate dq_goal using Cartesian velocity approach
   // Task space velocity: x_dot = K * error / D (avoid matrix inverse for numerical stability)
   // Use element-wise division to handle zero damping gracefully
-  Eigen::VectorXd x_dot_desired = Eigen::VectorXd::Zero(6);
-  for (int i = 0; i < 6; ++i) {
-    if (std::abs(damping(i, i)) > 1e-6) {
-      x_dot_desired[i] = stiffness(i, i) * error[i] / damping(i, i);
-    }
-    // else: leave as zero when damping is zero (no velocity command)
-  }
-
-  // Nullspace velocity: dq_null = K_null * (q_ref - q) / D_null
-  // Use element-wise division to handle zero damping gracefully
-  Eigen::VectorXd q_error_nullspace = q_ref - q;
-  Eigen::VectorXd dq_nullspace = Eigen::VectorXd::Zero(model_.nv);
-  for (int i = 0; i < model_.nv; ++i) {
-    if (std::abs(nullspace_damping(i, i)) > 1e-6) {
-      dq_nullspace[i] = nullspace_stiffness(i, i) * q_error_nullspace[i] / nullspace_damping(i, i);
-    }
-    // else: leave as zero when nullspace damping is zero
-  }
-
-  // Map to joint space with nullspace projection
-  dq_goal = J_pinv * x_dot_desired + nullspace_projection * dq_nullspace;
+  // Eigen::VectorXd x_dot_desired = Eigen::VectorXd::Zero(6);
+  // for (int i = 0; i < 6; ++i) {
+  //   if (std::abs(damping(i, i)) > 1e-6) {
+  //     x_dot_desired[i] = stiffness(i, i) * error[i] / damping(i, i);
+  //   }
+  //   // else: leave as zero when damping is zero (no velocity command)
+  // }
+  //
+  // // Nullspace velocity: dq_null = K_null * (q_ref - q) / D_null
+  // // Use element-wise division to handle zero damping gracefully
+  // Eigen::VectorXd q_error_nullspace = q_ref - q;
+  // Eigen::VectorXd dq_nullspace = Eigen::VectorXd::Zero(model_.nv);
+  // for (int i = 0; i < model_.nv; ++i) {
+  //   if (std::abs(nullspace_damping(i, i)) > 1e-6) {
+  //     dq_nullspace[i] = nullspace_stiffness(i, i) * q_error_nullspace[i] / nullspace_damping(i, i);
+  //   }
+  //   // else: leave as zero when nullspace damping is zero
+  // }
+  //
+  // // Map to joint space with nullspace projection
+  // dq_goal = J_pinv * x_dot_desired + nullspace_projection * dq_nullspace;
 
   // Check for NaN or unreasonable values in dq_goal
   static int dq_goal_check_counter = 0;
