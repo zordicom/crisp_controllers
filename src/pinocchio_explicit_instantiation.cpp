@@ -2,6 +2,9 @@
 // This file instantiates all commonly used Pinocchio templates once
 // to avoid redundant instantiation in multiple translation units
 
+#include <Eigen/Core>
+#include <Eigen/Dense>
+
 #include <pinocchio/multibody/model.hpp>
 #include <pinocchio/multibody/data.hpp>
 #include <pinocchio/algorithm/kinematics.hpp>

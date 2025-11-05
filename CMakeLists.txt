@@ -84,12 +84,19 @@ add_library(
 target_include_directories(pinocchio_instantiations
     PUBLIC
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+        ${EIGEN3_INCLUDE_DIR}
 )
 
 ament_target_dependencies(pinocchio_instantiations
     PUBLIC
-    pinocchio
     Eigen3
+    pinocchio
+)
+
+# Ensure Eigen is found and linked properly
+target_link_libraries(pinocchio_instantiations
+    PUBLIC
+    Eigen3::Eigen
 )
 
 # Disable unity build for explicit instantiation library
