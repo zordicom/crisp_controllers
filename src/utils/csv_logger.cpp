@@ -1,32 +1,37 @@
 #include "crisp_controllers/utils/csv_logger.hpp"
-#include <iostream>
 #include <iomanip>
+#include <iostream>
 #include <pinocchio/math/rpy.hpp>
 
 namespace crisp_controllers {
 
-ControllerCSVLogger::ControllerCSVLogger(const std::string& controller_name,
+ControllerCSVLogger::ControllerCSVLogger(const std::string &controller_name,
                                          rclcpp::Logger logger)
     : controller_name_(controller_name), logger_(logger) {}
 
-ControllerCSVLogger::~ControllerCSVLogger() {
-  close();
-}
+ControllerCSVLogger::~ControllerCSVLogger() { close(); }
 
-bool ControllerCSVLogger::initialize(size_t num_joints, const rclcpp::Time& start_time) {
+bool ControllerCSVLogger::initialize(size_t num_joints,
+                                     const rclcpp::Time &start_time) {
   num_joints_ = num_joints;
   start_time_ = start_time;
 
+  const char *user_ws = std::getenv("USER_WS");
+  if (!user_ws) {
+    return false;
+  }
+
   // Create log file directory
-  std::filesystem::path log_dir = "/tmp/controller_logs";
+  std::filesystem::path log_dir =
+      std::string(user_ws) + "/crisp_controller_logs";
   std::filesystem::create_directories(log_dir);
 
   // Generate filename with timestamp
   auto now = std::chrono::system_clock::now();
   auto time_t = std::chrono::system_clock::to_time_t(now);
   std::stringstream filename_stream;
-  filename_stream << log_dir.string() << "/" << controller_name_
-                  << "_log_" << std::put_time(std::localtime(&time_t), "%Y%m%d_%H%M%S")
+  filename_stream << log_dir.string() << "/" << controller_name_ << "_log_"
+                  << std::put_time(std::localtime(&time_t), "%Y%m%d_%H%M%S")
                   << ".csv";
 
   std::string log_filename = filename_stream.str();
@@ -34,11 +39,13 @@ bool ControllerCSVLogger::initialize(size_t num_joints, const rclcpp::Time& star
 
   if (csv_file_.is_open()) {
     logging_enabled_ = true;
-    RCLCPP_INFO(logger_, "CSV logging enabled, writing to: %s", log_filename.c_str());
+    RCLCPP_INFO(logger_, "CSV logging enabled, writing to: %s",
+                log_filename.c_str());
     writeHeader(num_joints);
     return true;
   } else {
-    RCLCPP_ERROR(logger_, "Failed to open CSV log file: %s", log_filename.c_str());
+    RCLCPP_ERROR(logger_, "Failed to open CSV log file: %s",
+                 log_filename.c_str());
     logging_enabled_ = false;
     return false;
   }
@@ -69,8 +76,8 @@ void ControllerCSVLogger::writeHeader(size_t num_joints) {
   for (size_t i = 0; i < num_joints; ++i) {
     csv_file_ << ",tau_task_" << i << ",tau_nullspace_" << i
               << ",tau_joint_limits_" << i << ",tau_friction_" << i
-              << ",tau_coriolis_" << i << ",tau_gravity_" << i
-              << ",tau_wrench_" << i << ",tau_total_" << i;
+              << ",tau_coriolis_" << i << ",tau_gravity_" << i << ",tau_wrench_"
+              << i << ",tau_total_" << i;
   }
 
   // Error metrics header
@@ -123,20 +130,22 @@ void ControllerCSVLogger::writeHeader(size_t num_joints) {
   csv_file_ << std::endl;
 }
 
-void ControllerCSVLogger::writePose(const pinocchio::SE3& pose) {
-  const auto& trans = pose.translation();
-  const auto& quat = Eigen::Quaterniond(pose.rotation());
+void ControllerCSVLogger::writePose(const pinocchio::SE3 &pose) {
+  const auto &trans = pose.translation();
+  const auto &quat = Eigen::Quaterniond(pose.rotation());
 
   csv_file_ << "," << trans[0] << "," << trans[1] << "," << trans[2];
-  csv_file_ << "," << quat.w() << "," << quat.x() << "," << quat.y() << "," << quat.z();
+  csv_file_ << "," << quat.w() << "," << quat.x() << "," << quat.y() << ","
+            << quat.z();
 }
 
-void ControllerCSVLogger::writeRPY(const pinocchio::SE3& pose) {
+void ControllerCSVLogger::writeRPY(const pinocchio::SE3 &pose) {
   auto rpy = pinocchio::rpy::matrixToRpy(pose.rotation());
   csv_file_ << "," << rpy[0] << "," << rpy[1] << "," << rpy[2];
 }
 
-void ControllerCSVLogger::logData(const ControllerLogData& data, const rclcpp::Time& current_time) {
+void ControllerCSVLogger::logData(const ControllerLogData &data,
+                                  const rclcpp::Time &current_time) {
   if (!logging_enabled_ || !csv_file_.is_open()) {
     return;
   }
@@ -157,21 +166,18 @@ void ControllerCSVLogger::logData(const ControllerLogData& data, const rclcpp::T
 
   // Write torque components
   for (int i = 0; i < data.tau_task.size(); ++i) {
-    csv_file_ << "," << data.tau_task[i]
-              << "," << data.tau_nullspace[i]
-              << "," << data.tau_joint_limits[i]
-              << "," << data.tau_friction[i]
-              << "," << data.tau_coriolis[i]
-              << "," << data.tau_gravity[i]
-              << "," << data.tau_wrench[i]
-              << "," << data.tau_total[i];
+    csv_file_ << "," << data.tau_task[i] << "," << data.tau_nullspace[i] << ","
+              << data.tau_joint_limits[i] << "," << data.tau_friction[i] << ","
+              << data.tau_coriolis[i] << "," << data.tau_gravity[i] << ","
+              << data.tau_wrench[i] << "," << data.tau_total[i];
   }
 
   // Write error metrics
   for (int i = 0; i < 6; ++i) {
     csv_file_ << "," << data.error[i];
   }
-  csv_file_ << "," << data.error_rot_magnitude << "," << data.error_pos_magnitude;
+  csv_file_ << "," << data.error_rot_magnitude << ","
+            << data.error_pos_magnitude;
 
   // Write poses
   writePose(data.current_pose);
@@ -208,7 +214,8 @@ void ControllerCSVLogger::logData(const ControllerLogData& data, const rclcpp::T
   }
 
   // Write filter parameters
-  csv_file_ << "," << data.filter_q << "," << data.filter_dq << "," << data.filter_output_torque;
+  csv_file_ << "," << data.filter_q << "," << data.filter_dq << ","
+            << data.filter_output_torque;
 
   // Write timing information
   csv_file_ << "," << data.loop_duration_ms;
