@@ -1,3 +1,6 @@
+#ifndef CRISP_CONTROLLERS_UTILS_PSEUDO_INVERSE_HPP
+#define CRISP_CONTROLLERS_UTILS_PSEUDO_INVERSE_HPP
+
 #include <Eigen/Core>
 #include <Eigen/LU>
 #include <Eigen/SVD>
@@ -41,3 +44,5 @@ inline bool is_near_singular(const Eigen::MatrixXd &matrix, double epsilon = 1e-
 
 
 } // namespace crisp_controllers
+
+#endif // CRISP_CONTROLLERS_UTILS_PSEUDO_INVERSE_HPP

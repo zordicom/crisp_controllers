@@ -23,6 +23,13 @@ fi
 # Build with optimized settings
 echo -e "${GREEN}Building with optimized settings...${NC}"
 
+# Check if gold linker is available
+LINKER_FLAGS=""
+if command -v ld.gold &> /dev/null; then
+    echo -e "${YELLOW}Using gold linker for faster linking${NC}"
+    LINKER_FLAGS="-DCMAKE_EXE_LINKER_FLAGS=-fuse-ld=gold"
+fi
+
 # For development builds (faster compilation, reasonable runtime performance)
 colcon build \
     --packages-select crisp_controllers \
@@ -31,7 +38,7 @@ colcon build \
         -DUSE_PRECOMPILED_HEADERS=ON \
         -DUSE_UNITY_BUILD=ON \
         -DCMAKE_CXX_FLAGS="-pipe" \
-        -DCMAKE_EXE_LINKER_FLAGS="-fuse-ld=gold" \
+        $LINKER_FLAGS \
     --parallel-workers $JOBS
 
 # Print ccache statistics

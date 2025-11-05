@@ -1,3 +1,6 @@
+#ifndef CRISP_CONTROLLERS_UTILS_JOINT_LIMITS_HPP
+#define CRISP_CONTROLLERS_UTILS_JOINT_LIMITS_HPP
+
 #include <Eigen/Dense>
 
 using namespace Eigen;
@@ -29,3 +32,5 @@ inline Eigen::VectorXd get_joint_limit_torque(const VectorXd &joint_positions,
                 .matrix();
   return torques;
 }
+
+#endif // CRISP_CONTROLLERS_UTILS_JOINT_LIMITS_HPP
