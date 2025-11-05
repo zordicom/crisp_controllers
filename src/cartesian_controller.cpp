@@ -133,8 +133,6 @@ CartesianController::update(const rclcpp::Time &time,
       pinocchio::log6(target_pose_), pinocchio::log6(new_target_pose),
       params_.filter.target_pose));
 
-  /*target_pose_ = pinocchio::SE3(target_orientation_.toRotationMatrix(),
-   * target_position_);*/
 
   // Get end-effector pose in world frame (as Pinocchio provides it)
   end_effector_pose = data_.oMf[end_effector_frame_id];
@@ -304,8 +302,6 @@ CartesianController::update(const rclcpp::Time &time,
 
   // Vectorized clamping: tau_d = min(max(tau_d, -limits), limits)
   tau_d = tau_d.cwiseMin(tau_limits).cwiseMax(-tau_limits);
-  /*tau_d = exponential_moving_average(tau_d, tau_previous,*/
-  /*                                   params_.filter.output_torque);*/
 
   // Log commanded torques every 100 cycles (~1Hz at 100Hz update rate)
   static int torque_log_counter = 0;
@@ -1109,13 +1105,11 @@ void CartesianController::parse_target_joint_() {
     for (size_t i = 0; i < msg->position.size(); ++i) {
       q_ref[i] = msg->position[i];
     }
-    /*filterJointValues(msg->name, msg->position, params_.joints, q_ref);*/
   }
   if (msg->velocity.size()) {
     for (size_t i = 0; i < msg->position.size(); ++i) {
       dq_ref[i] = msg->velocity[i];
     }
-    /*filterJointValues(msg->name, msg->velocity, params_.joints, dq_ref);*/
   }
 }
 
@@ -1138,10 +1132,6 @@ void CartesianController::log_debug_info(const rclcpp::Time &time) {
     RCLCPP_INFO_STREAM_THROTTLE(
         get_node()->get_logger(), *get_node()->get_clock(), 1000,
         "end_effector_pos" << end_effector_pose.translation());
-    /*RCLCPP_INFO_STREAM_THROTTLE(get_node()->get_logger(),
-     * *get_node()->get_clock(),*/
-    /*                            1000, "end_effector_rot" <<
-     * end_effector_pose.rotation());*/
     RCLCPP_INFO_STREAM_THROTTLE(get_node()->get_logger(),
                                 *get_node()->get_clock(), 1000,
                                 "q: " << q.transpose());
@@ -1220,9 +1210,6 @@ void CartesianController::log_debug_info(const rclcpp::Time &time) {
     RCLCPP_INFO_STREAM_THROTTLE(get_node()->get_logger(),
                                 *get_node()->get_clock(), 1000,
                                 "M: " << data_.M);
-    /*RCLCPP_INFO_STREAM_THROTTLE(get_node()->get_logger(),
-     * *get_node()->get_clock(),*/
-    /*                            1000, "Mx: " << Mx);*/
     RCLCPP_INFO_STREAM_THROTTLE(get_node()->get_logger(),
                                 *get_node()->get_clock(), 1000,
                                 "Minv: " << data_.Minv);
