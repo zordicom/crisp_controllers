@@ -1,4 +1,5 @@
 #include "crisp_controllers/utils/csv_logger.hpp"
+#include "crisp_controllers/utils/async_csv_logger.hpp"
 #include "crisp_controllers/utils/fiters.hpp"
 #include "crisp_controllers/utils/torque_rate_saturation.hpp"
 
@@ -1000,11 +1001,29 @@ CallbackReturn CartesianController::on_activate(
 
   // Open CSV log file if logging is enabled
   if (params_.log.enabled) {
-    csv_logger_ = std::make_unique<ControllerCSVLogger>(
-        get_node()->get_name(), get_node()->get_logger());
+    if (params_.log.use_async_logging) {
+      // Use async logger for better real-time performance
+      async_csv_logger_ = std::make_unique<AsyncCSVLogger>(
+          get_node()->get_name(), get_node()->get_logger());
 
-    if (!csv_logger_->initialize(num_joints, get_node()->now())) {
-      return CallbackReturn::ERROR;
+      if (!async_csv_logger_->initialize(num_joints, get_node()->now())) {
+        RCLCPP_ERROR(get_node()->get_logger(), "Failed to initialize async CSV logger");
+        return CallbackReturn::ERROR;
+      }
+
+      RCLCPP_INFO(get_node()->get_logger(),
+                  "Using ASYNC CSV logging for improved real-time performance");
+    } else {
+      // Fallback to synchronous logger
+      csv_logger_ = std::make_unique<ControllerCSVLogger>(
+          get_node()->get_name(), get_node()->get_logger());
+
+      if (!csv_logger_->initialize(num_joints, get_node()->now())) {
+        return CallbackReturn::ERROR;
+      }
+
+      RCLCPP_WARN(get_node()->get_logger(),
+                  "Using SYNCHRONOUS CSV logging - may impact real-time performance!");
     }
   }
 
@@ -1018,6 +1037,12 @@ controller_interface::CallbackReturn CartesianController::on_deactivate(
   if (csv_logger_) {
     csv_logger_->close();
     csv_logger_.reset();
+  }
+
+  // Close async CSV logger if it was opened
+  if (async_csv_logger_) {
+    async_csv_logger_->close();
+    async_csv_logger_.reset();
   }
 
   return CallbackReturn::SUCCESS;
@@ -1177,7 +1202,10 @@ void CartesianController::log_debug_info(const rclcpp::Time &time) {
   }
 
   // Write CSV data if logging is enabled
-  if (csv_logger_ && csv_logger_->isLoggingEnabled()) {
+  bool should_log = (csv_logger_ && csv_logger_->isLoggingEnabled()) ||
+                    (async_csv_logger_ && async_csv_logger_->isLoggingEnabled());
+
+  if (should_log) {
     ControllerLogData log_data;
 
     // Populate log data structure
@@ -1218,7 +1246,12 @@ void CartesianController::log_debug_info(const rclcpp::Time &time) {
     log_data.filter_dq = params_.filter.dq;
     log_data.filter_output_torque = params_.filter.output_torque;
 
-    csv_logger_->logData(log_data, time);
+    // Use appropriate logger based on configuration
+    if (async_csv_logger_ && async_csv_logger_->isLoggingEnabled()) {
+      async_csv_logger_->logData(log_data, time);
+    } else if (csv_logger_ && csv_logger_->isLoggingEnabled()) {
+      csv_logger_->logData(log_data, time);
+    }
   }
 }
 

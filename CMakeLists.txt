@@ -64,6 +64,7 @@ add_library(
         src/torque_feedback_controller.cpp
         src/twist_broadcaster.cpp
         src/utils/csv_logger.cpp
+        src/utils/async_csv_logger.cpp
 )
 
 target_include_directories(${PROJECT_NAME}
