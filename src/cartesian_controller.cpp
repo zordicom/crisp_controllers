@@ -64,6 +64,9 @@ controller_interface::return_type
 CartesianController::update(const rclcpp::Time &time,
                             const rclcpp::Duration & /*period*/) {
 
+  // Start timing the control loop
+  auto loop_start_time = get_node()->get_clock()->now();
+
   size_t num_joints = params_.joints.size();
 
   // Log first update to compare with on_activate values
@@ -1255,6 +1258,10 @@ void CartesianController::log_debug_info(const rclcpp::Time &time) {
     log_data.filter_q = params_.filter.q;
     log_data.filter_dq = params_.filter.dq;
     log_data.filter_output_torque = params_.filter.output_torque;
+
+    // Calculate control loop duration
+    auto loop_end_time = get_node()->get_clock()->now();
+    log_data.loop_duration_ms = (loop_end_time - loop_start_time).nanoseconds() * 1e-6;
 
     // Use appropriate logger based on configuration
     if (async_csv_logger_ && async_csv_logger_->isLoggingEnabled()) {
