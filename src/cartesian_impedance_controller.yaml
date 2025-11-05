@@ -199,6 +199,10 @@ cartesian_impedance_controller:
       type: bool
       default_value: false
       description: "If set so to true, log some debugging statements."
+    use_async_logging:
+      type: bool
+      default_value: true
+      description: "If true, use asynchronous CSV logging in a background thread for better real-time performance. If false, use synchronous logging (may impact control loop timing)."
     robot_state:
       type: bool
       default_value: false

@@ -32,8 +32,9 @@ using CallbackReturn =
 
 namespace crisp_controllers {
 
-// Forward declaration
+// Forward declarations
 class ControllerCSVLogger;
+class AsyncCSVLogger;
 
 /**
  * @brief Controller implementing Cartesian control
@@ -357,6 +358,9 @@ private:
   size_t csv_flush_counter_ = 0;
   /** @brief CSV logger instance for controller diagnostics */
   std::unique_ptr<ControllerCSVLogger> csv_logger_;
+
+  /** @brief Async CSV logger for non-blocking logging */
+  std::unique_ptr<AsyncCSVLogger> async_csv_logger_;
 };
 
 } // namespace crisp_controllers
