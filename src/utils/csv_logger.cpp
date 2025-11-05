@@ -117,6 +117,9 @@ void ControllerCSVLogger::writeHeader(size_t num_joints) {
   // Filter parameters header
   csv_file_ << ",filter_q,filter_dq,filter_output_torque";
 
+  // Timing header
+  csv_file_ << ",loop_duration_ms";
+
   csv_file_ << std::endl;
 }
 
@@ -207,6 +210,9 @@ void ControllerCSVLogger::logData(const ControllerLogData& data, const rclcpp::T
 
   // Write filter parameters
   csv_file_ << "," << data.filter_q << "," << data.filter_dq << "," << data.filter_output_torque;
+
+  // Write timing information
+  csv_file_ << "," << data.loop_duration_ms;
 
   csv_file_ << std::endl;
 

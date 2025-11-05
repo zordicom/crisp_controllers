@@ -59,6 +59,9 @@ struct ControllerLogData {
   double filter_q;
   double filter_dq;
   double filter_output_torque;
+
+  // Timing information
+  double loop_duration_ms;  // Control loop duration in milliseconds
 };
 
 /**
