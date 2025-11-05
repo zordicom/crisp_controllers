@@ -481,9 +481,14 @@ CartesianController::update(const rclcpp::Time &time,
 
   tau_previous = tau_d;
 
-  params_listener_->refresh_dynamic_parameters();
-  params_ = params_listener_->get_params();
-  setStiffnessAndDamping();
+  // Only refresh parameters periodically to avoid mutex locks every cycle
+  double elapsed_ms = (time - last_param_refresh_time_).seconds() * 1000.0;
+  if (elapsed_ms >= PARAM_REFRESH_INTERVAL_MS) {
+    params_listener_->refresh_dynamic_parameters();
+    params_ = params_listener_->get_params();
+    setStiffnessAndDamping();
+    last_param_refresh_time_ = time;
+  }
 
   log_debug_info(time, loop_start_time);
 
@@ -842,6 +847,9 @@ CallbackReturn CartesianController::on_configure(
 
   // Initialize nullspace projection matrix
   nullspace_projection = Eigen::MatrixXd::Identity(model_.nv, model_.nv);
+
+  // Initialize parameter refresh tracking
+  last_param_refresh_time_ = get_node()->now();
 
   RCLCPP_INFO(get_node()->get_logger(),
               "State interfaces and control vectors initialized.");
@@ -1356,7 +1364,6 @@ Eigen::VectorXd CartesianController::computeControlTorques(
   // Compute nullspace projection
   Eigen::MatrixXd J_pinv =
       pseudo_inverse(J_local, params_.nullspace.regularization);
-  Eigen::MatrixXd Id_nv = Eigen::MatrixXd::Identity(model_.nv, model_.nv);
   Eigen::MatrixXd nullspace_proj;
 
   if (params_.nullspace.projector_type == "dynamic") {
@@ -1364,11 +1371,11 @@ Eigen::VectorXd CartesianController::computeControlTorques(
     auto Mx_inv = J_local * data_.Minv * J_local.transpose();
     auto Mx = pseudo_inverse(Mx_inv);
     auto J_bar = data_.Minv * J_local.transpose() * Mx;
-    nullspace_proj = Id_nv - J_local.transpose() * J_bar.transpose();
+    nullspace_proj = Id_nv_ - J_local.transpose() * J_bar.transpose();
   } else if (params_.nullspace.projector_type == "kinematic") {
-    nullspace_proj = Id_nv - J_pinv * J_local;
+    nullspace_proj = Id_nv_ - J_pinv * J_local;
   } else {
-    nullspace_proj = Eigen::MatrixXd::Identity(model_.nv, model_.nv);
+    nullspace_proj = Id_nv_;
   }
 
   // Compute task-space control torques

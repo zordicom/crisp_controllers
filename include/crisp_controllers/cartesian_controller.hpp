@@ -332,7 +332,8 @@ private:
    * @brief Log debug information based on parameter settings
    * @param time Current time for throttling logs
    */
-  void log_debug_info(const rclcpp::Time &time, const rclcpp::Time &loop_start_time);
+  void log_debug_info(const rclcpp::Time &time,
+                      const rclcpp::Time &loop_start_time);
 
   /**
    * @brief Check publisher count for a specific topic
@@ -344,10 +345,15 @@ private:
   // Logging constants
   static constexpr int LOG_CYCLE_INTERVAL = 100; // Log every 100 cycles
   static constexpr int CSV_FLUSH_INTERVAL = 50;  // Flush CSV every 50 cycles
-  static constexpr int DEBUG_LOG_THROTTLE_MS =
-      1000; // Throttle debug logs to 1Hz
+
+  // Throttle debug logs to 1Hz
+  static constexpr int DEBUG_LOG_THROTTLE_MS = 1000;
   static constexpr int TIMING_LOG_THROTTLE_MS = 2000; // Throttle timing logs
-                                                      //
+
+  // Parameter refresh rate limiting
+  static constexpr double PARAM_REFRESH_INTERVAL_MS = 50.0;
+
+  rclcpp::Time last_param_refresh_time_;
   /** @brief CSV log file stream for controller diagnostics */
   std::ofstream csv_log_file_;
   /** @brief Flag to track if CSV logging is enabled */
