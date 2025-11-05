@@ -1,3 +1,4 @@
+#include "crisp_controllers/utils/csv_logger.hpp"
 #include "crisp_controllers/utils/fiters.hpp"
 #include "crisp_controllers/utils/torque_rate_saturation.hpp"
 
@@ -99,7 +100,8 @@ CartesianController::update(const rclcpp::Time &time,
 
     // Log velocity filtering for first joint to verify it's working
     if (i == 0) {
-      // Throttle logging to every LOG_CYCLE_INTERVAL cycles (~1Hz at 100Hz update rate)
+      // Throttle logging to every LOG_CYCLE_INTERVAL cycles (~1Hz at 100Hz
+      // update rate)
       static int vel_log_counter = 0;
       if (vel_log_counter++ % LOG_CYCLE_INTERVAL == 0) {
         RCLCPP_INFO(get_node()->get_logger(),
@@ -132,7 +134,6 @@ CartesianController::update(const rclcpp::Time &time,
   target_pose_ = pinocchio::exp6(exponential_moving_average(
       pinocchio::log6(target_pose_), pinocchio::log6(new_target_pose),
       params_.filter.target_pose));
-
 
   // Get end-effector pose in world frame (as Pinocchio provides it)
   end_effector_pose = data_.oMf[end_effector_frame_id];
@@ -303,7 +304,8 @@ CartesianController::update(const rclcpp::Time &time,
   // Vectorized clamping: tau_d = min(max(tau_d, -limits), limits)
   tau_d = tau_d.cwiseMin(tau_limits).cwiseMax(-tau_limits);
 
-  // Log commanded torques every LOG_CYCLE_INTERVAL cycles (~1Hz at 100Hz update rate)
+  // Log commanded torques every LOG_CYCLE_INTERVAL cycles (~1Hz at 100Hz update
+  // rate)
   static int torque_log_counter = 0;
   if (torque_log_counter++ % LOG_CYCLE_INTERVAL == 0) {
     RCLCPP_INFO(get_node()->get_logger(),
@@ -348,13 +350,14 @@ CartesianController::update(const rclcpp::Time &time,
 
     // Check for discontinuities in q_goal (warn if jump > 1 radian)
     static int goal_discontinuity_counter = 0;
-    if (goal_discontinuity_counter++ % 10 == 0) {  // Check every 10 cycles
+    if (goal_discontinuity_counter++ % 10 == 0) { // Check every 10 cycles
       Eigen::VectorXd q_goal_delta = q_goal_new - q_goal;
       double max_jump = q_goal_delta.cwiseAbs().maxCoeff();
       if (max_jump > 1.0) {
-        RCLCPP_WARN(get_node()->get_logger(),
-                    "Large q_goal discontinuity detected: %.2f rad (max safe: 1.0 rad)",
-                    max_jump);
+        RCLCPP_WARN(
+            get_node()->get_logger(),
+            "Large q_goal discontinuity detected: %.2f rad (max safe: 1.0 rad)",
+            max_jump);
         // Log which joint and the components
         for (int i = 0; i < model_.nv; ++i) {
           if (std::abs(q_goal_delta[i]) > 1.0) {
@@ -370,16 +373,16 @@ CartesianController::update(const rclcpp::Time &time,
   }
 
   // Set dq_goal to zero - we're doing position control, not velocity tracking
-  // The old calculation was producing unrealistically large velocities (>1000 rad/s)
-  // due to low damping values and Jacobian singularities
+  // The old calculation was producing unrealistically large velocities (>1000
+  // rad/s) due to low damping values and Jacobian singularities
   dq_goal = Eigen::VectorXd::Zero(model_.nv);
 
   // OLD CODE (removed):
   // Calculate dq_goal using Cartesian velocity approach
-  // Task space velocity: x_dot = K * error / D (avoid matrix inverse for numerical stability)
-  // Use element-wise division to handle zero damping gracefully
-  // Eigen::VectorXd x_dot_desired = Eigen::VectorXd::Zero(6);
-  // for (int i = 0; i < 6; ++i) {
+  // Task space velocity: x_dot = K * error / D (avoid matrix inverse for
+  // numerical stability) Use element-wise division to handle zero damping
+  // gracefully Eigen::VectorXd x_dot_desired = Eigen::VectorXd::Zero(6); for
+  // (int i = 0; i < 6; ++i) {
   //   if (std::abs(damping(i, i)) > 1e-6) {
   //     x_dot_desired[i] = stiffness(i, i) * error[i] / damping(i, i);
   //   }
@@ -392,7 +395,8 @@ CartesianController::update(const rclcpp::Time &time,
   // Eigen::VectorXd dq_nullspace = Eigen::VectorXd::Zero(model_.nv);
   // for (int i = 0; i < model_.nv; ++i) {
   //   if (std::abs(nullspace_damping(i, i)) > 1e-6) {
-  //     dq_nullspace[i] = nullspace_stiffness(i, i) * q_error_nullspace[i] / nullspace_damping(i, i);
+  //     dq_nullspace[i] = nullspace_stiffness(i, i) * q_error_nullspace[i] /
+  //     nullspace_damping(i, i);
   //   }
   //   // else: leave as zero when nullspace damping is zero
   // }
@@ -402,7 +406,7 @@ CartesianController::update(const rclcpp::Time &time,
 
   // Check for NaN or unreasonable values in dq_goal
   static int dq_goal_check_counter = 0;
-  if (dq_goal_check_counter++ % 10 == 0) {  // Check every 10 cycles
+  if (dq_goal_check_counter++ % 10 == 0) { // Check every 10 cycles
     bool has_nan = false;
     bool has_large = false;
     double max_dq = 0.0;
@@ -412,7 +416,7 @@ CartesianController::update(const rclcpp::Time &time,
         has_nan = true;
       }
       double abs_dq = std::abs(dq_goal[i]);
-      if (abs_dq > 10.0) {  // 10 rad/s is very high for most joints
+      if (abs_dq > 10.0) { // 10 rad/s is very high for most joints
         has_large = true;
       }
       max_dq = std::max(max_dq, abs_dq);
@@ -420,14 +424,16 @@ CartesianController::update(const rclcpp::Time &time,
 
     if (has_nan) {
       RCLCPP_ERROR(get_node()->get_logger(),
-                   "NaN or Inf detected in dq_goal! This indicates numerical instability.");
+                   "NaN or Inf detected in dq_goal! This indicates numerical "
+                   "instability.");
       RCLCPP_ERROR(get_node()->get_logger(),
                    "  dq_goal: [%.3f, %.3f, %.3f, %.3f, %.3f, %.3f, %.3f]",
-                   dq_goal[0], dq_goal[1], dq_goal[2], dq_goal[3],
-                   dq_goal[4], dq_goal[5], dq_goal[6]);
+                   dq_goal[0], dq_goal[1], dq_goal[2], dq_goal[3], dq_goal[4],
+                   dq_goal[5], dq_goal[6]);
     } else if (has_large) {
       RCLCPP_WARN(get_node()->get_logger(),
-                  "Large dq_goal detected: max=%.2f rad/s (consider if this is reasonable)",
+                  "Large dq_goal detected: max=%.2f rad/s (consider if this is "
+                  "reasonable)",
                   max_dq);
     }
   }
@@ -669,7 +675,8 @@ CallbackReturn CartesianController::on_configure(
           const std::shared_ptr<geometry_msgs::msg::PoseStamped> msg) -> void {
     if (!check_topic_publisher_count("target_pose")) {
       RCLCPP_WARN_THROTTLE(
-          get_node()->get_logger(), *get_node()->get_clock(), DEBUG_LOG_THROTTLE_MS,
+          get_node()->get_logger(), *get_node()->get_clock(),
+          DEBUG_LOG_THROTTLE_MS,
           "Ignoring target_pose message due to multiple publishers detected!");
       return;
     }
@@ -706,7 +713,8 @@ CallbackReturn CartesianController::on_configure(
       [this](const std::shared_ptr<sensor_msgs::msg::JointState> msg) -> void {
     if (!check_topic_publisher_count("target_joint")) {
       RCLCPP_WARN_THROTTLE(
-          get_node()->get_logger(), *get_node()->get_clock(), DEBUG_LOG_THROTTLE_MS,
+          get_node()->get_logger(), *get_node()->get_clock(),
+          DEBUG_LOG_THROTTLE_MS,
           "Ignoring target_joint message due to multiple publishers detected!");
       return;
     }
@@ -947,111 +955,11 @@ CallbackReturn CartesianController::on_activate(
 
   // Open CSV log file if logging is enabled
   if (params_.log.enabled) {
-    // Get user workspace directory
-    const char *user_ws = std::getenv("USER_WS");
-    if (!user_ws) {
-      RCLCPP_ERROR(
-          get_node()->get_logger(),
-          "USER_WS environment variable not set. Cannot create log directory.");
+    csv_logger_ = std::make_unique<ControllerCSVLogger>(
+        get_node()->get_name(), get_node()->get_logger());
+
+    if (!csv_logger_->initialize(num_joints, get_node()->now())) {
       return CallbackReturn::ERROR;
-    }
-
-    std::string log_dir = std::string(user_ws) + "/crisp_controller_logs";
-
-    // Get timestamp with millisecond precision
-    auto now = get_node()->now();
-    int64_t timestamp_ms = now.seconds() * 1000 + now.nanoseconds() / 1000000;
-
-    std::string log_filename = log_dir + "/" + get_node()->get_name() + "_" +
-                               std::to_string(timestamp_ms) + ".csv";
-
-    // Create directory if it doesn't exist
-    std::filesystem::create_directories(log_dir);
-
-    csv_log_file_.open(log_filename, std::ios::out);
-    if (csv_log_file_.is_open()) {
-      csv_logging_enabled_ = true;
-      csv_log_start_time_ = get_node()->now();
-      csv_flush_counter_ = 0;
-
-      // Write CSV header with all data merged from both original files
-      csv_log_file_ << "timestamp";
-
-      // Task space forces (6 DOF: x, y, z, rx, ry, rz)
-      csv_log_file_ << ",task_force_P_x,task_force_P_y,task_force_P_z,task_"
-                       "force_P_rx,task_force_P_ry,task_force_P_rz";
-      csv_log_file_ << ",task_force_D_x,task_force_D_y,task_force_D_z,task_"
-                       "force_D_rx,task_force_D_ry,task_force_D_rz";
-      csv_log_file_
-          << ",task_force_total_x,task_force_total_y,task_force_total_z,task_"
-             "force_total_rx,task_force_total_ry,task_force_total_rz";
-
-      // Add torque columns for each joint
-      for (auto i = 0u; i < num_joints; ++i) {
-        csv_log_file_ << ",tau_task_" << i << ",tau_nullspace_" << i
-                      << ",tau_joint_limits_" << i << ",tau_friction_" << i
-                      << ",tau_coriolis_" << i << ",tau_gravity_" << i
-                      << ",tau_wrench_" << i << ",tau_total_" << i;
-      }
-
-      // Add error columns (6 DOF: x, y, z, rx, ry, rz)
-      csv_log_file_ << ",error_x,error_y,error_z,error_rx,error_ry,error_rz";
-      csv_log_file_
-          << ",error_rot_magnitude,error_pos_magnitude,error_xyz_norm";
-
-      // Add pose columns (current and target) - both quaternion and RPY
-      csv_log_file_ << ",current_x,current_y,current_z,current_qw,current_qx,"
-                       "current_qy,current_qz";
-      csv_log_file_ << ",current_roll,current_pitch,current_yaw";
-      csv_log_file_ << ",target_x,target_y,target_z,target_qw,target_qx,target_"
-                       "qy,target_qz";
-      csv_log_file_ << ",target_roll,target_pitch,target_yaw";
-
-      // Stiffness and damping values
-      csv_log_file_ << ",k_pos_x,k_pos_y,k_pos_z,k_rot_x,k_rot_y,k_rot_z";
-      csv_log_file_ << ",d_pos_x,d_pos_y,d_pos_z,d_rot_x,d_rot_y,d_rot_z";
-
-      // Raw joint positions (before filtering)
-      for (auto i = 0u; i < num_joints; ++i) {
-        csv_log_file_ << ",q_raw_" << i;
-      }
-
-      // Filtered joint positions
-      for (auto i = 0u; i < num_joints; ++i) {
-        csv_log_file_ << ",q_filtered_" << i;
-      }
-
-      // Raw joint velocities (before filtering)
-      for (auto i = 0u; i < num_joints; ++i) {
-        csv_log_file_ << ",dq_raw_" << i;
-      }
-
-      // Filtered joint velocities
-      for (auto i = 0u; i < num_joints; ++i) {
-        csv_log_file_ << ",dq_filtered_" << i;
-      }
-
-      // Goal joint positions (desired configuration)
-      for (auto i = 0u; i < num_joints; ++i) {
-        csv_log_file_ << ",q_goal_" << i;
-      }
-
-      // Goal joint velocities (desired velocity)
-      for (auto i = 0u; i < num_joints; ++i) {
-        csv_log_file_ << ",dq_goal_" << i;
-      }
-
-      // Filter parameters
-      csv_log_file_ << ",filter_q,filter_dq,filter_output_torque";
-
-      csv_log_file_ << std::endl;
-
-      RCLCPP_INFO(get_node()->get_logger(), "CSV logging enabled: %s",
-                  log_filename.c_str());
-    } else {
-      csv_logging_enabled_ = false;
-      RCLCPP_WARN(get_node()->get_logger(), "Failed to open CSV log file: %s",
-                  log_filename.c_str());
     }
   }
 
@@ -1061,13 +969,10 @@ CallbackReturn CartesianController::on_activate(
 
 controller_interface::CallbackReturn CartesianController::on_deactivate(
     const rclcpp_lifecycle::State & /*previous_state*/) {
-  // Close CSV log file if it was opened
-  if (csv_logging_enabled_ && csv_log_file_.is_open()) {
-    // Flush any remaining buffered data before closing
-    csv_log_file_.flush();
-    csv_log_file_.close();
-    csv_logging_enabled_ = false;
-    RCLCPP_INFO(get_node()->get_logger(), "CSV log file closed.");
+  // Close CSV logger if it was opened
+  if (csv_logger_) {
+    csv_logger_->close();
+    csv_logger_.reset();
   }
 
   return CallbackReturn::SUCCESS;
@@ -1129,9 +1034,10 @@ void CartesianController::log_debug_info(const rclcpp::Time &time) {
                                 *get_node()->get_clock(), DEBUG_LOG_THROTTLE_MS,
                                 "nq: " << model_.nq << ", nv: " << model_.nv);
 
-    RCLCPP_INFO_STREAM_THROTTLE(
-        get_node()->get_logger(), *get_node()->get_clock(), DEBUG_LOG_THROTTLE_MS,
-        "end_effector_pos" << end_effector_pose.translation());
+    RCLCPP_INFO_STREAM_THROTTLE(get_node()->get_logger(),
+                                *get_node()->get_clock(), DEBUG_LOG_THROTTLE_MS,
+                                "end_effector_pos"
+                                    << end_effector_pose.translation());
     RCLCPP_INFO_STREAM_THROTTLE(get_node()->get_logger(),
                                 *get_node()->get_clock(), DEBUG_LOG_THROTTLE_MS,
                                 "q: " << q.transpose());
@@ -1142,7 +1048,8 @@ void CartesianController::log_debug_info(const rclcpp::Time &time) {
                                 *get_node()->get_clock(), DEBUG_LOG_THROTTLE_MS,
                                 "dq: " << dq.transpose());
     RCLCPP_INFO_STREAM_THROTTLE(get_node()->get_logger(),
-                                *get_node()->get_clock(), DEBUG_LOG_THROTTLE_MS, "J: " << J);
+                                *get_node()->get_clock(), DEBUG_LOG_THROTTLE_MS,
+                                "J: " << J);
   }
 
   if (params_.log.control_values) {
@@ -1177,7 +1084,8 @@ void CartesianController::log_debug_info(const rclcpp::Time &time) {
 
   if (params_.log.limits) {
     RCLCPP_INFO_STREAM_THROTTLE(
-        get_node()->get_logger(), *get_node()->get_clock(), DEBUG_LOG_THROTTLE_MS,
+        get_node()->get_logger(), *get_node()->get_clock(),
+        DEBUG_LOG_THROTTLE_MS,
         "joint_limits: " << model_.lowerPositionLimit.transpose() << ", "
                          << model_.upperPositionLimit.transpose());
     RCLCPP_INFO_STREAM_THROTTLE(get_node()->get_logger(),
@@ -1193,7 +1101,8 @@ void CartesianController::log_debug_info(const rclcpp::Time &time) {
                                 *get_node()->get_clock(), DEBUG_LOG_THROTTLE_MS,
                                 "tau_task: " << tau_task.transpose());
     RCLCPP_INFO_STREAM_THROTTLE(
-        get_node()->get_logger(), *get_node()->get_clock(), DEBUG_LOG_THROTTLE_MS,
+        get_node()->get_logger(), *get_node()->get_clock(),
+        DEBUG_LOG_THROTTLE_MS,
         "tau_joint_limits: " << tau_joint_limits.transpose());
     RCLCPP_INFO_STREAM_THROTTLE(get_node()->get_logger(),
                                 *get_node()->get_clock(), DEBUG_LOG_THROTTLE_MS,
@@ -1214,143 +1123,63 @@ void CartesianController::log_debug_info(const rclcpp::Time &time) {
                                 *get_node()->get_clock(), DEBUG_LOG_THROTTLE_MS,
                                 "Minv: " << data_.Minv);
     RCLCPP_INFO_STREAM_THROTTLE(
-        get_node()->get_logger(), *get_node()->get_clock(), DEBUG_LOG_THROTTLE_MS,
-        "nullspace projector: " << nullspace_projection);
+        get_node()->get_logger(), *get_node()->get_clock(),
+        DEBUG_LOG_THROTTLE_MS, "nullspace projector: " << nullspace_projection);
   }
 
   if (params_.log.timing) {
 
     auto t_end = get_node()->get_clock()->now();
     RCLCPP_INFO_STREAM_THROTTLE(
-        get_node()->get_logger(), *get_node()->get_clock(), TIMING_LOG_THROTTLE_MS,
+        get_node()->get_logger(), *get_node()->get_clock(),
+        TIMING_LOG_THROTTLE_MS,
         "Control loop needed: "
             << (t_end.nanoseconds() - time.nanoseconds()) * 1e-6 << " ms");
   }
 
   // Write CSV data if logging is enabled
-  if (csv_logging_enabled_ && csv_log_file_.is_open()) {
-    // Write relative timestamp in seconds (from start of logging)
-    double relative_time = (time - csv_log_start_time_).seconds();
-    csv_log_file_ << relative_time;
+  if (csv_logger_ && csv_logger_->isLoggingEnabled()) {
+    ControllerLogData log_data;
 
-    // Task space forces P (proportional)
+    // Populate log data structure
+    log_data.timestamp = (time - get_node()->now()).seconds();
+    log_data.task_force_P = task_force_P_;
+    log_data.task_force_D = task_force_D_;
+    log_data.task_force_total = task_force_total_;
+
+    log_data.tau_task = tau_task;
+    log_data.tau_nullspace = tau_nullspace;
+    log_data.tau_joint_limits = tau_joint_limits;
+    log_data.tau_friction = tau_friction;
+    log_data.tau_coriolis = tau_coriolis;
+    log_data.tau_gravity = tau_gravity;
+    log_data.tau_wrench = tau_wrench;
+    log_data.tau_total = tau_d;
+
+    log_data.error = error;
+    log_data.error_rot_magnitude = error.tail(3).norm();
+    log_data.error_pos_magnitude = error.head(3).norm();
+
+    log_data.current_pose = end_effector_pose;
+    log_data.target_pose = target_pose_;
+
     for (int i = 0; i < 6; ++i) {
-      csv_log_file_ << "," << task_force_P_[i];
+      log_data.stiffness_diag[i] = stiffness(i, i);
+      log_data.damping_diag[i] = damping(i, i);
     }
 
-    // Task space forces D (damping)
-    for (int i = 0; i < 6; ++i) {
-      csv_log_file_ << "," << task_force_D_[i];
-    }
+    log_data.q_raw = q_raw;
+    log_data.q_filtered = q;
+    log_data.dq_raw = dq_raw;
+    log_data.dq_filtered = dq;
+    log_data.q_goal = q_goal;
+    log_data.dq_goal = dq_goal;
 
-    // Task space forces total
-    for (int i = 0; i < 6; ++i) {
-      csv_log_file_ << "," << task_force_total_[i];
-    }
+    log_data.filter_q = params_.filter.q;
+    log_data.filter_dq = params_.filter.dq;
+    log_data.filter_output_torque = params_.filter.output_torque;
 
-    // Write torque components for each joint
-    for (auto i = 0; i < tau_task.size(); ++i) {
-      csv_log_file_ << "," << tau_task[i] << "," << tau_nullspace[i] << ","
-                    << tau_joint_limits[i] << "," << tau_friction[i] << ","
-                    << tau_coriolis[i] << "," << tau_gravity[i] << ","
-                    << tau_wrench[i] << "," << tau_d[i];
-    }
-
-    // Write error (6 DOF: x, y, z, rx, ry, rz)
-    for (auto i = 0; i < 6; ++i) {
-      csv_log_file_ << "," << error[i];
-    }
-
-    // Error magnitudes
-    double error_rot_magnitude = error.tail(3).norm();
-    double error_pos_magnitude = error.head(3).norm();
-    double error_xyz_norm = error.head(3).norm();
-    csv_log_file_ << "," << error_rot_magnitude << "," << error_pos_magnitude
-                  << "," << error_xyz_norm;
-
-    // Write current pose (position and orientation as quaternion)
-    Eigen::Vector3d current_pos = end_effector_pose.translation();
-    Eigen::Quaterniond current_quat(end_effector_pose.rotation());
-    csv_log_file_ << "," << current_pos.x() << "," << current_pos.y() << ","
-                  << current_pos.z() << "," << current_quat.w() << ","
-                  << current_quat.x() << "," << current_quat.y() << ","
-                  << current_quat.z();
-
-    // Write current orientation as RPY (roll, pitch, yaw)
-    Eigen::Vector3d current_rpy =
-        end_effector_pose.rotation().eulerAngles(0, 1, 2); // Roll, Pitch, Yaw
-    csv_log_file_ << "," << current_rpy[0] << "," << current_rpy[1] << ","
-                  << current_rpy[2];
-
-    // Write target pose (position and orientation as quaternion)
-    Eigen::Vector3d target_pos = target_pose_.translation();
-    Eigen::Quaterniond target_quat(target_pose_.rotation());
-    csv_log_file_ << "," << target_pos.x() << "," << target_pos.y() << ","
-                  << target_pos.z() << "," << target_quat.w() << ","
-                  << target_quat.x() << "," << target_quat.y() << ","
-                  << target_quat.z();
-
-    // Write target orientation as RPY (roll, pitch, yaw)
-    Eigen::Vector3d target_rpy =
-        target_pose_.rotation().eulerAngles(0, 1, 2); // Roll, Pitch, Yaw
-    csv_log_file_ << "," << target_rpy[0] << "," << target_rpy[1] << ","
-                  << target_rpy[2];
-
-    // Stiffness values (diagonal elements)
-    csv_log_file_ << "," << stiffness(0, 0) << "," << stiffness(1, 1) << ","
-                  << stiffness(2, 2);
-    csv_log_file_ << "," << stiffness(3, 3) << "," << stiffness(4, 4) << ","
-                  << stiffness(5, 5);
-
-    // Damping values (diagonal elements)
-    csv_log_file_ << "," << damping(0, 0) << "," << damping(1, 1) << ","
-                  << damping(2, 2);
-    csv_log_file_ << "," << damping(3, 3) << "," << damping(4, 4) << ","
-                  << damping(5, 5);
-
-    // Raw joint positions
-    for (int i = 0; i < q_raw.size(); ++i) {
-      csv_log_file_ << "," << q_raw[i];
-    }
-
-    // Filtered joint positions
-    for (int i = 0; i < q.size(); ++i) {
-      csv_log_file_ << "," << q[i];
-    }
-
-    // Raw joint velocities
-    for (int i = 0; i < dq_raw.size(); ++i) {
-      csv_log_file_ << "," << dq_raw[i];
-    }
-
-    // Filtered joint velocities
-    for (int i = 0; i < dq.size(); ++i) {
-      csv_log_file_ << "," << dq[i];
-    }
-
-    // Goal joint positions
-    for (int i = 0; i < q_goal.size(); ++i) {
-      csv_log_file_ << "," << q_goal[i];
-    }
-
-    // Goal joint velocities
-    for (int i = 0; i < dq_goal.size(); ++i) {
-      csv_log_file_ << "," << dq_goal[i];
-    }
-
-    // Filter parameters
-    csv_log_file_ << "," << params_.filter.q << "," << params_.filter.dq << ","
-                  << params_.filter.output_torque;
-
-    // Use '\n' instead of std::endl to avoid flushing every cycle
-    csv_log_file_ << '\n';
-
-    // Flush every CSV_FLUSH_INTERVAL cycles for better performance
-    csv_flush_counter_++;
-    if (csv_flush_counter_ >= CSV_FLUSH_INTERVAL) {
-      csv_log_file_.flush();
-      csv_flush_counter_ = 0;
-    }
+    csv_logger_->logData(log_data, time);
   }
 }
 

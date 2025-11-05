@@ -2,7 +2,8 @@
 
 /**
  * @file cartesian_controller.hpp
- * @brief Cartesian controller implementation for robot manipulation (supports impedance and OSC)
+ * @brief Cartesian controller implementation for robot manipulation (supports
+ * impedance and OSC)
  * @author Your Organization
  */
 
@@ -19,16 +20,18 @@
 
 #include "realtime_tools/realtime_buffer.hpp"
 #include <crisp_controllers/cartesian_impedance_controller_parameters.hpp>
+#include <memory>
 #include <sensor_msgs/msg/joint_state.hpp>
 #include <string>
 #include <unordered_set>
-#include <fstream>
-#include <filesystem>
 
 using CallbackReturn =
     rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn;
 
 namespace crisp_controllers {
+
+// Forward declaration
+class ControllerCSVLogger;
 
 /**
  * @brief Controller implementing Cartesian control
@@ -38,8 +41,7 @@ namespace crisp_controllers {
  * allowing for compliant interaction with the environment while maintaining
  * desired position and orientation targets.
  */
-class CartesianController
-    : public controller_interface::ControllerInterface {
+class CartesianController : public controller_interface::ControllerInterface {
 public:
   /**
    * @brief Get the command interface configuration
@@ -107,20 +109,20 @@ private:
    * @param time Current time for logging
    * @return Computed control torques
    */
-  Eigen::VectorXd computeControlTorques(
-      const pinocchio::SE3& current_pose,
-      const pinocchio::SE3& target_pose,
-      const Eigen::VectorXd& q,
-      const Eigen::VectorXd& q_pin,
-      const Eigen::VectorXd& dq,
-      const rclcpp::Time& time);
+  Eigen::VectorXd computeControlTorques(const pinocchio::SE3 &current_pose,
+                                        const pinocchio::SE3 &target_pose,
+                                        const Eigen::VectorXd &q,
+                                        const Eigen::VectorXd &q_pin,
+                                        const Eigen::VectorXd &dq,
+                                        const rclcpp::Time &time);
 
   /** @brief Subscription for target pose messages */
   rclcpp::Subscription<geometry_msgs::msg::PoseStamped>::SharedPtr pose_sub_;
   /** @brief Subscription for target joint state messages */
   rclcpp::Subscription<sensor_msgs::msg::JointState>::SharedPtr joint_sub_;
   /** @brief Subscription for target wrench messages */
-  rclcpp::Subscription<geometry_msgs::msg::WrenchStamped>::SharedPtr wrench_sub_;
+  rclcpp::Subscription<geometry_msgs::msg::WrenchStamped>::SharedPtr
+      wrench_sub_;
 
   /** @brief Flag to indicate if multiple publishers detected */
   bool multiple_publishers_detected_;
@@ -134,17 +136,20 @@ private:
   void setStiffnessAndDamping();
 
   /**
-   * @brief Reads the target pose in realtime loop from the buffer and parses it to be used in the controller.
+   * @brief Reads the target pose in realtime loop from the buffer and parses it
+   * to be used in the controller.
    */
   void parse_target_pose_();
 
   /**
-   * @brief Reads the target joint in realtime loop from the buffer and parses it to be used in the controller.
+   * @brief Reads the target joint in realtime loop from the buffer and parses
+   * it to be used in the controller.
    */
   void parse_target_joint_();
 
   /**
-   * @brief Reads the target wrench in realtime loop from the buffer and parses it to be used in the controller.
+   * @brief Reads the target wrench in realtime loop from the buffer and parses
+   * it to be used in the controller.
    */
   void parse_target_wrench_();
 
@@ -152,14 +157,16 @@ private:
   bool new_target_joint_;
   bool new_target_wrench_;
 
-  realtime_tools::RealtimeBuffer<std::shared_ptr<geometry_msgs::msg::PoseStamped>>
-    target_pose_buffer_;
+  realtime_tools::RealtimeBuffer<
+      std::shared_ptr<geometry_msgs::msg::PoseStamped>>
+      target_pose_buffer_;
 
   realtime_tools::RealtimeBuffer<std::shared_ptr<sensor_msgs::msg::JointState>>
-    target_joint_buffer_;
+      target_joint_buffer_;
 
-  realtime_tools::RealtimeBuffer<std::shared_ptr<geometry_msgs::msg::WrenchStamped>>
-    target_wrench_buffer_;
+  realtime_tools::RealtimeBuffer<
+      std::shared_ptr<geometry_msgs::msg::WrenchStamped>>
+      target_wrench_buffer_;
 
   /** @brief Target position in Cartesian space */
   Eigen::Vector3d target_position_;
@@ -201,8 +208,8 @@ private:
   /** @brief Raw joint positions from hardware (before filtering) */
   Eigen::VectorXd q_raw;
   /** @brief Current joint positions with dimension nq.
-   This is size might be different than the actuated dimension of the joint type is different!
-   Check https://github.com/stack-of-tasks/pinocchio/issues/1127
+   This is size might be different than the actuated dimension of the joint type
+   is different! Check https://github.com/stack-of-tasks/pinocchio/issues/1127
   */
   Eigen::VectorXd q_pin;
   /** @brief Current joint velocities */
@@ -236,20 +243,16 @@ private:
   /** @brief Friction parameters 3 of size nv */
   Eigen::VectorXd fp3;
 
-
   /** @brief Allowed type of joints **/
   const std::unordered_set<std::basic_string<char>> allowed_joint_types = {
-    "JointModelRX",
-    "JointModelRY",
-    "JointModelRZ",
-    "JointModelRevoluteUnaligned",
-    "JointModelRUBX",
-    "JointModelRUBY",
-    "JointModelRUBZ",
+      "JointModelRX",   "JointModelRY",
+      "JointModelRZ",   "JointModelRevoluteUnaligned",
+      "JointModelRUBX", "JointModelRUBY",
+      "JointModelRUBZ",
   };
   /** @brief Continous joint types that should be considered separetly. **/
-  const std::unordered_set<std::basic_string<char>> continous_joint_types =
-    {"JointModelRUBX", "JointModelRUBY", "JointModelRUBZ"};
+  const std::unordered_set<std::basic_string<char>> continous_joint_types = {
+      "JointModelRUBX", "JointModelRUBY", "JointModelRUBZ"};
 
   /** @brief Maximum allowed delta values for error clipping */
   Eigen::VectorXd max_delta_ = Eigen::VectorXd::Zero(6);
@@ -290,15 +293,22 @@ private:
    * @brief Log debug information based on parameter settings
    * @param time Current time for throttling logs
    */
-  void log_debug_info(const rclcpp::Time& time);
+  void log_debug_info(const rclcpp::Time &time);
 
   /**
    * @brief Check publisher count for a specific topic
    * @param topic_name Name of the topic to check
    * @return true if publisher count is safe (<=1), false otherwise
    */
-  bool check_topic_publisher_count(const std::string& topic_name);
+  bool check_topic_publisher_count(const std::string &topic_name);
 
+  // Logging constants
+  static constexpr int LOG_CYCLE_INTERVAL = 100; // Log every 100 cycles
+  static constexpr int CSV_FLUSH_INTERVAL = 50;  // Flush CSV every 50 cycles
+  static constexpr int DEBUG_LOG_THROTTLE_MS =
+      1000; // Throttle debug logs to 1Hz
+  static constexpr int TIMING_LOG_THROTTLE_MS = 2000; // Throttle timing logs
+                                                      //
   /** @brief CSV log file stream for controller diagnostics */
   std::ofstream csv_log_file_;
   /** @brief Flag to track if CSV logging is enabled */
@@ -307,12 +317,8 @@ private:
   rclcpp::Time csv_log_start_time_;
   /** @brief Counter to track cycles for periodic CSV flushing */
   size_t csv_flush_counter_ = 0;
-
-  // Logging constants
-  static constexpr int LOG_CYCLE_INTERVAL = 100;  // Log every 100 cycles
-  static constexpr int CSV_FLUSH_INTERVAL = 50;   // Flush CSV every 50 cycles
-  static constexpr int DEBUG_LOG_THROTTLE_MS = 1000;  // Throttle debug logs to 1Hz
-  static constexpr int TIMING_LOG_THROTTLE_MS = 2000; // Throttle timing logs
+  /** @brief CSV logger instance for controller diagnostics */
+  std::unique_ptr<ControllerCSVLogger> csv_logger_;
 };
 
 } // namespace crisp_controllers
