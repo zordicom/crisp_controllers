@@ -1039,6 +1039,9 @@ CallbackReturn CartesianController::on_activate(
           << ",task_force_total_x,task_force_total_y,task_force_total_z,task_"
              "force_total_rx,task_force_total_ry,task_force_total_rz";
 
+      // Add task space velocities (J*dq) - cartesian velocities
+      csv_log_file_ << ",J_dq_x,J_dq_y,J_dq_z,J_dq_rx,J_dq_ry,J_dq_rz";
+
       // Add torque columns for each joint
       for (auto i = 0u; i < num_joints; ++i) {
         csv_log_file_ << ",tau_task_" << i << ",tau_nullspace_" << i
@@ -1302,6 +1305,11 @@ void CartesianController::log_debug_info(const rclcpp::Time &time) {
     // Task space forces total
     for (int i = 0; i < 6; ++i) {
       csv_log_file_ << "," << task_force_total_[i];
+    }
+
+    // Task space velocities (J*dq) - cartesian velocities
+    for (int i = 0; i < 6; ++i) {
+      csv_log_file_ << "," << task_velocity_[i];
     }
 
     // Write torque components for each joint
