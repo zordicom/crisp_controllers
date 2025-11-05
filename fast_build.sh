@@ -8,6 +8,11 @@ YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
 
 echo -e "${GREEN}Starting optimized build for crisp_controllers...${NC}"
+echo -e "${YELLOW}Build optimizations enabled:${NC}"
+echo -e "  ✓ Explicit template instantiation for Pinocchio"
+echo -e "  ✓ Unity/Jumbo builds"
+echo -e "  ✓ Precompiled headers"
+echo -e "  ✓ ccache compilation cache"
 
 # Set number of parallel jobs (use all available cores)
 JOBS=$(nproc)

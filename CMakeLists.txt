@@ -73,6 +73,29 @@ generate_parameter_library(
   src/twist_broadcaster.yaml
 )
 
+# Create a separate library for Pinocchio explicit instantiations
+# This is built without unity build to ensure single instantiation
+add_library(
+        pinocchio_instantiations
+        STATIC
+        src/pinocchio_explicit_instantiation.cpp
+)
+
+target_include_directories(pinocchio_instantiations
+    PUBLIC
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+)
+
+ament_target_dependencies(pinocchio_instantiations
+    PUBLIC
+    pinocchio
+    Eigen3
+)
+
+# Disable unity build for explicit instantiation library
+set_target_properties(pinocchio_instantiations PROPERTIES UNITY_BUILD OFF)
+
+# Main library
 add_library(
         ${PROJECT_NAME}
         SHARED
@@ -103,13 +126,14 @@ if(USE_UNITY_BUILD)
     set_target_properties(${PROJECT_NAME} PROPERTIES UNITY_BUILD_BATCH_SIZE 16)
 endif()
 
-# Link parameter libraries to the main library
+# Link parameter libraries and pinocchio instantiations to the main library
 target_link_libraries(${PROJECT_NAME}
   PRIVATE
     cartesian_impedance_controller_parameters
     pose_broadcaster_parameters
     torque_feedback_controller_parameters
     twist_broadcaster_parameters
+    pinocchio_instantiations
 )
 
 

@@ -8,13 +8,7 @@
 #include <Eigen/Core>
 #include <rclcpp/rclcpp.hpp>
 #include <controller_interface/controller_interface.hpp>
-#include <pinocchio/fwd.hpp>
 
-// Add commonly used heavy Pinocchio headers
-#include <pinocchio/multibody/model.hpp>
-#include <pinocchio/multibody/data.hpp>
-#include <pinocchio/algorithm/kinematics.hpp>
-#include <pinocchio/algorithm/jacobian.hpp>
-#include <pinocchio/algorithm/frames.hpp>
-#include <pinocchio/parsers/urdf.hpp>
+// Use forward declarations with extern templates instead of full headers
+#include "crisp_controllers/pinocchio_fwd.hpp"
 
