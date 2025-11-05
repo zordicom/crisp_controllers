@@ -1,25 +1,30 @@
 #include "crisp_controllers/utils/async_csv_logger.hpp"
-#include <iostream>
 #include <iomanip>
-#include <sched.h>
+#include <iostream>
 #include <pinocchio/math/rpy.hpp>
+#include <sched.h>
 
 namespace crisp_controllers {
 
-AsyncCSVLogger::AsyncCSVLogger(const std::string& controller_name,
+AsyncCSVLogger::AsyncCSVLogger(const std::string &controller_name,
                                rclcpp::Logger logger)
     : controller_name_(controller_name), logger_(logger) {}
 
-AsyncCSVLogger::~AsyncCSVLogger() {
-  close();
-}
+AsyncCSVLogger::~AsyncCSVLogger() { close(); }
 
-bool AsyncCSVLogger::initialize(size_t num_joints, const rclcpp::Time& start_time) {
+bool AsyncCSVLogger::initialize(size_t num_joints,
+                                const rclcpp::Time &start_time) {
   num_joints_ = num_joints;
   start_time_ = start_time;
 
+  const char *user_ws = std::getenv("USER_WS");
+  if (!user_ws) {
+    return false;
+  }
+
   // Create log file directory
-  std::filesystem::path log_dir = "/tmp/controller_logs";
+  std::filesystem::path log_dir =
+      std::string(user_ws) + "/crisp_controller_logs";
   std::filesystem::create_directories(log_dir);
 
   // Generate filename with timestamp
@@ -27,14 +32,16 @@ bool AsyncCSVLogger::initialize(size_t num_joints, const rclcpp::Time& start_tim
   auto time_t = std::chrono::system_clock::to_time_t(now);
   std::stringstream filename_stream;
   filename_stream << log_dir.string() << "/" << controller_name_
-                  << "_async_log_" << std::put_time(std::localtime(&time_t), "%Y%m%d_%H%M%S")
+                  << "_async_log_"
+                  << std::put_time(std::localtime(&time_t), "%Y%m%d_%H%M%S")
                   << ".csv";
 
   std::string log_filename = filename_stream.str();
   csv_file_.open(log_filename, std::ios::out);
 
   if (csv_file_.is_open()) {
-    RCLCPP_INFO(logger_, "Async CSV logging enabled, writing to: %s", log_filename.c_str());
+    RCLCPP_INFO(logger_, "Async CSV logging enabled, writing to: %s",
+                log_filename.c_str());
     RCLCPP_INFO(logger_, "Max queue size: %zu samples, batch write size: %zu",
                 MAX_QUEUE_SIZE, BATCH_WRITE_SIZE);
 
@@ -45,16 +52,17 @@ bool AsyncCSVLogger::initialize(size_t num_joints, const rclcpp::Time& start_tim
     shutdown_requested_ = false;
     writer_thread_ = std::thread(&AsyncCSVLogger::writerThread, this);
 
-    // Set thread priority (optional, may require permissions)
-    #ifdef __linux__
+// Set thread priority (optional, may require permissions)
+#ifdef __linux__
     struct sched_param param;
     param.sched_priority = WRITER_THREAD_PRIORITY;
     pthread_setschedparam(writer_thread_.native_handle(), SCHED_OTHER, &param);
-    #endif
+#endif
 
     return true;
   } else {
-    RCLCPP_ERROR(logger_, "Failed to open async CSV log file: %s", log_filename.c_str());
+    RCLCPP_ERROR(logger_, "Failed to open async CSV log file: %s",
+                 log_filename.c_str());
     logging_enabled_ = false;
     return false;
   }
@@ -77,17 +85,20 @@ void AsyncCSVLogger::close() {
       csv_file_.close();
 
       RCLCPP_INFO(logger_,
-                  "Async CSV log file closed. Total samples: %zu, Dropped: %zu (%.2f%%)",
+                  "Async CSV log file closed. Total samples: %zu, Dropped: %zu "
+                  "(%.2f%%)",
                   total_samples_.load(), dropped_samples_.load(),
-                  total_samples_.load() > 0 ?
-                    100.0 * dropped_samples_.load() / total_samples_.load() : 0.0);
+                  total_samples_.load() > 0
+                      ? 100.0 * dropped_samples_.load() / total_samples_.load()
+                      : 0.0);
     }
 
     logging_enabled_ = false;
   }
 }
 
-void AsyncCSVLogger::logData(const ControllerLogData& data, const rclcpp::Time& current_time) {
+void AsyncCSVLogger::logData(const ControllerLogData &data,
+                             const rclcpp::Time &current_time) {
   if (!logging_enabled_.load()) {
     return;
   }
@@ -99,7 +110,8 @@ void AsyncCSVLogger::logData(const ControllerLogData& data, const rclcpp::Time& 
     std::unique_lock<std::mutex> lock(queue_mutex_, std::try_to_lock);
 
     if (!lock.owns_lock()) {
-      // Could not acquire lock immediately - skip this sample to avoid blocking RT thread
+      // Could not acquire lock immediately - skip this sample to avoid blocking
+      // RT thread
       dropped_samples_++;
       return;
     }
@@ -144,7 +156,7 @@ void AsyncCSVLogger::writerThread() {
     }
 
     // Write batch to file (outside of lock)
-    for (const auto& data : batch_buffer) {
+    for (const auto &data : batch_buffer) {
       processLogData(data);
     }
 
@@ -163,7 +175,7 @@ void AsyncCSVLogger::writerThread() {
   RCLCPP_INFO(logger_, "CSV writer thread finished");
 }
 
-void AsyncCSVLogger::processLogData(const ControllerLogData& data) {
+void AsyncCSVLogger::processLogData(const ControllerLogData &data) {
   if (!csv_file_.is_open()) {
     return;
   }
@@ -189,21 +201,18 @@ void AsyncCSVLogger::processLogData(const ControllerLogData& data) {
 
   // Write torque components
   for (int i = 0; i < data.tau_task.size(); ++i) {
-    csv_file_ << "," << data.tau_task[i]
-              << "," << data.tau_nullspace[i]
-              << "," << data.tau_joint_limits[i]
-              << "," << data.tau_friction[i]
-              << "," << data.tau_coriolis[i]
-              << "," << data.tau_gravity[i]
-              << "," << data.tau_wrench[i]
-              << "," << data.tau_total[i];
+    csv_file_ << "," << data.tau_task[i] << "," << data.tau_nullspace[i] << ","
+              << data.tau_joint_limits[i] << "," << data.tau_friction[i] << ","
+              << data.tau_coriolis[i] << "," << data.tau_gravity[i] << ","
+              << data.tau_wrench[i] << "," << data.tau_total[i];
   }
 
   // Write error metrics
   for (int i = 0; i < 6; ++i) {
     csv_file_ << "," << data.error[i];
   }
-  csv_file_ << "," << data.error_rot_magnitude << "," << data.error_pos_magnitude;
+  csv_file_ << "," << data.error_rot_magnitude << ","
+            << data.error_pos_magnitude;
 
   // Write poses
   writePose(data.current_pose);
@@ -240,7 +249,8 @@ void AsyncCSVLogger::processLogData(const ControllerLogData& data) {
   }
 
   // Write filter parameters
-  csv_file_ << "," << data.filter_q << "," << data.filter_dq << "," << data.filter_output_torque;
+  csv_file_ << "," << data.filter_q << "," << data.filter_dq << ","
+            << data.filter_output_torque;
 
   // Write timing information
   csv_file_ << "," << data.loop_duration_ms;
@@ -276,8 +286,8 @@ void AsyncCSVLogger::writeHeader(size_t num_joints) {
   for (size_t i = 0; i < num_joints; ++i) {
     csv_file_ << ",tau_task_" << i << ",tau_nullspace_" << i
               << ",tau_joint_limits_" << i << ",tau_friction_" << i
-              << ",tau_coriolis_" << i << ",tau_gravity_" << i
-              << ",tau_wrench_" << i << ",tau_total_" << i;
+              << ",tau_coriolis_" << i << ",tau_gravity_" << i << ",tau_wrench_"
+              << i << ",tau_total_" << i;
   }
 
   // Error metrics header
@@ -325,15 +335,16 @@ void AsyncCSVLogger::writeHeader(size_t num_joints) {
   csv_file_ << std::endl;
 }
 
-void AsyncCSVLogger::writePose(const pinocchio::SE3& pose) {
-  const auto& trans = pose.translation();
-  const auto& quat = Eigen::Quaterniond(pose.rotation());
+void AsyncCSVLogger::writePose(const pinocchio::SE3 &pose) {
+  const auto &trans = pose.translation();
+  const auto &quat = Eigen::Quaterniond(pose.rotation());
 
   csv_file_ << "," << trans[0] << "," << trans[1] << "," << trans[2];
-  csv_file_ << "," << quat.w() << "," << quat.x() << "," << quat.y() << "," << quat.z();
+  csv_file_ << "," << quat.w() << "," << quat.x() << "," << quat.y() << ","
+            << quat.z();
 }
 
-void AsyncCSVLogger::writeRPY(const pinocchio::SE3& pose) {
+void AsyncCSVLogger::writeRPY(const pinocchio::SE3 &pose) {
   auto rpy = pinocchio::rpy::matrixToRpy(pose.rotation());
   csv_file_ << "," << rpy[0] << "," << rpy[1] << "," << rpy[2];
 }
