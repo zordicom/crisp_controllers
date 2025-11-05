@@ -332,7 +332,7 @@ private:
    * @brief Log debug information based on parameter settings
    * @param time Current time for throttling logs
    */
-  void log_debug_info(const rclcpp::Time &time);
+  void log_debug_info(const rclcpp::Time &time, const rclcpp::Time &loop_start_time);
 
   /**
    * @brief Check publisher count for a specific topic

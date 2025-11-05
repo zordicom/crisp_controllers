@@ -1,5 +1,5 @@
-#include "crisp_controllers/utils/csv_logger.hpp"
 #include "crisp_controllers/utils/async_csv_logger.hpp"
+#include "crisp_controllers/utils/csv_logger.hpp"
 #include "crisp_controllers/utils/fiters.hpp"
 #include "crisp_controllers/utils/torque_rate_saturation.hpp"
 
@@ -210,13 +210,17 @@ CartesianController::update(const rclcpp::Time &time,
 
   J_pinv_ = pseudo_inverse(J, params_.nullspace.regularization);
 
-  // Compute Minverse once if needed by either dynamic nullspace or operational space
-  bool minverse_computed = false;
-  if (params_.nullspace.projector_type == "dynamic" || params_.use_operational_space) {
+  // Compute Minverse once if needed by either dynamic nullspace or operational
+  // space
+  bool minverse_computed = false; // Currently unused
+
+  if (params_.nullspace.projector_type == "dynamic" ||
+      params_.use_operational_space) {
     pinocchio::computeMinverse(model_, data_, q_pin);
     minverse_computed = true;
 
-    // Compute operational space mass matrix (used by both dynamic nullspace and OSC)
+    // Compute operational space mass matrix (used by both dynamic nullspace and
+    // OSC)
     Mx_inv_ = J * data_.Minv * J.transpose();
     Mx_ = pseudo_inverse(Mx_inv_);
   }
@@ -289,9 +293,9 @@ CartesianController::update(const rclcpp::Time &time,
   }
 
   if (params_.use_coriolis_compensation) {
-    // TODO: This might be redundant - computeAllTerms already computes C*dq+g in data_.nle
-    // Could potentially use: tau_coriolis = data_.nle - gravity_terms
-    // But needs careful testing to ensure correctness
+    // TODO: This might be redundant - computeAllTerms already computes C*dq+g
+    // in data_.nle Could potentially use: tau_coriolis = data_.nle -
+    // gravity_terms But needs careful testing to ensure correctness
     pinocchio::computeAllTerms(model_, data_, q_pin, dq);
     tau_coriolis =
         pinocchio::computeCoriolisMatrix(model_, data_, q_pin, dq) * dq;
@@ -481,7 +485,7 @@ CartesianController::update(const rclcpp::Time &time,
   params_ = params_listener_->get_params();
   setStiffnessAndDamping();
 
-  log_debug_info(time);
+  log_debug_info(time, loop_start_time);
 
   return controller_interface::return_type::OK;
 }
@@ -1020,7 +1024,8 @@ CallbackReturn CartesianController::on_activate(
           get_node()->get_name(), get_node()->get_logger());
 
       if (!async_csv_logger_->initialize(num_joints, get_node()->now())) {
-        RCLCPP_ERROR(get_node()->get_logger(), "Failed to initialize async CSV logger");
+        RCLCPP_ERROR(get_node()->get_logger(),
+                     "Failed to initialize async CSV logger");
         return CallbackReturn::ERROR;
       }
 
@@ -1035,8 +1040,9 @@ CallbackReturn CartesianController::on_activate(
         return CallbackReturn::ERROR;
       }
 
-      RCLCPP_WARN(get_node()->get_logger(),
-                  "Using SYNCHRONOUS CSV logging - may impact real-time performance!");
+      RCLCPP_WARN(
+          get_node()->get_logger(),
+          "Using SYNCHRONOUS CSV logging - may impact real-time performance!");
     }
   }
 
@@ -1102,7 +1108,8 @@ void CartesianController::parse_target_wrench_() {
       msg->wrench.torque.z;
 }
 
-void CartesianController::log_debug_info(const rclcpp::Time &time) {
+void CartesianController::log_debug_info(const rclcpp::Time &time,
+                                         const rclcpp::Time &loop_start_time) {
   if (!params_.log.enabled) {
     return;
   }
@@ -1114,7 +1121,7 @@ void CartesianController::log_debug_info(const rclcpp::Time &time) {
     RCLCPP_INFO_STREAM_THROTTLE(get_node()->get_logger(),
                                 *get_node()->get_clock(), DEBUG_LOG_THROTTLE_MS,
                                 "end_effector_pos"
-                                    << end_effector_pose.translation());
+                                    << ee_pose_base_.translation());
     RCLCPP_INFO_STREAM_THROTTLE(get_node()->get_logger(),
                                 *get_node()->get_clock(), DEBUG_LOG_THROTTLE_MS,
                                 "q: " << q.transpose());
@@ -1215,8 +1222,9 @@ void CartesianController::log_debug_info(const rclcpp::Time &time) {
   }
 
   // Write CSV data if logging is enabled
-  bool should_log = (csv_logger_ && csv_logger_->isLoggingEnabled()) ||
-                    (async_csv_logger_ && async_csv_logger_->isLoggingEnabled());
+  bool should_log =
+      (csv_logger_ && csv_logger_->isLoggingEnabled()) ||
+      (async_csv_logger_ && async_csv_logger_->isLoggingEnabled());
 
   if (should_log) {
     ControllerLogData log_data;
@@ -1226,6 +1234,7 @@ void CartesianController::log_debug_info(const rclcpp::Time &time) {
     log_data.task_force_P = task_force_P_;
     log_data.task_force_D = task_force_D_;
     log_data.task_force_total = task_force_total_;
+    log_data.task_velocity = task_velocity_;
 
     log_data.tau_task = tau_task;
     log_data.tau_nullspace = tau_nullspace;
@@ -1240,7 +1249,7 @@ void CartesianController::log_debug_info(const rclcpp::Time &time) {
     log_data.error_rot_magnitude = error.tail(3).norm();
     log_data.error_pos_magnitude = error.head(3).norm();
 
-    log_data.current_pose = end_effector_pose;
+    log_data.current_pose = ee_pose_base_;
     log_data.target_pose = target_pose_;
 
     for (int i = 0; i < 6; ++i) {
@@ -1261,7 +1270,8 @@ void CartesianController::log_debug_info(const rclcpp::Time &time) {
 
     // Calculate control loop duration
     auto loop_end_time = get_node()->get_clock()->now();
-    log_data.loop_duration_ms = (loop_end_time - loop_start_time).nanoseconds() * 1e-6;
+    log_data.loop_duration_ms =
+        (loop_end_time - loop_start_time).nanoseconds() * 1e-6;
 
     // Use appropriate logger based on configuration
     if (async_csv_logger_ && async_csv_logger_->isLoggingEnabled()) {

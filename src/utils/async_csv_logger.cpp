@@ -182,6 +182,11 @@ void AsyncCSVLogger::processLogData(const ControllerLogData& data) {
     csv_file_ << "," << data.task_force_total[i];
   }
 
+  // Write task space velocity (J*dq)
+  for (int i = 0; i < 6; ++i) {
+    csv_file_ << "," << data.task_velocity[i];
+  }
+
   // Write torque components
   for (int i = 0; i < data.tau_task.size(); ++i) {
     csv_file_ << "," << data.tau_task[i]
@@ -262,6 +267,10 @@ void AsyncCSVLogger::writeHeader(size_t num_joints) {
                "force_D_rx,task_force_D_ry,task_force_D_rz";
   csv_file_ << ",task_force_total_x,task_force_total_y,task_force_total_z,"
                "task_force_total_rx,task_force_total_ry,task_force_total_rz";
+
+  // Task space velocity header (J*dq)
+  csv_file_ << ",J_dq_x,J_dq_y,J_dq_z,"
+               "J_dq_rx,J_dq_ry,J_dq_rz";
 
   // Torque components header (per joint)
   for (size_t i = 0; i < num_joints; ++i) {
