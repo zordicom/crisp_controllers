@@ -307,6 +307,12 @@ private:
   rclcpp::Time csv_log_start_time_;
   /** @brief Counter to track cycles for periodic CSV flushing */
   size_t csv_flush_counter_ = 0;
+
+  // Logging constants
+  static constexpr int LOG_CYCLE_INTERVAL = 100;  // Log every 100 cycles
+  static constexpr int CSV_FLUSH_INTERVAL = 50;   // Flush CSV every 50 cycles
+  static constexpr int DEBUG_LOG_THROTTLE_MS = 1000;  // Throttle debug logs to 1Hz
+  static constexpr int TIMING_LOG_THROTTLE_MS = 2000; // Throttle timing logs
 };
 
 } // namespace crisp_controllers

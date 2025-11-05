@@ -99,9 +99,9 @@ CartesianController::update(const rclcpp::Time &time,
 
     // Log velocity filtering for first joint to verify it's working
     if (i == 0) {
-      // Throttle logging to every 100 cycles (~1Hz at 100Hz update rate)
+      // Throttle logging to every LOG_CYCLE_INTERVAL cycles (~1Hz at 100Hz update rate)
       static int vel_log_counter = 0;
-      if (vel_log_counter++ % 100 == 0) {
+      if (vel_log_counter++ % LOG_CYCLE_INTERVAL == 0) {
         RCLCPP_INFO(get_node()->get_logger(),
                     "Joint0: q_raw=%.4f q_filt=%.4f dq_raw=%.4f dq_filt=%.4f "
                     "alpha_dq=%.3f",
@@ -178,9 +178,9 @@ CartesianController::update(const rclcpp::Time &time,
     error = error.cwiseMax(-max_delta_).cwiseMin(max_delta_);
   }
 
-  // Log error every 100 cycles (~1Hz at 100Hz update rate)
+  // Log error every LOG_CYCLE_INTERVAL cycles (~1Hz at 100Hz update rate)
   static int log_counter = 0;
-  if (log_counter++ % 100 == 0) {
+  if (log_counter++ % LOG_CYCLE_INTERVAL == 0) {
     RCLCPP_INFO(
         get_node()->get_logger(),
         "Cartesian error: pos=[%.4f, %.4f, %.4f]m, ori=[%.4f, %.4f, %.4f]rad",
@@ -222,7 +222,7 @@ CartesianController::update(const rclcpp::Time &time,
 
   // Log damping force computation to verify filtering effect
   static int damping_log_counter = 0;
-  if (damping_log_counter++ % 100 == 0) {
+  if (damping_log_counter++ % LOG_CYCLE_INTERVAL == 0) {
     RCLCPP_INFO(get_node()->get_logger(),
                 "Damping: task_vel_x=%.4f, d_pos=%.2f, force_D_x=%.4f (P=%.4f)",
                 task_velocity[0], damping(0, 0), task_force_D_[0],
@@ -303,9 +303,9 @@ CartesianController::update(const rclcpp::Time &time,
   // Vectorized clamping: tau_d = min(max(tau_d, -limits), limits)
   tau_d = tau_d.cwiseMin(tau_limits).cwiseMax(-tau_limits);
 
-  // Log commanded torques every 100 cycles (~1Hz at 100Hz update rate)
+  // Log commanded torques every LOG_CYCLE_INTERVAL cycles (~1Hz at 100Hz update rate)
   static int torque_log_counter = 0;
-  if (torque_log_counter++ % 100 == 0) {
+  if (torque_log_counter++ % LOG_CYCLE_INTERVAL == 0) {
     RCLCPP_INFO(get_node()->get_logger(),
                 "Commanded torques: [%.3f, %.3f, %.3f, %.3f, %.3f, %.3f, %.3f] "
                 "Nm (stop_commands=%s, gravity_only=%s)",
@@ -669,7 +669,7 @@ CallbackReturn CartesianController::on_configure(
           const std::shared_ptr<geometry_msgs::msg::PoseStamped> msg) -> void {
     if (!check_topic_publisher_count("target_pose")) {
       RCLCPP_WARN_THROTTLE(
-          get_node()->get_logger(), *get_node()->get_clock(), 1000,
+          get_node()->get_logger(), *get_node()->get_clock(), DEBUG_LOG_THROTTLE_MS,
           "Ignoring target_pose message due to multiple publishers detected!");
       return;
     }
@@ -706,7 +706,7 @@ CallbackReturn CartesianController::on_configure(
       [this](const std::shared_ptr<sensor_msgs::msg::JointState> msg) -> void {
     if (!check_topic_publisher_count("target_joint")) {
       RCLCPP_WARN_THROTTLE(
-          get_node()->get_logger(), *get_node()->get_clock(), 1000,
+          get_node()->get_logger(), *get_node()->get_clock(), DEBUG_LOG_THROTTLE_MS,
           "Ignoring target_joint message due to multiple publishers detected!");
       return;
     }
@@ -1126,95 +1126,95 @@ void CartesianController::log_debug_info(const rclcpp::Time &time) {
   }
   if (params_.log.robot_state) {
     RCLCPP_INFO_STREAM_THROTTLE(get_node()->get_logger(),
-                                *get_node()->get_clock(), 1000,
+                                *get_node()->get_clock(), DEBUG_LOG_THROTTLE_MS,
                                 "nq: " << model_.nq << ", nv: " << model_.nv);
 
     RCLCPP_INFO_STREAM_THROTTLE(
-        get_node()->get_logger(), *get_node()->get_clock(), 1000,
+        get_node()->get_logger(), *get_node()->get_clock(), DEBUG_LOG_THROTTLE_MS,
         "end_effector_pos" << end_effector_pose.translation());
     RCLCPP_INFO_STREAM_THROTTLE(get_node()->get_logger(),
-                                *get_node()->get_clock(), 1000,
+                                *get_node()->get_clock(), DEBUG_LOG_THROTTLE_MS,
                                 "q: " << q.transpose());
     RCLCPP_INFO_STREAM_THROTTLE(get_node()->get_logger(),
-                                *get_node()->get_clock(), 1000,
+                                *get_node()->get_clock(), DEBUG_LOG_THROTTLE_MS,
                                 "q_pin: " << q_pin.transpose());
     RCLCPP_INFO_STREAM_THROTTLE(get_node()->get_logger(),
-                                *get_node()->get_clock(), 1000,
+                                *get_node()->get_clock(), DEBUG_LOG_THROTTLE_MS,
                                 "dq: " << dq.transpose());
     RCLCPP_INFO_STREAM_THROTTLE(get_node()->get_logger(),
-                                *get_node()->get_clock(), 1000, "J: " << J);
+                                *get_node()->get_clock(), DEBUG_LOG_THROTTLE_MS, "J: " << J);
   }
 
   if (params_.log.control_values) {
     RCLCPP_INFO_STREAM_THROTTLE(get_node()->get_logger(),
-                                *get_node()->get_clock(), 1000,
+                                *get_node()->get_clock(), DEBUG_LOG_THROTTLE_MS,
                                 "error: " << error.transpose());
     RCLCPP_INFO_STREAM_THROTTLE(get_node()->get_logger(),
-                                *get_node()->get_clock(), 1000,
+                                *get_node()->get_clock(), DEBUG_LOG_THROTTLE_MS,
                                 "max_delta: " << max_delta_.transpose());
     RCLCPP_INFO_STREAM_THROTTLE(get_node()->get_logger(),
-                                *get_node()->get_clock(), 1000,
+                                *get_node()->get_clock(), DEBUG_LOG_THROTTLE_MS,
                                 "q_ref: " << q_ref.transpose());
     RCLCPP_INFO_STREAM_THROTTLE(get_node()->get_logger(),
-                                *get_node()->get_clock(), 1000,
+                                *get_node()->get_clock(), DEBUG_LOG_THROTTLE_MS,
                                 "dq_ref: " << dq_ref.transpose());
   }
 
   if (params_.log.controller_parameters) {
     RCLCPP_INFO_STREAM_THROTTLE(get_node()->get_logger(),
-                                *get_node()->get_clock(), 1000,
+                                *get_node()->get_clock(), DEBUG_LOG_THROTTLE_MS,
                                 "stiffness: " << stiffness);
     RCLCPP_INFO_STREAM_THROTTLE(get_node()->get_logger(),
-                                *get_node()->get_clock(), 1000,
+                                *get_node()->get_clock(), DEBUG_LOG_THROTTLE_MS,
                                 "damping: " << damping);
     RCLCPP_INFO_STREAM_THROTTLE(get_node()->get_logger(),
-                                *get_node()->get_clock(), 1000,
+                                *get_node()->get_clock(), DEBUG_LOG_THROTTLE_MS,
                                 "nullspace_stiffness: " << nullspace_stiffness);
     RCLCPP_INFO_STREAM_THROTTLE(get_node()->get_logger(),
-                                *get_node()->get_clock(), 1000,
+                                *get_node()->get_clock(), DEBUG_LOG_THROTTLE_MS,
                                 "nullspace_damping: " << nullspace_damping);
   }
 
   if (params_.log.limits) {
     RCLCPP_INFO_STREAM_THROTTLE(
-        get_node()->get_logger(), *get_node()->get_clock(), 1000,
+        get_node()->get_logger(), *get_node()->get_clock(), DEBUG_LOG_THROTTLE_MS,
         "joint_limits: " << model_.lowerPositionLimit.transpose() << ", "
                          << model_.upperPositionLimit.transpose());
     RCLCPP_INFO_STREAM_THROTTLE(get_node()->get_logger(),
-                                *get_node()->get_clock(), 1000,
+                                *get_node()->get_clock(), DEBUG_LOG_THROTTLE_MS,
                                 "velocity_limits: " << model_.velocityLimit);
     RCLCPP_INFO_STREAM_THROTTLE(get_node()->get_logger(),
-                                *get_node()->get_clock(), 1000,
+                                *get_node()->get_clock(), DEBUG_LOG_THROTTLE_MS,
                                 "effort_limits: " << model_.effortLimit);
   }
 
   if (params_.log.computed_torques) {
     RCLCPP_INFO_STREAM_THROTTLE(get_node()->get_logger(),
-                                *get_node()->get_clock(), 1000,
+                                *get_node()->get_clock(), DEBUG_LOG_THROTTLE_MS,
                                 "tau_task: " << tau_task.transpose());
     RCLCPP_INFO_STREAM_THROTTLE(
-        get_node()->get_logger(), *get_node()->get_clock(), 1000,
+        get_node()->get_logger(), *get_node()->get_clock(), DEBUG_LOG_THROTTLE_MS,
         "tau_joint_limits: " << tau_joint_limits.transpose());
     RCLCPP_INFO_STREAM_THROTTLE(get_node()->get_logger(),
-                                *get_node()->get_clock(), 1000,
+                                *get_node()->get_clock(), DEBUG_LOG_THROTTLE_MS,
                                 "tau_nullspace: " << tau_nullspace.transpose());
     RCLCPP_INFO_STREAM_THROTTLE(get_node()->get_logger(),
-                                *get_node()->get_clock(), 1000,
+                                *get_node()->get_clock(), DEBUG_LOG_THROTTLE_MS,
                                 "tau_friction: " << tau_friction.transpose());
     RCLCPP_INFO_STREAM_THROTTLE(get_node()->get_logger(),
-                                *get_node()->get_clock(), 1000,
+                                *get_node()->get_clock(), DEBUG_LOG_THROTTLE_MS,
                                 "tau_coriolis: " << tau_coriolis.transpose());
   }
 
   if (params_.log.dynamic_params) {
     RCLCPP_INFO_STREAM_THROTTLE(get_node()->get_logger(),
-                                *get_node()->get_clock(), 1000,
+                                *get_node()->get_clock(), DEBUG_LOG_THROTTLE_MS,
                                 "M: " << data_.M);
     RCLCPP_INFO_STREAM_THROTTLE(get_node()->get_logger(),
-                                *get_node()->get_clock(), 1000,
+                                *get_node()->get_clock(), DEBUG_LOG_THROTTLE_MS,
                                 "Minv: " << data_.Minv);
     RCLCPP_INFO_STREAM_THROTTLE(
-        get_node()->get_logger(), *get_node()->get_clock(), 1000,
+        get_node()->get_logger(), *get_node()->get_clock(), DEBUG_LOG_THROTTLE_MS,
         "nullspace projector: " << nullspace_projection);
   }
 
@@ -1222,7 +1222,7 @@ void CartesianController::log_debug_info(const rclcpp::Time &time) {
 
     auto t_end = get_node()->get_clock()->now();
     RCLCPP_INFO_STREAM_THROTTLE(
-        get_node()->get_logger(), *get_node()->get_clock(), 2000,
+        get_node()->get_logger(), *get_node()->get_clock(), TIMING_LOG_THROTTLE_MS,
         "Control loop needed: "
             << (t_end.nanoseconds() - time.nanoseconds()) * 1e-6 << " ms");
   }
@@ -1345,9 +1345,9 @@ void CartesianController::log_debug_info(const rclcpp::Time &time) {
     // Use '\n' instead of std::endl to avoid flushing every cycle
     csv_log_file_ << '\n';
 
-    // Flush every 50 cycles for better performance
+    // Flush every CSV_FLUSH_INTERVAL cycles for better performance
     csv_flush_counter_++;
-    if (csv_flush_counter_ >= 50) {
+    if (csv_flush_counter_ >= CSV_FLUSH_INTERVAL) {
       csv_log_file_.flush();
       csv_flush_counter_ = 0;
     }
