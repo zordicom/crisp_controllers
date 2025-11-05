@@ -1,3 +1,4 @@
+#include "crisp_controllers/utils/csv_logger_interface.hpp"
 #include "crisp_controllers/utils/async_csv_logger.hpp"
 #include "crisp_controllers/utils/csv_logger.hpp"
 #include "crisp_controllers/utils/fiters.hpp"
@@ -1026,16 +1027,13 @@ CallbackReturn CartesianController::on_activate(
 
   // Open CSV log file if logging is enabled
   if (params_.log.enabled) {
+    // Store the start time for consistent timestamp calculations
+    csv_log_start_time_ = get_node()->now();
+
     if (params_.log.use_async_logging) {
       // Use async logger for better real-time performance
-      async_csv_logger_ = std::make_unique<AsyncCSVLogger>(
+      csv_logger_ = std::make_unique<AsyncCSVLogger>(
           get_node()->get_name(), get_node()->get_logger());
-
-      if (!async_csv_logger_->initialize(num_joints, get_node()->now())) {
-        RCLCPP_ERROR(get_node()->get_logger(),
-                     "Failed to initialize async CSV logger");
-        return CallbackReturn::ERROR;
-      }
 
       RCLCPP_INFO(get_node()->get_logger(),
                   "Using ASYNC CSV logging for improved real-time performance");
@@ -1044,13 +1042,15 @@ CallbackReturn CartesianController::on_activate(
       csv_logger_ = std::make_unique<ControllerCSVLogger>(
           get_node()->get_name(), get_node()->get_logger());
 
-      if (!csv_logger_->initialize(num_joints, get_node()->now())) {
-        return CallbackReturn::ERROR;
-      }
-
       RCLCPP_WARN(
           get_node()->get_logger(),
           "Using SYNCHRONOUS CSV logging - may impact real-time performance!");
+    }
+
+    if (!csv_logger_->initialize(num_joints, csv_log_start_time_)) {
+      RCLCPP_ERROR(get_node()->get_logger(),
+                   "Failed to initialize CSV logger");
+      return CallbackReturn::ERROR;
     }
   }
 
@@ -1064,12 +1064,6 @@ controller_interface::CallbackReturn CartesianController::on_deactivate(
   if (csv_logger_) {
     csv_logger_->close();
     csv_logger_.reset();
-  }
-
-  // Close async CSV logger if it was opened
-  if (async_csv_logger_) {
-    async_csv_logger_->close();
-    async_csv_logger_.reset();
   }
 
   return CallbackReturn::SUCCESS;
@@ -1230,15 +1224,12 @@ void CartesianController::log_debug_info(const rclcpp::Time &time,
   }
 
   // Write CSV data if logging is enabled
-  bool should_log =
-      (csv_logger_ && csv_logger_->isLoggingEnabled()) ||
-      (async_csv_logger_ && async_csv_logger_->isLoggingEnabled());
-
-  if (should_log) {
+  if (csv_logger_ && csv_logger_->isLoggingEnabled()) {
     ControllerLogData log_data;
 
     // Populate log data structure
-    log_data.timestamp = (time - get_node()->now()).seconds();
+    // Fix: Calculate timestamp correctly as time since start
+    log_data.timestamp = (time - csv_log_start_time_).seconds();
     log_data.task_force_P = task_force_P_;
     log_data.task_force_D = task_force_D_;
     log_data.task_force_total = task_force_total_;
@@ -1281,12 +1272,8 @@ void CartesianController::log_debug_info(const rclcpp::Time &time,
     log_data.loop_duration_ms =
         (loop_end_time - loop_start_time).nanoseconds() * 1e-6;
 
-    // Use appropriate logger based on configuration
-    if (async_csv_logger_ && async_csv_logger_->isLoggingEnabled()) {
-      async_csv_logger_->logData(log_data, time);
-    } else if (csv_logger_ && csv_logger_->isLoggingEnabled()) {
-      csv_logger_->logData(log_data, time);
-    }
+    // Log the data using the unified interface
+    csv_logger_->logData(log_data, time);
   }
 }
 

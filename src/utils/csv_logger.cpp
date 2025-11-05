@@ -141,9 +141,8 @@ void ControllerCSVLogger::logData(const ControllerLogData& data, const rclcpp::T
     return;
   }
 
-  // Compute timestamp relative to start
-  double timestamp = (current_time - start_time_).seconds();
-  csv_file_ << timestamp;
+  // Use the timestamp already computed by the controller
+  csv_file_ << data.timestamp;
 
   // Write task space forces
   for (int i = 0; i < 6; ++i) {

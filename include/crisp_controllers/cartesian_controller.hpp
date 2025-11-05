@@ -33,8 +33,7 @@ using CallbackReturn =
 namespace crisp_controllers {
 
 // Forward declarations
-class ControllerCSVLogger;
-class AsyncCSVLogger;
+class CSVLoggerInterface;
 
 /**
  * @brief Controller implementing Cartesian control
@@ -362,11 +361,8 @@ private:
   rclcpp::Time csv_log_start_time_;
   /** @brief Counter to track cycles for periodic CSV flushing */
   size_t csv_flush_counter_ = 0;
-  /** @brief CSV logger instance for controller diagnostics */
-  std::unique_ptr<ControllerCSVLogger> csv_logger_;
-
-  /** @brief Async CSV logger for non-blocking logging */
-  std::unique_ptr<AsyncCSVLogger> async_csv_logger_;
+  /** @brief CSV logger instance (can be sync or async) */
+  std::unique_ptr<CSVLoggerInterface> csv_logger_;
 };
 
 } // namespace crisp_controllers

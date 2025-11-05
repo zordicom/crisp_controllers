@@ -14,6 +14,7 @@
 #include <rclcpp/rclcpp.hpp>
 #include <pinocchio/spatial/se3.hpp>
 #include "crisp_controllers/utils/controller_log_data.hpp"
+#include "crisp_controllers/utils/csv_logger_interface.hpp"
 
 namespace crisp_controllers {
 
@@ -24,12 +25,12 @@ namespace crisp_controllers {
  * blocking in the real-time control thread. Data is copied to a queue
  * and written to disk by a background thread.
  */
-class AsyncCSVLogger {
+class AsyncCSVLogger : public CSVLoggerInterface {
 public:
   AsyncCSVLogger(const std::string& controller_name, rclcpp::Logger logger);
-  ~AsyncCSVLogger();
+  ~AsyncCSVLogger() override;
 
-  bool initialize(size_t num_joints, const rclcpp::Time& start_time);
+  bool initialize(size_t num_joints, const rclcpp::Time& start_time) override;
 
   /**
    * @brief Queue data for logging (non-blocking for real-time thread)
@@ -38,10 +39,10 @@ public:
    * If the buffer is full, the oldest data is overwritten (data loss).
    * Returns immediately without blocking.
    */
-  void logData(const ControllerLogData& data, const rclcpp::Time& current_time);
+  void logData(const ControllerLogData& data, const rclcpp::Time& current_time) override;
 
-  void close();
-  bool isLoggingEnabled() const { return logging_enabled_.load(); }
+  void close() override;
+  bool isLoggingEnabled() const override { return logging_enabled_.load(); }
 
   /**
    * @brief Get number of dropped samples due to buffer overflow

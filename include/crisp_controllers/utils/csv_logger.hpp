@@ -8,18 +8,19 @@
 #include <rclcpp/rclcpp.hpp>
 #include <pinocchio/spatial/se3.hpp>
 #include "crisp_controllers/utils/controller_log_data.hpp"
+#include "crisp_controllers/utils/csv_logger_interface.hpp"
 
 namespace crisp_controllers {
 
-class ControllerCSVLogger {
+class ControllerCSVLogger : public CSVLoggerInterface {
 public:
   ControllerCSVLogger(const std::string& controller_name, rclcpp::Logger logger);
-  ~ControllerCSVLogger();
+  ~ControllerCSVLogger() override;
 
-  bool initialize(size_t num_joints, const rclcpp::Time& start_time);
-  void logData(const ControllerLogData& data, const rclcpp::Time& current_time);
-  void close();
-  bool isLoggingEnabled() const { return logging_enabled_ && csv_file_.is_open(); }
+  bool initialize(size_t num_joints, const rclcpp::Time& start_time) override;
+  void logData(const ControllerLogData& data, const rclcpp::Time& current_time) override;
+  void close() override;
+  bool isLoggingEnabled() const override { return logging_enabled_ && csv_file_.is_open(); }
 
 private:
   void writeHeader(size_t num_joints);
