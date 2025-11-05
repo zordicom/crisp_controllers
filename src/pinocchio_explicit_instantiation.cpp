@@ -1,5 +1,5 @@
 // Explicit template instantiation for Pinocchio templates
-// This file instantiates all commonly used Pinocchio templates once
+// This file instantiates the most commonly used Pinocchio templates once
 // to avoid redundant instantiation in multiple translation units
 
 #include <Eigen/Core>
@@ -8,22 +8,20 @@
 #include <pinocchio/multibody/model.hpp>
 #include <pinocchio/multibody/data.hpp>
 #include <pinocchio/algorithm/kinematics.hpp>
-#include <pinocchio/algorithm/jacobian.hpp>
 #include <pinocchio/algorithm/frames.hpp>
+#include <pinocchio/algorithm/jacobian.hpp>
 #include <pinocchio/algorithm/aba.hpp>
 #include <pinocchio/algorithm/rnea.hpp>
 #include <pinocchio/algorithm/compute-all-terms.hpp>
-#include <pinocchio/algorithm/model.hpp>
 #include <pinocchio/parsers/urdf.hpp>
 #include <pinocchio/spatial/se3.hpp>
 #include <pinocchio/spatial/motion.hpp>
 #include <pinocchio/spatial/force.hpp>
 #include <pinocchio/spatial/inertia.hpp>
-#include <pinocchio/spatial/explog.hpp>
 
 namespace pinocchio {
 
-// Explicitly instantiate Model and Data templates
+// Explicitly instantiate the core Model and Data templates
 template class ModelTpl<double>;
 template class DataTpl<double>;
 
@@ -33,91 +31,50 @@ template class MotionTpl<double>;
 template class ForceTpl<double>;
 template class InertiaTpl<double>;
 
-// Explicitly instantiate algorithm functions for double precision
-// Note: These are function templates, so we need to instantiate them with specific calls
+// Force instantiation of commonly used algorithm functions
+// by creating dummy functions that use them
+namespace {
 
-// Forward kinematics
-template void forwardKinematics<double, 0, JointCollectionDefaultTpl>(
-    const ModelTpl<double>&,
-    DataTpl<double>&,
-    const Eigen::MatrixBase<Eigen::VectorXd>&);
+void force_instantiations() {
+    // This function is never called, but forces template instantiation
+    ModelTpl<double> model;
+    DataTpl<double> data(model);
+    Eigen::VectorXd q = Eigen::VectorXd::Zero(model.nq);
+    Eigen::VectorXd v = Eigen::VectorXd::Zero(model.nv);
+    Eigen::VectorXd a = Eigen::VectorXd::Zero(model.nv);
+    Eigen::VectorXd tau = Eigen::VectorXd::Zero(model.nv);
 
-template void forwardKinematics<double, 0, JointCollectionDefaultTpl>(
-    const ModelTpl<double>&,
-    DataTpl<double>&,
-    const Eigen::MatrixBase<Eigen::VectorXd>&,
-    const Eigen::MatrixBase<Eigen::VectorXd>&);
+    // Force instantiation of forwardKinematics variants
+    forwardKinematics(model, data, q);
+    forwardKinematics(model, data, q, v);
+    forwardKinematics(model, data, q, v, a);
 
-template void forwardKinematics<double, 0, JointCollectionDefaultTpl>(
-    const ModelTpl<double>&,
-    DataTpl<double>&,
-    const Eigen::MatrixBase<Eigen::VectorXd>&,
-    const Eigen::MatrixBase<Eigen::VectorXd>&,
-    const Eigen::MatrixBase<Eigen::VectorXd>&);
+    // Force instantiation of updateFramePlacements
+    updateFramePlacements(model, data);
 
-// Update frame placements
-template void updateFramePlacements<double, 0, JointCollectionDefaultTpl>(
-    const ModelTpl<double>&,
-    DataTpl<double>&);
+    // Force instantiation of computeJointJacobians
+    computeJointJacobians(model, data, q);
+    computeJointJacobians(model, data);
 
-// Compute joint Jacobians
-template void computeJointJacobians<double, 0, JointCollectionDefaultTpl>(
-    const ModelTpl<double>&,
-    DataTpl<double>&,
-    const Eigen::MatrixBase<Eigen::VectorXd>&);
+    // Force instantiation of frame operations
+    if (model.nframes > 0) {
+        FrameIndex frame_id = 0;
+        getFrameVelocity(model, data, frame_id, LOCAL_WORLD_ALIGNED);
+        getFrameAcceleration(model, data, frame_id, LOCAL_WORLD_ALIGNED);
 
-template void computeJointJacobians<double, 0, JointCollectionDefaultTpl>(
-    const ModelTpl<double>&,
-    DataTpl<double>&);
+        Eigen::Matrix<double, 6, Eigen::Dynamic> J(6, model.nv);
+        getFrameJacobian(model, data, frame_id, LOCAL_WORLD_ALIGNED, J);
+    }
 
-// Get frame Jacobian
-template void getFrameJacobian<double, 0, JointCollectionDefaultTpl>(
-    const ModelTpl<double>&,
-    DataTpl<double>&,
-    const FrameIndex,
-    const ReferenceFrame,
-    const Eigen::MatrixBase<Eigen::Matrix<double, 6, Eigen::Dynamic>>&);
+    // Force instantiation of dynamics algorithms
+    computeAllTerms(model, data, q, v);
+    aba(model, data, q, v, tau, Convention::WORLD);
+    rnea(model, data, q, v, a);
 
-// Get frame velocity
-template MotionTpl<double> getFrameVelocity<double, 0, JointCollectionDefaultTpl>(
-    const ModelTpl<double>&,
-    const DataTpl<double>&,
-    const FrameIndex,
-    const ReferenceFrame);
+    // Force instantiation of neutral configuration
+    neutral(model, q);
+}
 
-// Get frame acceleration
-template MotionTpl<double> getFrameAcceleration<double, 0, JointCollectionDefaultTpl>(
-    const ModelTpl<double>&,
-    const DataTpl<double>&,
-    const FrameIndex,
-    const ReferenceFrame);
-
-// Compute all terms (for dynamics)
-template void computeAllTerms<double, 0, JointCollectionDefaultTpl>(
-    const ModelTpl<double>&,
-    DataTpl<double>&,
-    const Eigen::MatrixBase<Eigen::VectorXd>&,
-    const Eigen::MatrixBase<Eigen::VectorXd>&);
-
-// ABA (Articulated Body Algorithm)
-template const Eigen::VectorXd& aba<double, 0, JointCollectionDefaultTpl>(
-    const ModelTpl<double>&,
-    DataTpl<double>&,
-    const Eigen::MatrixBase<Eigen::VectorXd>&,
-    const Eigen::MatrixBase<Eigen::VectorXd>&,
-    const Eigen::MatrixBase<Eigen::VectorXd>&);
-
-// RNEA (Recursive Newton-Euler Algorithm)
-template const Eigen::VectorXd& rnea<double, 0, JointCollectionDefaultTpl>(
-    const ModelTpl<double>&,
-    DataTpl<double>&,
-    const Eigen::MatrixBase<Eigen::VectorXd>&,
-    const Eigen::MatrixBase<Eigen::VectorXd>&,
-    const Eigen::MatrixBase<Eigen::VectorXd>&);
-
-// Neutral configuration
-template void neutral<double, 0, JointCollectionDefaultTpl>(
-    const ModelTpl<double>&,
-    const Eigen::MatrixBase<Eigen::VectorXd>&);
+} // anonymous namespace
 
 } // namespace pinocchio

@@ -19,60 +19,6 @@ extern template class MotionTpl<double>;
 extern template class ForceTpl<double>;
 extern template class InertiaTpl<double>;
 
-// Algorithm functions
-extern template void forwardKinematics<double, 0, JointCollectionDefaultTpl>(
-    const ModelTpl<double>&,
-    DataTpl<double>&,
-    const Eigen::MatrixBase<Eigen::VectorXd>&);
-
-extern template void forwardKinematics<double, 0, JointCollectionDefaultTpl>(
-    const ModelTpl<double>&,
-    DataTpl<double>&,
-    const Eigen::MatrixBase<Eigen::VectorXd>&,
-    const Eigen::MatrixBase<Eigen::VectorXd>&);
-
-extern template void updateFramePlacements<double, 0, JointCollectionDefaultTpl>(
-    const ModelTpl<double>&,
-    DataTpl<double>&);
-
-extern template void computeJointJacobians<double, 0, JointCollectionDefaultTpl>(
-    const ModelTpl<double>&,
-    DataTpl<double>&,
-    const Eigen::MatrixBase<Eigen::VectorXd>&);
-
-extern template void getFrameJacobian<double, 0, JointCollectionDefaultTpl>(
-    const ModelTpl<double>&,
-    DataTpl<double>&,
-    const FrameIndex,
-    const ReferenceFrame,
-    const Eigen::MatrixBase<Eigen::Matrix<double, 6, Eigen::Dynamic>>&);
-
-extern template MotionTpl<double> getFrameVelocity<double, 0, JointCollectionDefaultTpl>(
-    const ModelTpl<double>&,
-    const DataTpl<double>&,
-    const FrameIndex,
-    const ReferenceFrame);
-
-extern template void computeAllTerms<double, 0, JointCollectionDefaultTpl>(
-    const ModelTpl<double>&,
-    DataTpl<double>&,
-    const Eigen::MatrixBase<Eigen::VectorXd>&,
-    const Eigen::MatrixBase<Eigen::VectorXd>&);
-
-extern template const Eigen::VectorXd& aba<double, 0, JointCollectionDefaultTpl>(
-    const ModelTpl<double>&,
-    DataTpl<double>&,
-    const Eigen::MatrixBase<Eigen::VectorXd>&,
-    const Eigen::MatrixBase<Eigen::VectorXd>&,
-    const Eigen::MatrixBase<Eigen::VectorXd>&);
-
-extern template const Eigen::VectorXd& rnea<double, 0, JointCollectionDefaultTpl>(
-    const ModelTpl<double>&,
-    DataTpl<double>&,
-    const Eigen::MatrixBase<Eigen::VectorXd>&,
-    const Eigen::MatrixBase<Eigen::VectorXd>&,
-    const Eigen::MatrixBase<Eigen::VectorXd>&);
-
 } // namespace pinocchio
 
 #endif // CRISP_CONTROLLERS_PINOCCHIO_FWD_HPP
