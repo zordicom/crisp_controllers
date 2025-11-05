@@ -20,6 +20,8 @@
 
 #include "realtime_tools/realtime_buffer.hpp"
 #include <crisp_controllers/cartesian_impedance_controller_parameters.hpp>
+#include <filesystem>
+#include <fstream>
 #include <memory>
 #include <sensor_msgs/msg/joint_state.hpp>
 #include <string>
@@ -184,9 +186,15 @@ private:
   cartesian_impedance_controller::Params params_;
 
   /** @brief Frame ID of the end effector in the robot model */
-  int end_effector_frame_id;
+  int ee_frame_id_;
   /** @brief Frame ID of the base frame in the robot model */
-  int base_frame_id;
+  int base_frame_id_;
+
+  /** @brief Cached joint IDs for each configured joint (to avoid lookups in
+   * control loop) */
+  std::vector<pinocchio::JointIndex> joint_ids_;
+  /** @brief Cached joint model references (to avoid lookups in control loop) */
+  std::vector<const pinocchio::Model::JointModel *> joint_models_;
 
   /** @brief Pinocchio robot model */
   pinocchio::Model model_;
@@ -232,7 +240,7 @@ private:
   Eigen::VectorXd tau_limits;
 
   /** @brief Current end effector pose */
-  pinocchio::SE3 end_effector_pose;
+  pinocchio::SE3 ee_pose_base_;
   /** @brief End effector Jacobian matrix */
   pinocchio::Data::Matrix6x J;
 
@@ -288,6 +296,36 @@ private:
   Eigen::Vector<double, 6> task_force_D_;
   /** @brief Task space total forces for CSV logging */
   Eigen::Vector<double, 6> task_force_total_;
+
+  // Pre-allocated matrices for real-time control loop (avoiding per-cycle
+  // allocations)
+  /** @brief Adjoint matrix for base-to-end-effector transformation */
+  Eigen::Matrix<double, 6, 6> Ad_be_;
+  /** @brief Adjoint matrix for base-to-world transformation */
+  Eigen::Matrix<double, 6, 6> Ad_bw_;
+  /** @brief Jacobian pseudo-inverse */
+  Eigen::MatrixXd J_pinv_;
+  /** @brief Identity matrix (nv x nv) */
+  Eigen::MatrixXd Id_nv_;
+  /** @brief Task space velocity */
+  Eigen::Vector<double, 6> task_velocity_;
+  /** @brief Operational space mass matrix inverse (for dynamic
+   * nullspace/operational space) */
+  Eigen::Matrix<double, 6, 6> Mx_inv_;
+  /** @brief Operational space mass matrix */
+  Eigen::Matrix<double, 6, 6> Mx_;
+  /** @brief Dynamically consistent Jacobian inverse */
+  Eigen::MatrixXd J_bar_;
+  /** @brief Unclamped desired torque (before saturation) */
+  Eigen::VectorXd tau_d_unclamped_;
+  /** @brief Task space joint position update (for position control) */
+  Eigen::VectorXd q_task_;
+  /** @brief Nullspace joint position update */
+  Eigen::VectorXd q_nullspace_update_;
+  /** @brief New goal joint positions */
+  Eigen::VectorXd q_goal_new_;
+  /** @brief Change in goal joint positions */
+  Eigen::VectorXd q_goal_delta_;
 
   /**
    * @brief Log debug information based on parameter settings
