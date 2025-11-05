@@ -18,8 +18,30 @@ endif()
 # Enable precompiled headers
 option(USE_PRECOMPILED_HEADERS "Use precompiled headers" ON)
 
+# Enable unity build for faster compilation
+option(USE_UNITY_BUILD "Use unity build" ON)
+
 if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
     add_compile_options(-Wall -Wextra -Wpedantic)
+
+    # Add optimization flags for faster builds
+    if(CMAKE_BUILD_TYPE STREQUAL "Debug")
+        # Use -Og for faster debug builds with some optimization
+        add_compile_options(-Og)
+    elseif(CMAKE_BUILD_TYPE STREQUAL "RelWithDebInfo")
+        # Template-heavy code benefits from these flags
+        add_compile_options(-O2 -march=native)
+    elseif(CMAKE_BUILD_TYPE STREQUAL "Release")
+        add_compile_options(-O3 -march=native)
+    endif()
+
+    # Reduce template instantiation depth if needed (default is 900)
+    add_compile_options(-ftemplate-backtrace-limit=0)
+
+    # Enable parallel template instantiation for GCC 9+
+    if(CMAKE_CXX_COMPILER_ID MATCHES "GNU" AND CMAKE_CXX_COMPILER_VERSION VERSION_GREATER_EQUAL 9.0)
+        add_compile_options(-ftemplate-param-max-expanded=100000)
+    endif()
 endif()
 
 option(CHECK_TIDY "Adds clang-tidy tests" OFF)
@@ -74,10 +96,16 @@ target_include_directories(${PROJECT_NAME}
 )
 
 if(USE_PRECOMPILED_HEADERS)
-    target_precompile_headers(${PROJECT_NAME} 
+    target_precompile_headers(${PROJECT_NAME}
         PRIVATE
         include/crisp_controllers/pch.hpp
     )
+endif()
+
+if(USE_UNITY_BUILD)
+    set_target_properties(${PROJECT_NAME} PROPERTIES UNITY_BUILD ON)
+    # Optionally adjust batch size (default is 8)
+    set_target_properties(${PROJECT_NAME} PROPERTIES UNITY_BUILD_BATCH_SIZE 16)
 endif()
 
 # Link parameter libraries to the main library
