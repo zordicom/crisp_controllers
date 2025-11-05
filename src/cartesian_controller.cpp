@@ -207,10 +207,19 @@ CartesianController::update(const rclcpp::Time &time,
 
   J_pinv_ = pseudo_inverse(J, params_.nullspace.regularization);
 
-  if (params_.nullspace.projector_type == "dynamic") {
+  // Compute Minverse once if needed by either dynamic nullspace or operational space
+  bool minverse_computed = false;
+  if (params_.nullspace.projector_type == "dynamic" || params_.use_operational_space) {
     pinocchio::computeMinverse(model_, data_, q_pin);
+    minverse_computed = true;
+
+    // Compute operational space mass matrix (used by both dynamic nullspace and OSC)
     Mx_inv_ = J * data_.Minv * J.transpose();
     Mx_ = pseudo_inverse(Mx_inv_);
+  }
+
+  if (params_.nullspace.projector_type == "dynamic") {
+    // Use already computed Minv and Mx
     J_bar_ = data_.Minv * J.transpose() * Mx_;
     nullspace_projection = Id_nv_ - J.transpose() * J_bar_.transpose();
   } else if (params_.nullspace.projector_type == "kinematic") {
@@ -239,9 +248,7 @@ CartesianController::update(const rclcpp::Time &time,
   }
 
   if (params_.use_operational_space) {
-    pinocchio::computeMinverse(model_, data_, q_pin);
-    Mx_inv_ = J * data_.Minv * J.transpose();
-    Mx_ = pseudo_inverse(Mx_inv_);
+    // Minv and Mx already computed above if needed
 
     task_force_total_ = Mx_ * (task_force_P_ - task_force_D_);
     tau_task = J.transpose() * task_force_total_;
@@ -279,6 +286,9 @@ CartesianController::update(const rclcpp::Time &time,
   }
 
   if (params_.use_coriolis_compensation) {
+    // TODO: This might be redundant - computeAllTerms already computes C*dq+g in data_.nle
+    // Could potentially use: tau_coriolis = data_.nle - gravity_terms
+    // But needs careful testing to ensure correctness
     pinocchio::computeAllTerms(model_, data_, q_pin, dq);
     tau_coriolis =
         pinocchio::computeCoriolisMatrix(model_, data_, q_pin, dq) * dq;
