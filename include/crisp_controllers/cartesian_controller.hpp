@@ -2,7 +2,8 @@
 
 /**
  * @file cartesian_controller.hpp
- * @brief Cartesian controller implementation for robot manipulation (supports impedance and OSC)
+ * @brief Cartesian controller implementation for robot manipulation (supports
+ * impedance and OSC)
  * @author Your Organization
  */
 
@@ -19,11 +20,11 @@
 
 #include "realtime_tools/realtime_buffer.hpp"
 #include <crisp_controllers/cartesian_impedance_controller_parameters.hpp>
+#include <filesystem>
+#include <fstream>
 #include <sensor_msgs/msg/joint_state.hpp>
 #include <string>
 #include <unordered_set>
-#include <fstream>
-#include <filesystem>
 
 using CallbackReturn =
     rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn;
@@ -38,8 +39,7 @@ namespace crisp_controllers {
  * allowing for compliant interaction with the environment while maintaining
  * desired position and orientation targets.
  */
-class CartesianController
-    : public controller_interface::ControllerInterface {
+class CartesianController : public controller_interface::ControllerInterface {
 public:
   /**
    * @brief Get the command interface configuration
@@ -107,20 +107,20 @@ private:
    * @param time Current time for logging
    * @return Computed control torques
    */
-  Eigen::VectorXd computeControlTorques(
-      const pinocchio::SE3& current_pose,
-      const pinocchio::SE3& target_pose,
-      const Eigen::VectorXd& q,
-      const Eigen::VectorXd& q_pin,
-      const Eigen::VectorXd& dq,
-      const rclcpp::Time& time);
+  Eigen::VectorXd computeControlTorques(const pinocchio::SE3 &current_pose,
+                                        const pinocchio::SE3 &target_pose,
+                                        const Eigen::VectorXd &q,
+                                        const Eigen::VectorXd &q_pin,
+                                        const Eigen::VectorXd &dq,
+                                        const rclcpp::Time &time);
 
   /** @brief Subscription for target pose messages */
   rclcpp::Subscription<geometry_msgs::msg::PoseStamped>::SharedPtr pose_sub_;
   /** @brief Subscription for target joint state messages */
   rclcpp::Subscription<sensor_msgs::msg::JointState>::SharedPtr joint_sub_;
   /** @brief Subscription for target wrench messages */
-  rclcpp::Subscription<geometry_msgs::msg::WrenchStamped>::SharedPtr wrench_sub_;
+  rclcpp::Subscription<geometry_msgs::msg::WrenchStamped>::SharedPtr
+      wrench_sub_;
 
   /** @brief Flag to indicate if multiple publishers detected */
   bool multiple_publishers_detected_;
@@ -134,17 +134,20 @@ private:
   void setStiffnessAndDamping();
 
   /**
-   * @brief Reads the target pose in realtime loop from the buffer and parses it to be used in the controller.
+   * @brief Reads the target pose in realtime loop from the buffer and parses it
+   * to be used in the controller.
    */
   void parse_target_pose_();
 
   /**
-   * @brief Reads the target joint in realtime loop from the buffer and parses it to be used in the controller.
+   * @brief Reads the target joint in realtime loop from the buffer and parses
+   * it to be used in the controller.
    */
   void parse_target_joint_();
 
   /**
-   * @brief Reads the target wrench in realtime loop from the buffer and parses it to be used in the controller.
+   * @brief Reads the target wrench in realtime loop from the buffer and parses
+   * it to be used in the controller.
    */
   void parse_target_wrench_();
 
@@ -152,14 +155,16 @@ private:
   bool new_target_joint_;
   bool new_target_wrench_;
 
-  realtime_tools::RealtimeBuffer<std::shared_ptr<geometry_msgs::msg::PoseStamped>>
-    target_pose_buffer_;
+  realtime_tools::RealtimeBuffer<
+      std::shared_ptr<geometry_msgs::msg::PoseStamped>>
+      target_pose_buffer_;
 
   realtime_tools::RealtimeBuffer<std::shared_ptr<sensor_msgs::msg::JointState>>
-    target_joint_buffer_;
+      target_joint_buffer_;
 
-  realtime_tools::RealtimeBuffer<std::shared_ptr<geometry_msgs::msg::WrenchStamped>>
-    target_wrench_buffer_;
+  realtime_tools::RealtimeBuffer<
+      std::shared_ptr<geometry_msgs::msg::WrenchStamped>>
+      target_wrench_buffer_;
 
   /** @brief Target position in Cartesian space */
   Eigen::Vector3d target_position_;
@@ -177,9 +182,15 @@ private:
   cartesian_impedance_controller::Params params_;
 
   /** @brief Frame ID of the end effector in the robot model */
-  int end_effector_frame_id;
+  int ee_frame_id_;
   /** @brief Frame ID of the base frame in the robot model */
-  int base_frame_id;
+  int base_frame_id_;
+
+  /** @brief Cached joint IDs for each configured joint (to avoid lookups in
+   * control loop) */
+  std::vector<pinocchio::JointIndex> joint_ids_;
+  /** @brief Cached joint model references (to avoid lookups in control loop) */
+  std::vector<const pinocchio::Model::JointModel *> joint_models_;
 
   /** @brief Pinocchio robot model */
   pinocchio::Model model_;
@@ -201,8 +212,8 @@ private:
   /** @brief Raw joint positions from hardware (before filtering) */
   Eigen::VectorXd q_raw;
   /** @brief Current joint positions with dimension nq.
-   This is size might be different than the actuated dimension of the joint type is different!
-   Check https://github.com/stack-of-tasks/pinocchio/issues/1127
+   This is size might be different than the actuated dimension of the joint type
+   is different! Check https://github.com/stack-of-tasks/pinocchio/issues/1127
   */
   Eigen::VectorXd q_pin;
   /** @brief Current joint velocities */
@@ -225,7 +236,7 @@ private:
   Eigen::VectorXd tau_limits;
 
   /** @brief Current end effector pose */
-  pinocchio::SE3 end_effector_pose;
+  pinocchio::SE3 ee_pose_base_;
   /** @brief End effector Jacobian matrix */
   pinocchio::Data::Matrix6x J;
 
@@ -236,20 +247,16 @@ private:
   /** @brief Friction parameters 3 of size nv */
   Eigen::VectorXd fp3;
 
-
   /** @brief Allowed type of joints **/
   const std::unordered_set<std::basic_string<char>> allowed_joint_types = {
-    "JointModelRX",
-    "JointModelRY",
-    "JointModelRZ",
-    "JointModelRevoluteUnaligned",
-    "JointModelRUBX",
-    "JointModelRUBY",
-    "JointModelRUBZ",
+      "JointModelRX",   "JointModelRY",
+      "JointModelRZ",   "JointModelRevoluteUnaligned",
+      "JointModelRUBX", "JointModelRUBY",
+      "JointModelRUBZ",
   };
   /** @brief Continous joint types that should be considered separetly. **/
-  const std::unordered_set<std::basic_string<char>> continous_joint_types =
-    {"JointModelRUBX", "JointModelRUBY", "JointModelRUBZ"};
+  const std::unordered_set<std::basic_string<char>> continous_joint_types = {
+      "JointModelRUBX", "JointModelRUBY", "JointModelRUBZ"};
 
   /** @brief Maximum allowed delta values for error clipping */
   Eigen::VectorXd max_delta_ = Eigen::VectorXd::Zero(6);
@@ -286,18 +293,48 @@ private:
   /** @brief Task space total forces for CSV logging */
   Eigen::Vector<double, 6> task_force_total_;
 
+  // Pre-allocated matrices for real-time control loop (avoiding per-cycle
+  // allocations)
+  /** @brief Adjoint matrix for base-to-end-effector transformation */
+  Eigen::Matrix<double, 6, 6> Ad_be_;
+  /** @brief Adjoint matrix for base-to-world transformation */
+  Eigen::Matrix<double, 6, 6> Ad_bw_;
+  /** @brief Jacobian pseudo-inverse */
+  Eigen::MatrixXd J_pinv_;
+  /** @brief Identity matrix (nv x nv) */
+  Eigen::MatrixXd Id_nv_;
+  /** @brief Task space velocity */
+  Eigen::Vector<double, 6> task_velocity_;
+  /** @brief Operational space mass matrix inverse (for dynamic
+   * nullspace/operational space) */
+  Eigen::Matrix<double, 6, 6> Mx_inv_;
+  /** @brief Operational space mass matrix */
+  Eigen::Matrix<double, 6, 6> Mx_;
+  /** @brief Dynamically consistent Jacobian inverse */
+  Eigen::MatrixXd J_bar_;
+  /** @brief Unclamped desired torque (before saturation) */
+  Eigen::VectorXd tau_d_unclamped_;
+  /** @brief Task space joint position update (for position control) */
+  Eigen::VectorXd q_task_;
+  /** @brief Nullspace joint position update */
+  Eigen::VectorXd q_nullspace_update_;
+  /** @brief New goal joint positions */
+  Eigen::VectorXd q_goal_new_;
+  /** @brief Change in goal joint positions */
+  Eigen::VectorXd q_goal_delta_;
+
   /**
    * @brief Log debug information based on parameter settings
    * @param time Current time for throttling logs
    */
-  void log_debug_info(const rclcpp::Time& time);
+  void log_debug_info(const rclcpp::Time &time);
 
   /**
    * @brief Check publisher count for a specific topic
    * @param topic_name Name of the topic to check
    * @return true if publisher count is safe (<=1), false otherwise
    */
-  bool check_topic_publisher_count(const std::string& topic_name);
+  bool check_topic_publisher_count(const std::string &topic_name);
 
   /** @brief CSV log file stream for controller diagnostics */
   std::ofstream csv_log_file_;

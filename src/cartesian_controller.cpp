@@ -72,13 +72,9 @@ CartesianController::update(const rclcpp::Time &time,
   }
 
   for (size_t i = 0; i < num_joints; i++) {
-
-    // TODO: later it might be better to get this thing prepared in the
-    // configuration part (not in the control loop)
-    auto joint_name = params_.joints[i];
-    auto joint_id =
-        model_.getJointId(joint_name); // pinocchio joind id might be different
-    auto joint = model_.joints[joint_id];
+    // Use cached joint IDs and models (moved from control loop to
+    // configuration)
+    const auto &joint = *joint_models_[i];
 
     // Store raw values from hardware for logging
     q_raw[i] = state_interfaces_[i].get_value();
@@ -137,7 +133,14 @@ CartesianController::update(const rclcpp::Time &time,
    * target_position_);*/
 
   // Get end-effector pose in world frame (as Pinocchio provides it)
-  end_effector_pose = data_.oMf[end_effector_frame_id];
+  pinocchio::SE3 ee_pose_world = data_.oMf[ee_frame_id_];
+
+  // Get base frame pose in world frame
+  pinocchio::SE3 base_frame_pose_world = data_.oMf[base_frame_id_];
+
+  // Transform end-effector pose to base frame for consistent error computation
+  // Base->EE = (World->Base)^-1 * (World->EE)
+  ee_pose_base_ = base_frame_pose_world.inverse() * ee_pose_world;
 
   // Log first update to verify state interface data
   if (first_update) {
@@ -145,8 +148,8 @@ CartesianController::update(const rclcpp::Time &time,
                 "First update: Joint positions: [%.3f, %.3f, %.3f, %.3f, %.3f, "
                 "%.3f, %.3f]",
                 q[0], q[1], q[2], q[3], q[4], q[5], q[6]);
-    Eigen::Vector3d current_pos = end_effector_pose.translation();
-    Eigen::Quaterniond current_quat(end_effector_pose.rotation());
+    Eigen::Vector3d current_pos = ee_pose_base_.translation();
+    Eigen::Quaterniond current_quat(ee_pose_base_.rotation());
     RCLCPP_INFO(
         get_node()->get_logger(),
         "First update: Current end-effector position: [%.3f, %.3f, %.3f]",
@@ -160,18 +163,10 @@ CartesianController::update(const rclcpp::Time &time,
 
   // We consider translation and rotation separately to avoid unatural screw
   // motions
-  if (params_.use_local_jacobian) {
-    error.head(3) =
-        end_effector_pose.rotation().transpose() *
-        (target_pose_.translation() - end_effector_pose.translation());
-    error.tail(3) = pinocchio::log3(end_effector_pose.rotation().transpose() *
-                                    target_pose_.rotation());
-  } else {
-    error.head(3) =
-        target_pose_.translation() - end_effector_pose.translation();
-    error.tail(3) = pinocchio::log3(target_pose_.rotation() *
-                                    end_effector_pose.rotation().transpose());
-  }
+  //
+  error.head(3) = target_pose_.translation() - ee_pose_base_.translation();
+  error.tail(3) = pinocchio::log3(target_pose_.rotation() *
+                                  ee_pose_base_.rotation().transpose());
 
   if (params_.limit_error) {
     max_delta_ << params_.task.error_clip.x, params_.task.error_clip.y,
@@ -193,23 +188,35 @@ CartesianController::update(const rclcpp::Time &time,
   auto reference_frame = params_.use_local_jacobian
                              ? pinocchio::ReferenceFrame::LOCAL
                              : pinocchio::ReferenceFrame::WORLD;
-  pinocchio::computeFrameJacobian(model_, data_, q_pin, end_effector_frame_id,
+  pinocchio::computeFrameJacobian(model_, data_, q_pin, ee_frame_id_,
                                   reference_frame, J);
 
-  Eigen::MatrixXd J_pinv(model_.nv, 6);
-  J_pinv = pseudo_inverse(J, params_.nullspace.regularization);
-  Eigen::MatrixXd Id_nv = Eigen::MatrixXd::Identity(model_.nv, model_.nv);
+  // Transform Jacobian to base frame for consistency with pose transformations
+  if (params_.use_local_jacobian) {
+    // For LOCAL Jacobian: need to transform from end-effector frame to base
+    // frame J_base = Ad(base->ee) * J_local = Ad(ee->base)^-1 * J_local
+    Ad_be_ = ee_pose_base_.toActionMatrix();
+    J = Ad_be_ * J;
+  } else {
+    // For WORLD Jacobian: transform from world frame to base frame
+    // J_base = Ad(base->world)^-1 * J_world = Ad(world->base) * J_world
+    pinocchio::SE3 base_to_world = data_.oMf[base_frame_id_];
+    Ad_bw_ = base_to_world.inverse().toActionMatrix();
+    J = Ad_bw_ * J;
+  }
+
+  J_pinv_ = pseudo_inverse(J, params_.nullspace.regularization);
 
   if (params_.nullspace.projector_type == "dynamic") {
     pinocchio::computeMinverse(model_, data_, q_pin);
-    auto Mx_inv = J * data_.Minv * J.transpose();
-    auto Mx = pseudo_inverse(Mx_inv);
-    auto J_bar = data_.Minv * J.transpose() * Mx;
-    nullspace_projection = Id_nv - J.transpose() * J_bar.transpose();
+    Mx_inv_ = J * data_.Minv * J.transpose();
+    Mx_ = pseudo_inverse(Mx_inv_);
+    J_bar_ = data_.Minv * J.transpose() * Mx_;
+    nullspace_projection = Id_nv_ - J.transpose() * J_bar_.transpose();
   } else if (params_.nullspace.projector_type == "kinematic") {
-    nullspace_projection = Id_nv - J_pinv * J;
+    nullspace_projection = Id_nv_ - J_pinv_ * J;
   } else if (params_.nullspace.projector_type == "none") {
-    nullspace_projection = Eigen::MatrixXd::Identity(model_.nv, model_.nv);
+    nullspace_projection = Id_nv_;
   } else {
     RCLCPP_ERROR_STREAM_ONCE(get_node()->get_logger(),
                              "Unknown nullspace projector type: "
@@ -218,30 +225,29 @@ CartesianController::update(const rclcpp::Time &time,
   }
 
   // Compute task space forces separately for logging
-  task_force_P_ = stiffness * error;               // Proportional term
-  Eigen::Vector<double, 6> task_velocity = J * dq; // Task space velocity
-  task_force_D_ = damping * task_velocity;         // Damping term
+  task_force_P_ = stiffness * error;        // Proportional term
+  task_velocity_ = J * dq;                  // Task space velocity
+  task_force_D_ = damping * task_velocity_; // Damping term
 
   // Log damping force computation to verify filtering effect
   static int damping_log_counter = 0;
   if (damping_log_counter++ % 100 == 0) {
     RCLCPP_INFO(get_node()->get_logger(),
                 "Damping: task_vel_x=%.4f, d_pos=%.2f, force_D_x=%.4f (P=%.4f)",
-                task_velocity[0], damping(0, 0), task_force_D_[0],
+                task_velocity_[0], damping(0, 0), task_force_D_[0],
                 task_force_P_[0]);
   }
 
   if (params_.use_operational_space) {
-
     pinocchio::computeMinverse(model_, data_, q_pin);
-    auto Mx_inv = J * data_.Minv * J.transpose();
-    auto Mx = pseudo_inverse(Mx_inv);
+    Mx_inv_ = J * data_.Minv * J.transpose();
+    Mx_ = pseudo_inverse(Mx_inv_);
 
-    task_force_total_ = Mx * (task_force_P_ - task_force_D_);
-    tau_task << J.transpose() * task_force_total_;
+    task_force_total_ = Mx_ * (task_force_P_ - task_force_D_);
+    tau_task = J.transpose() * task_force_total_;
   } else {
     task_force_total_ = task_force_P_ - task_force_D_;
-    tau_task << J.transpose() * task_force_total_;
+    tau_task = J.transpose() * task_force_total_;
   }
 
   // Store task space forces for CSV logging later in log_debug_info
@@ -249,48 +255,52 @@ CartesianController::update(const rclcpp::Time &time,
 
   if (model_.nq != model_.nv) {
     // TODO: Then we have some continouts joints, not being handled for now
-    tau_joint_limits = Eigen::VectorXd::Zero(model_.nv);
+    tau_joint_limits.setZero();
   } else if (params_.joint_limit_avoidance.enable) {
     tau_joint_limits = get_joint_limit_torque(
         q, model_.lowerPositionLimit, model_.upperPositionLimit,
         params_.joint_limit_avoidance.safe_range,
         params_.joint_limit_avoidance.max_torque);
   } else {
-    tau_joint_limits = Eigen::VectorXd::Zero(model_.nv);
+    tau_joint_limits.setZero();
   }
 
-  tau_secondary << nullspace_stiffness * (q_ref - q) +
-                       nullspace_damping * (dq_ref - dq);
+  tau_secondary =
+      nullspace_stiffness * (q_ref - q) + nullspace_damping * (dq_ref - dq);
 
-  tau_nullspace << nullspace_projection * tau_secondary;
+  tau_nullspace = nullspace_projection * tau_secondary;
   tau_nullspace = tau_nullspace.cwiseMin(params_.nullspace.max_tau)
                       .cwiseMax(-params_.nullspace.max_tau);
 
-  tau_friction = params_.use_friction ? get_friction(dq, fp1, fp2, fp3)
-                                      : Eigen::VectorXd::Zero(model_.nv);
+  if (params_.use_friction) {
+    tau_friction = get_friction(dq, fp1, fp2, fp3);
+  } else {
+    tau_friction.setZero();
+  }
 
   if (params_.use_coriolis_compensation) {
     pinocchio::computeAllTerms(model_, data_, q_pin, dq);
     tau_coriolis =
         pinocchio::computeCoriolisMatrix(model_, data_, q_pin, dq) * dq;
   } else {
-    tau_coriolis = Eigen::VectorXd::Zero(model_.nv);
+    tau_coriolis.setZero();
   }
 
-  tau_gravity = params_.use_gravity_compensation
-                    ? Eigen::VectorXd(params_.gravity_scale *
-                                      pinocchio::computeGeneralizedGravity(
-                                          model_, data_, q_pin))
-                    : Eigen::VectorXd::Zero(model_.nv);
+  if (params_.use_gravity_compensation) {
+    tau_gravity = params_.gravity_scale *
+                  pinocchio::computeGeneralizedGravity(model_, data_, q_pin);
+  } else {
+    tau_gravity.setZero();
+  }
 
-  tau_wrench << J.transpose() * target_wrench_;
+  tau_wrench = J.transpose() * target_wrench_;
 
   // Gravity-only mode: only apply gravity compensation (safe for gain tuning)
   if (params_.gravity_only_mode) {
-    tau_d << tau_gravity;
+    tau_d = tau_gravity;
   } else {
-    tau_d << tau_task + tau_nullspace + tau_friction + tau_coriolis +
-                 tau_gravity + tau_joint_limits + tau_wrench;
+    tau_d = tau_task + tau_nullspace + tau_friction + tau_coriolis +
+            tau_gravity + tau_joint_limits + tau_wrench;
   }
 
   if (params_.limit_torques) {
@@ -300,7 +310,7 @@ CartesianController::update(const rclcpp::Time &time,
   // Apply absolute torque limits from URDF/Pinocchio model
   // This ensures we never exceed motor torque capabilities
   // Using pre-calculated limits with safety factor for efficiency
-  Eigen::VectorXd tau_d_unclamped = tau_d;
+  tau_d_unclamped_ = tau_d;
 
   // Vectorized clamping: tau_d = min(max(tau_d, -limits), limits)
   tau_d = tau_d.cwiseMin(tau_limits).cwiseMax(-tau_limits);
@@ -320,7 +330,7 @@ CartesianController::update(const rclcpp::Time &time,
     // Log if any torques were saturated
     bool saturated = false;
     for (size_t i = 0; i < num_joints; ++i) {
-      if (std::abs(tau_d_unclamped[i] - tau_d[i]) > 0.01) {
+      if (std::abs(tau_d_unclamped_[i] - tau_d[i]) > 0.01) {
         saturated = true;
         break;
       }
@@ -329,9 +339,9 @@ CartesianController::update(const rclcpp::Time &time,
       RCLCPP_WARN(get_node()->get_logger(),
                   "Torque saturation active! Unclamped: [%.3f, %.3f, %.3f, "
                   "%.3f, %.3f, %.3f, %.3f] Nm",
-                  tau_d_unclamped[0], tau_d_unclamped[1], tau_d_unclamped[2],
-                  tau_d_unclamped[3], tau_d_unclamped[4], tau_d_unclamped[5],
-                  tau_d_unclamped[6]);
+                  tau_d_unclamped_[0], tau_d_unclamped_[1], tau_d_unclamped_[2],
+                  tau_d_unclamped_[3], tau_d_unclamped_[4], tau_d_unclamped_[5],
+                  tau_d_unclamped_[6]);
     }
   }
 
@@ -346,44 +356,46 @@ CartesianController::update(const rclcpp::Time &time,
     q_goal = q;
   } else {
     // Compute goal position components
-    Eigen::VectorXd q_task = J_pinv * error;
-    Eigen::VectorXd q_nullspace_update = nullspace_projection * (q_ref - q);
-    Eigen::VectorXd q_goal_new = q + q_task + q_nullspace_update;
+    q_task_ = J_pinv_ * error;
+    q_nullspace_update_ = nullspace_projection * (q_ref - q);
+    q_goal_new_ = q + q_task_ + q_nullspace_update_;
 
     // Check for discontinuities in q_goal (warn if jump > 1 radian)
     static int goal_discontinuity_counter = 0;
-    if (goal_discontinuity_counter++ % 10 == 0) {  // Check every 10 cycles
-      Eigen::VectorXd q_goal_delta = q_goal_new - q_goal;
-      double max_jump = q_goal_delta.cwiseAbs().maxCoeff();
+    if (goal_discontinuity_counter++ % 10 == 0) { // Check every 10 cycles
+      q_goal_delta_ = q_goal_new_ - q_goal;
+      double max_jump = q_goal_delta_.cwiseAbs().maxCoeff();
       if (max_jump > 1.0) {
-        RCLCPP_WARN(get_node()->get_logger(),
-                    "Large q_goal discontinuity detected: %.2f rad (max safe: 1.0 rad)",
-                    max_jump);
+        RCLCPP_WARN(
+            get_node()->get_logger(),
+            "Large q_goal discontinuity detected: %.2f rad (max safe: 1.0 rad)",
+            max_jump);
         // Log which joint and the components
         for (int i = 0; i < model_.nv; ++i) {
-          if (std::abs(q_goal_delta[i]) > 1.0) {
+          if (std::abs(q_goal_delta_[i]) > 1.0) {
             RCLCPP_WARN(get_node()->get_logger(),
                         "  Joint %d: delta=%.2f rad (q_task=%.2f, q_null=%.2f)",
-                        i, q_goal_delta[i], q_task[i], q_nullspace_update[i]);
+                        i, q_goal_delta_[i], q_task_[i],
+                        q_nullspace_update_[i]);
           }
         }
       }
     }
 
-    q_goal = q_goal_new;
+    q_goal = q_goal_new_;
   }
 
   // Set dq_goal to zero - we're doing position control, not velocity tracking
-  // The old calculation was producing unrealistically large velocities (>1000 rad/s)
-  // due to low damping values and Jacobian singularities
-  dq_goal = Eigen::VectorXd::Zero(model_.nv);
+  // The old calculation was producing unrealistically large velocities (>1000
+  // rad/s) due to low damping values and Jacobian singularities
+  dq_goal.setZero();
 
   // OLD CODE (removed):
   // Calculate dq_goal using Cartesian velocity approach
-  // Task space velocity: x_dot = K * error / D (avoid matrix inverse for numerical stability)
-  // Use element-wise division to handle zero damping gracefully
-  // Eigen::VectorXd x_dot_desired = Eigen::VectorXd::Zero(6);
-  // for (int i = 0; i < 6; ++i) {
+  // Task space velocity: x_dot = K * error / D (avoid matrix inverse for
+  // numerical stability) Use element-wise division to handle zero damping
+  // gracefully Eigen::VectorXd x_dot_desired = Eigen::VectorXd::Zero(6); for
+  // (int i = 0; i < 6; ++i) {
   //   if (std::abs(damping(i, i)) > 1e-6) {
   //     x_dot_desired[i] = stiffness(i, i) * error[i] / damping(i, i);
   //   }
@@ -396,7 +408,8 @@ CartesianController::update(const rclcpp::Time &time,
   // Eigen::VectorXd dq_nullspace = Eigen::VectorXd::Zero(model_.nv);
   // for (int i = 0; i < model_.nv; ++i) {
   //   if (std::abs(nullspace_damping(i, i)) > 1e-6) {
-  //     dq_nullspace[i] = nullspace_stiffness(i, i) * q_error_nullspace[i] / nullspace_damping(i, i);
+  //     dq_nullspace[i] = nullspace_stiffness(i, i) * q_error_nullspace[i] /
+  //     nullspace_damping(i, i);
   //   }
   //   // else: leave as zero when nullspace damping is zero
   // }
@@ -406,7 +419,7 @@ CartesianController::update(const rclcpp::Time &time,
 
   // Check for NaN or unreasonable values in dq_goal
   static int dq_goal_check_counter = 0;
-  if (dq_goal_check_counter++ % 10 == 0) {  // Check every 10 cycles
+  if (dq_goal_check_counter++ % 10 == 0) { // Check every 10 cycles
     bool has_nan = false;
     bool has_large = false;
     double max_dq = 0.0;
@@ -416,7 +429,7 @@ CartesianController::update(const rclcpp::Time &time,
         has_nan = true;
       }
       double abs_dq = std::abs(dq_goal[i]);
-      if (abs_dq > 10.0) {  // 10 rad/s is very high for most joints
+      if (abs_dq > 10.0) { // 10 rad/s is very high for most joints
         has_large = true;
       }
       max_dq = std::max(max_dq, abs_dq);
@@ -424,14 +437,16 @@ CartesianController::update(const rclcpp::Time &time,
 
     if (has_nan) {
       RCLCPP_ERROR(get_node()->get_logger(),
-                   "NaN or Inf detected in dq_goal! This indicates numerical instability.");
+                   "NaN or Inf detected in dq_goal! This indicates numerical "
+                   "instability.");
       RCLCPP_ERROR(get_node()->get_logger(),
                    "  dq_goal: [%.3f, %.3f, %.3f, %.3f, %.3f, %.3f, %.3f]",
-                   dq_goal[0], dq_goal[1], dq_goal[2], dq_goal[3],
-                   dq_goal[4], dq_goal[5], dq_goal[6]);
+                   dq_goal[0], dq_goal[1], dq_goal[2], dq_goal[3], dq_goal[4],
+                   dq_goal[5], dq_goal[6]);
     } else if (has_large) {
       RCLCPP_WARN(get_node()->get_logger(),
-                  "Large dq_goal detected: max=%.2f rad/s (consider if this is reasonable)",
+                  "Large dq_goal detected: max=%.2f rad/s (consider if this is "
+                  "reasonable)",
                   max_dq);
     }
   }
@@ -597,10 +612,9 @@ CallbackReturn CartesianController::on_configure(
     return CallbackReturn::ERROR;
   }
 
-  end_effector_frame_id = model_.getFrameId(params_.end_effector_frame);
-  RCLCPP_INFO_STREAM(
-      get_node()->get_logger(),
-      "Found end effector frame with ID: " << end_effector_frame_id);
+  ee_frame_id_ = model_.getFrameId(params_.end_effector_frame);
+  RCLCPP_INFO_STREAM(get_node()->get_logger(),
+                     "Found end effector frame with ID: " << ee_frame_id_);
 
   // Base frame is required for proper operation
   if (params_.base_frame.empty()) {
@@ -625,10 +639,10 @@ CallbackReturn CartesianController::on_configure(
     return CallbackReturn::ERROR;
   }
 
-  base_frame_id = model_.getFrameId(params_.base_frame);
+  base_frame_id_ = model_.getFrameId(params_.base_frame);
   RCLCPP_INFO_STREAM(get_node()->get_logger(),
                      "Found base frame '" << params_.base_frame
-                                          << "' with ID: " << base_frame_id);
+                                          << "' with ID: " << base_frame_id_);
   RCLCPP_INFO_STREAM(get_node()->get_logger(),
                      "Expecting target poses in frame: " << params_.base_frame);
 
@@ -644,6 +658,18 @@ CallbackReturn CartesianController::on_configure(
   tau_previous = Eigen::VectorXd::Zero(model_.nv);
   J = Eigen::MatrixXd::Zero(6, model_.nv);
 
+  // Pre-allocate matrices for control loop (avoiding per-cycle allocations)
+  J_pinv_ = Eigen::MatrixXd::Zero(model_.nv, 6);
+  Id_nv_ = Eigen::MatrixXd::Identity(model_.nv, model_.nv);
+  J_bar_ = Eigen::MatrixXd::Zero(model_.nv, 6);
+  tau_d_unclamped_ = Eigen::VectorXd::Zero(model_.nv);
+  q_task_ = Eigen::VectorXd::Zero(model_.nv);
+  q_nullspace_update_ = Eigen::VectorXd::Zero(model_.nv);
+  q_goal_new_ = Eigen::VectorXd::Zero(model_.nv);
+  q_goal_delta_ = Eigen::VectorXd::Zero(model_.nv);
+  // Note: Ad_be_, Ad_bw_, task_velocity_, Mx_inv_, Mx_ are fixed-size and don't
+  // need initialization
+
   // Pre-calculate torque limits with safety factor
   tau_limits = model_.effortLimit * params_.torque_safety_factor;
   RCLCPP_INFO_STREAM(get_node()->get_logger(),
@@ -658,6 +684,27 @@ CallbackReturn CartesianController::on_configure(
 
   nullspace_stiffness = Eigen::MatrixXd::Zero(model_.nv, model_.nv);
   nullspace_damping = Eigen::MatrixXd::Zero(model_.nv, model_.nv);
+
+  // Cache joint IDs and models to avoid lookups in the control loop
+  size_t num_joints = params_.joints.size();
+  joint_ids_.resize(num_joints);
+  joint_models_.resize(num_joints);
+
+  for (size_t i = 0; i < num_joints; i++) {
+    const auto &joint_name = params_.joints[i];
+    joint_ids_[i] = model_.getJointId(joint_name);
+    joint_models_[i] = &model_.joints[joint_ids_[i]];
+
+    // Verify the joint exists
+    if (joint_ids_[i] >= model_.joints.size()) {
+      RCLCPP_ERROR(get_node()->get_logger(), "Joint '%s' not found in model!",
+                   joint_name.c_str());
+      return CallbackReturn::ERROR;
+    }
+  }
+
+  RCLCPP_INFO(get_node()->get_logger(), "Cached %zu joint IDs for control loop",
+              num_joints);
 
   setStiffnessAndDamping();
 
@@ -838,13 +885,9 @@ CallbackReturn CartesianController::on_activate(
     const rclcpp_lifecycle::State & /*previous_state*/) {
   auto num_joints = params_.joints.size();
   for (size_t i = 0; i < num_joints; i++) {
-
-    // TODO: later it might be better to get this thing prepared in the
-    // configuration part (not in the control loop)
-    auto joint_name = params_.joints[i];
-    auto joint_id =
-        model_.getJointId(joint_name); // pinocchio joind id might be different
-    auto joint = model_.joints[joint_id];
+    // Use cached joint IDs and models (moved from control loop to
+    // configuration)
+    const auto &joint = *joint_models_[i];
 
     q[i] = state_interfaces_[i].get_value();
     if (continous_joint_types.count(
@@ -869,11 +912,17 @@ CallbackReturn CartesianController::on_activate(
   pinocchio::updateFramePlacements(model_, data_);
 
   // Get end-effector pose in world frame (as Pinocchio provides it)
-  end_effector_pose = data_.oMf[end_effector_frame_id];
+  pinocchio::SE3 ee_pose_world = data_.oMf[ee_frame_id_];
 
-  // Initialize target to current pose (in world frame)
-  target_position_ = end_effector_pose.translation();
-  target_orientation_ = Eigen::Quaterniond(end_effector_pose.rotation());
+  // Get base frame pose in world frame
+  pinocchio::SE3 base_frame_pose_world = data_.oMf[base_frame_id_];
+
+  // Transform end-effector pose to base frame for consistent initialization
+  ee_pose_base_ = base_frame_pose_world.inverse() * ee_pose_world;
+
+  // Initialize target to current pose (now in base frame)
+  target_position_ = ee_pose_base_.translation();
+  target_orientation_ = Eigen::Quaterniond(ee_pose_base_.rotation());
   target_pose_ =
       pinocchio::SE3(target_orientation_.toRotationMatrix(), target_position_);
 
@@ -919,10 +968,10 @@ CallbackReturn CartesianController::on_activate(
     // to MIT mode This prevents the arm from falling by computing the full
     // control law at activation
     tau_init =
-        computeControlTorques(end_effector_pose, // current pose
-                              target_pose_, // target pose (same as current)
-                              q,            // joint positions
-                              q_pin,        // pinocchio joint positions
+        computeControlTorques(ee_pose_base_, // current pose
+                              target_pose_,  // target pose (same as current)
+                              q,             // joint positions
+                              q_pin,         // pinocchio joint positions
                               dq, // joint velocities (should be near zero)
                               get_node()->get_clock()->now() // current time
         );
@@ -1091,16 +1140,10 @@ void CartesianController::parse_target_pose_() {
 
   pinocchio::SE3 target_in_base(quat_in_base.toRotationMatrix(), pose_in_base);
 
-  // Get base frame pose in world coordinates
-  pinocchio::SE3 base_in_world = data_.oMf[base_frame_id];
-
-  // Transform target pose to world frame: World->Target = (World->Base) *
-  // (Base->Target)
-  pinocchio::SE3 target_in_world = base_in_world * target_in_base;
-
-  // Extract position and orientation in world frame
-  target_position_ = target_in_world.translation();
-  target_orientation_ = Eigen::Quaterniond(target_in_world.rotation());
+  // Keep target in base frame to match the end-effector pose transformation
+  // Now both target_pose_ and end_effector_pose will be in base frame
+  target_position_ = target_in_base.translation();
+  target_orientation_ = Eigen::Quaterniond(target_in_base.rotation());
 }
 
 void CartesianController::parse_target_joint_() {
@@ -1137,7 +1180,7 @@ void CartesianController::log_debug_info(const rclcpp::Time &time) {
 
     RCLCPP_INFO_STREAM_THROTTLE(
         get_node()->get_logger(), *get_node()->get_clock(), 1000,
-        "end_effector_pos" << end_effector_pose.translation());
+        "end_effector_pos" << ee_pose_base_.translation());
     /*RCLCPP_INFO_STREAM_THROTTLE(get_node()->get_logger(),
      * *get_node()->get_clock(),*/
     /*                            1000, "end_effector_rot" <<
@@ -1282,8 +1325,8 @@ void CartesianController::log_debug_info(const rclcpp::Time &time) {
                   << "," << error_xyz_norm;
 
     // Write current pose (position and orientation as quaternion)
-    Eigen::Vector3d current_pos = end_effector_pose.translation();
-    Eigen::Quaterniond current_quat(end_effector_pose.rotation());
+    Eigen::Vector3d current_pos = ee_pose_base_.translation();
+    Eigen::Quaterniond current_quat(ee_pose_base_.rotation());
     csv_log_file_ << "," << current_pos.x() << "," << current_pos.y() << ","
                   << current_pos.z() << "," << current_quat.w() << ","
                   << current_quat.x() << "," << current_quat.y() << ","
@@ -1291,7 +1334,7 @@ void CartesianController::log_debug_info(const rclcpp::Time &time) {
 
     // Write current orientation as RPY (roll, pitch, yaw)
     Eigen::Vector3d current_rpy =
-        end_effector_pose.rotation().eulerAngles(0, 1, 2); // Roll, Pitch, Yaw
+        ee_pose_base_.rotation().eulerAngles(0, 1, 2); // Roll, Pitch, Yaw
     csv_log_file_ << "," << current_rpy[0] << "," << current_rpy[1] << ","
                   << current_rpy[2];
 
@@ -1435,7 +1478,7 @@ Eigen::VectorXd CartesianController::computeControlTorques(
   auto reference_frame = params_.use_local_jacobian
                              ? pinocchio::ReferenceFrame::LOCAL
                              : pinocchio::ReferenceFrame::WORLD;
-  pinocchio::computeFrameJacobian(model_, data_, q_pin, end_effector_frame_id,
+  pinocchio::computeFrameJacobian(model_, data_, q_pin, ee_frame_id_,
                                   reference_frame, J_local);
 
   // Compute nullspace projection
