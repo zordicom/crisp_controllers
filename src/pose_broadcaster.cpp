@@ -112,7 +112,7 @@ PoseBroadcaster::update(const rclcpp::Time &time,
     pose_msg.pose.orientation.y = world_quat.y();
     pose_msg.pose.orientation.z = world_quat.z();
     pose_msg.pose.orientation.w = world_quat.w();
-    rt_pose_publisher_->unlockAndPublish();
+    rt_world_pose_publisher_->unlockAndPublish();
     last_publish_time_ = time;
   }
 
