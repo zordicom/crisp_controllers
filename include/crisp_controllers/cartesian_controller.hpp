@@ -189,6 +189,8 @@ private:
   int ee_frame_id_;
   /** @brief Frame ID of the base frame in the robot model */
   int base_frame_id_;
+  /** @brief Static transformation from world to base frame (computed once at configure) */
+  pinocchio::SE3 base_frame_pose_world_;
 
   /** @brief Cached joint IDs for each configured joint (to avoid lookups in
    * control loop) */
@@ -239,8 +241,8 @@ private:
   /** @brief Pre-calculated torque limits with safety factor applied */
   Eigen::VectorXd tau_limits;
 
-  /** @brief Current end effector pose */
-  pinocchio::SE3 ee_pose_base_;
+  /** @brief Current end effector pose in world frame */
+  pinocchio::SE3 ee_pose_world_;
   /** @brief End effector Jacobian matrix */
   pinocchio::Data::Matrix6x J;
 
@@ -299,10 +301,6 @@ private:
 
   // Pre-allocated matrices for real-time control loop (avoiding per-cycle
   // allocations)
-  /** @brief Adjoint matrix for base-to-end-effector transformation */
-  Eigen::Matrix<double, 6, 6> Ad_be_;
-  /** @brief Adjoint matrix for base-to-world transformation */
-  Eigen::Matrix<double, 6, 6> Ad_bw_;
   /** @brief Jacobian pseudo-inverse */
   Eigen::MatrixXd J_pinv_;
   /** @brief Identity matrix (nv x nv) */
@@ -343,7 +341,6 @@ private:
 
   // Logging constants
   static constexpr int LOG_CYCLE_INTERVAL = 100; // Log every 100 cycles
-  static constexpr int CSV_FLUSH_INTERVAL = 50;  // Flush CSV every 50 cycles
 
   // Throttle debug logs to 1Hz
   static constexpr int DEBUG_LOG_THROTTLE_MS = 1000;
@@ -353,14 +350,8 @@ private:
   static constexpr double PARAM_REFRESH_INTERVAL_MS = 50.0;
 
   rclcpp::Time last_param_refresh_time_;
-  /** @brief CSV log file stream for controller diagnostics */
-  std::ofstream csv_log_file_;
-  /** @brief Flag to track if CSV logging is enabled */
-  bool csv_logging_enabled_ = false;
   /** @brief Start time for CSV logging (to compute relative timestamps) */
   rclcpp::Time csv_log_start_time_;
-  /** @brief Counter to track cycles for periodic CSV flushing */
-  size_t csv_flush_counter_ = 0;
   /** @brief CSV logger instance (can be sync or async) */
   std::unique_ptr<CSVLoggerInterface> csv_logger_;
 };

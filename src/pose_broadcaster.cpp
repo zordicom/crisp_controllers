@@ -35,21 +35,35 @@ PoseBroadcaster::state_interface_configuration() const {
 
 controller_interface::return_type
 PoseBroadcaster::update(const rclcpp::Time &time,
-                                   const rclcpp::Duration & /*period*/) {
+                        const rclcpp::Duration & /*period*/) {
+
+  // Decide whether to publish the pose or not
+  bool should_publish = true;
+  if (params_.publish_frequency > 0.0) {
+    auto time_since_last = time - last_publish_time_;
+    auto min_interval =
+        rclcpp::Duration::from_seconds(1.0 / params_.publish_frequency);
+    should_publish = time_since_last >= min_interval;
+  }
+
+  if (!should_publish) {
+    return controller_interface::return_type::OK;
+  }
 
   size_t num_joints = params_.joints.size();
   Eigen::VectorXd q_pin = Eigen::VectorXd::Zero(model_.nq);
 
   for (size_t i = 0; i < num_joints; i++) {
-
     auto joint_name = params_.joints[i];
     auto joint_id = model_.getJointId(joint_name);
     auto joint = model_.joints[joint_id];
 
     q[i] = state_interfaces_[i].get_value();
-    if (continous_joint_types.count(joint.shortname())) {  // Then we are handling a continous joint that is SO(2)
+    if (continous_joint_types.count(
+            joint.shortname())) { // Then we are handling a continous joint that
+                                  // is SO(2)
       q_pin[joint.idx_q()] = std::cos(q[i]);
-      q_pin[joint.idx_q()+1] = std::sin(q[i]);
+      q_pin[joint.idx_q() + 1] = std::sin(q[i]);
     } else {
       q_pin[joint.idx_q()] = q[i];
     }
@@ -59,26 +73,17 @@ PoseBroadcaster::update(const rclcpp::Time &time,
   pinocchio::updateFramePlacements(model_, data_);
 
   // Get poses in world frame
-  pinocchio::SE3 ee_pose_world = data_.oMf[end_effector_frame_id];    // World -> EE
-  pinocchio::SE3 base_pose_world = data_.oMf[base_frame_id];          // World -> Base
+  pinocchio::SE3 ee_pose_world =
+      data_.oMf[end_effector_frame_id];                       // World -> EE
+  pinocchio::SE3 base_pose_world = data_.oMf[base_frame_id];  // World -> Base
+  pinocchio::SE3 world_pose_base = base_pose_world.inverse(); // Base -> World
 
   // Transform to base frame: Base -> EE = (World -> Base)^-1 * (World -> EE)
-  pinocchio::SE3 current_pose = base_pose_world.inverse() * ee_pose_world;
+  pinocchio::SE3 current_pose = world_pose_base * ee_pose_world;
+  auto current_quaternion = Eigen::Quaterniond(current_pose.rotation());
 
-  auto current_quaternion =
-      Eigen::Quaterniond(current_pose.rotation());
-
-  // Decide whether to publish the pose or not
-  bool should_publish = true;
-  if (params_.publish_frequency > 0.0) {
-    auto time_since_last = time - last_publish_time_;
-    auto min_interval = rclcpp::Duration::from_seconds(1.0 / params_.publish_frequency);
-    should_publish = time_since_last >= min_interval;
-  }
-
-  if (should_publish && realtime_pose_publisher_ && realtime_pose_publisher_->trylock())
-  {
-    auto & pose_msg = realtime_pose_publisher_->msg_;
+  if (rt_pose_publisher_ && rt_pose_publisher_->trylock()) {
+    auto &pose_msg = rt_pose_publisher_->msg_;
 
     pose_msg.header.stamp = time;
     pose_msg.header.frame_id = params_.base_frame;
@@ -89,7 +94,25 @@ PoseBroadcaster::update(const rclcpp::Time &time,
     pose_msg.pose.orientation.y = current_quaternion.y();
     pose_msg.pose.orientation.z = current_quaternion.z();
     pose_msg.pose.orientation.w = current_quaternion.w();
-    realtime_pose_publisher_->unlockAndPublish();
+    rt_pose_publisher_->unlockAndPublish();
+    last_publish_time_ = time;
+  }
+
+  if (rt_world_pose_publisher_ && rt_world_pose_publisher_->trylock()) {
+    auto &pose_msg = rt_world_pose_publisher_->msg_;
+
+    auto world_quat = Eigen::Quaterniond(world_pose_base.rotation());
+
+    pose_msg.header.stamp = time;
+    pose_msg.header.frame_id = params_.base_frame;
+    pose_msg.pose.position.x = world_pose_base.translation()[0];
+    pose_msg.pose.position.y = world_pose_base.translation()[1];
+    pose_msg.pose.position.z = world_pose_base.translation()[2];
+    pose_msg.pose.orientation.x = world_quat.x();
+    pose_msg.pose.orientation.y = world_quat.y();
+    pose_msg.pose.orientation.z = world_quat.z();
+    pose_msg.pose.orientation.w = world_quat.w();
+    rt_pose_publisher_->unlockAndPublish();
     last_publish_time_ = time;
   }
 
@@ -128,41 +151,61 @@ CallbackReturn PoseBroadcaster::on_configure(
   pinocchio::Model raw_model_;
   pinocchio::urdf::buildModelFromXML(robot_description_, raw_model_);
 
-  RCLCPP_INFO(get_node()->get_logger(), "Checking available joints in model:"); 
+  RCLCPP_INFO(get_node()->get_logger(), "Checking available joints in model:");
   for (int joint_id = 0; joint_id < raw_model_.njoints; joint_id++) {
-      RCLCPP_INFO_STREAM(get_node()->get_logger(), "Joint " << joint_id << " with name " << raw_model_.names[joint_id] << " is of type " << raw_model_.joints[joint_id].shortname());
+    RCLCPP_INFO_STREAM(get_node()->get_logger(),
+                       "Joint " << joint_id << " with name "
+                                << raw_model_.names[joint_id] << " is of type "
+                                << raw_model_.joints[joint_id].shortname());
   }
 
   // First we check that the passed joints exist in the kineatic tree
-  for (auto& joint : params_.joints) {
+  for (auto &joint : params_.joints) {
     if (not raw_model_.existJointName(joint)) {
-      RCLCPP_ERROR_STREAM(get_node()->get_logger(), "Failed to configure because " << joint << " is not part of the kinematic tree but it has been passed in the parameters.");
+      RCLCPP_ERROR_STREAM(get_node()->get_logger(),
+                          "Failed to configure because "
+                              << joint
+                              << " is not part of the kinematic tree but it "
+                                 "has been passed in the parameters.");
       return CallbackReturn::ERROR;
     }
   }
-  RCLCPP_INFO(get_node()->get_logger(), "All joints passed in the parameters exist in the kinematic tree of the URDF.");
-  RCLCPP_INFO_STREAM(get_node()->get_logger(), "Removing the rest of the joints that are not used: ");
+  RCLCPP_INFO(get_node()->get_logger(),
+              "All joints passed in the parameters exist in the kinematic tree "
+              "of the URDF.");
+  RCLCPP_INFO_STREAM(get_node()->get_logger(),
+                     "Removing the rest of the joints that are not used: ");
   // Now we fix all joints that are not referenced in the tree
   std::vector<pinocchio::JointIndex> list_of_joints_to_lock_by_id;
-  for (auto& joint : raw_model_.names) {
-    if (std::find(params_.joints.begin(), params_.joints.end(), joint) == params_.joints.end() and joint != "universe") {
-      RCLCPP_INFO_STREAM(get_node()->get_logger(), "Joint " << joint << " is not used, removing it from the model.");
+  for (auto &joint : raw_model_.names) {
+    if (std::find(params_.joints.begin(), params_.joints.end(), joint) ==
+            params_.joints.end() and
+        joint != "universe") {
+      RCLCPP_INFO_STREAM(
+          get_node()->get_logger(),
+          "Joint " << joint << " is not used, removing it from the model.");
       list_of_joints_to_lock_by_id.push_back(raw_model_.getJointId(joint));
     }
   }
 
   Eigen::VectorXd q_locked = Eigen::VectorXd::Zero(raw_model_.nq);
-  model_ = pinocchio::buildReducedModel(raw_model_, list_of_joints_to_lock_by_id, q_locked);
+  model_ = pinocchio::buildReducedModel(raw_model_,
+                                        list_of_joints_to_lock_by_id, q_locked);
   data_ = pinocchio::Data(model_);
 
   for (int joint_id = 0; joint_id < model_.njoints; joint_id++) {
     if (model_.names[joint_id] == "universe") {
       continue;
     }
-      if (not allowed_joint_types.count(model_.joints[joint_id].shortname())) {
-        RCLCPP_ERROR_STREAM(get_node()->get_logger(), "Joint type "  << model_.joints[joint_id].shortname() << " is unsupported (" << model_.names[joint_id] << "), only revolute/continous like joints can be used.");
-        return CallbackReturn::ERROR;
-      }
+    if (not allowed_joint_types.count(model_.joints[joint_id].shortname())) {
+      RCLCPP_ERROR_STREAM(
+          get_node()->get_logger(),
+          "Joint type "
+              << model_.joints[joint_id].shortname() << " is unsupported ("
+              << model_.names[joint_id]
+              << "), only revolute/continous like joints can be used.");
+      return CallbackReturn::ERROR;
+    }
   }
 
   end_effector_frame_id = model_.getFrameId(params_.end_effector_frame);
@@ -171,27 +214,33 @@ CallbackReturn PoseBroadcaster::on_configure(
   if (params_.base_frame.empty()) {
     RCLCPP_ERROR(get_node()->get_logger(),
                  "base_frame parameter is required but not specified!");
-    RCLCPP_ERROR(get_node()->get_logger(),
-                 "Please set the base_frame parameter in the controller configuration.");
+    RCLCPP_ERROR(
+        get_node()->get_logger(),
+        "Please set the base_frame parameter in the controller configuration.");
     return CallbackReturn::ERROR;
   }
 
   // Check if base frame exists in the model
   if (!model_.existFrame(params_.base_frame)) {
     RCLCPP_ERROR_STREAM(get_node()->get_logger(),
-                        "Base frame '" << params_.base_frame << "' not found in model!");
+                        "Base frame '" << params_.base_frame
+                                       << "' not found in model!");
     RCLCPP_ERROR(get_node()->get_logger(), "Available frames:");
     for (size_t i = 0; i < model_.frames.size(); i++) {
-      RCLCPP_ERROR_STREAM(get_node()->get_logger(), "  - " << model_.frames[i].name);
+      RCLCPP_ERROR_STREAM(get_node()->get_logger(),
+                          "  - " << model_.frames[i].name);
     }
     return CallbackReturn::ERROR;
   }
 
   base_frame_id = model_.getFrameId(params_.base_frame);
   RCLCPP_INFO_STREAM(get_node()->get_logger(),
-                     "Found base frame '" << params_.base_frame << "' with ID: " << base_frame_id);
-  RCLCPP_INFO_STREAM(get_node()->get_logger(),
-                     "Pose broadcaster will publish end-effector poses relative to: " << params_.base_frame);
+                     "Found base frame '" << params_.base_frame
+                                          << "' with ID: " << base_frame_id);
+  RCLCPP_INFO_STREAM(
+      get_node()->get_logger(),
+      "Pose broadcaster will publish end-effector poses relative to: "
+          << params_.base_frame);
 
   q = Eigen::VectorXd::Zero(model_.nv);
 
@@ -203,11 +252,25 @@ CallbackReturn PoseBroadcaster::on_configure(
   RCLCPP_INFO_STREAM(get_node()->get_logger(),
                      "Publishing current pose to: " << pose_topic);
 
-  pose_publisher_ = get_node()->create_publisher<geometry_msgs::msg::PoseStamped>(
+  pose_publisher_ =
+      get_node()->create_publisher<geometry_msgs::msg::PoseStamped>(
           pose_topic, rclcpp::SystemDefaultsQoS());
-  realtime_pose_publisher_ =
-      std::make_shared<realtime_tools::RealtimePublisher<geometry_msgs::msg::PoseStamped>>(
-        pose_publisher_);
+
+  rt_pose_publisher_ = std::make_shared<
+      realtime_tools::RealtimePublisher<geometry_msgs::msg::PoseStamped>>(
+      pose_publisher_);
+
+  std::string world_pose_topic = node_name + "/world_pose";
+  RCLCPP_INFO_STREAM(get_node()->get_logger(),
+                     "Publishing world pose to: " << world_pose_topic);
+
+  world_pose_publisher_ =
+      get_node()->create_publisher<geometry_msgs::msg::PoseStamped>(
+          world_pose_topic, rclcpp::SystemDefaultsQoS());
+
+  rt_world_pose_publisher_ = std::make_shared<
+      realtime_tools::RealtimePublisher<geometry_msgs::msg::PoseStamped>>(
+      world_pose_publisher_);
 
   last_publish_time_ = this->get_node()->now();
   return CallbackReturn::SUCCESS;

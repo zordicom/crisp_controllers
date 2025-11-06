@@ -129,6 +129,7 @@ CartesianController::update(const rclcpp::Time &time,
   pinocchio::forwardKinematics(model_, data_, q_pin, dq);
   pinocchio::updateFramePlacements(model_, data_);
 
+  // Apply filtering to target pose (already in world frame from parse_target_pose_)
   pinocchio::SE3 new_target_pose =
       pinocchio::SE3(target_orientation_.toRotationMatrix(), target_position_);
 
@@ -137,14 +138,7 @@ CartesianController::update(const rclcpp::Time &time,
       params_.filter.target_pose));
 
   // Get end-effector pose in world frame (as Pinocchio provides it)
-  pinocchio::SE3 ee_pose_world = data_.oMf[ee_frame_id_];
-
-  // Get base frame pose in world frame
-  pinocchio::SE3 base_frame_pose_world = data_.oMf[base_frame_id_];
-
-  // Transform end-effector pose to base frame for consistent error computation
-  // Base->EE = (World->Base)^-1 * (World->EE)
-  ee_pose_base_ = base_frame_pose_world.inverse() * ee_pose_world;
+  ee_pose_world_ = data_.oMf[ee_frame_id_];
 
   // Log first update to verify state interface data
   if (first_update) {
@@ -152,25 +146,24 @@ CartesianController::update(const rclcpp::Time &time,
                 "First update: Joint positions: [%.3f, %.3f, %.3f, %.3f, %.3f, "
                 "%.3f, %.3f]",
                 q[0], q[1], q[2], q[3], q[4], q[5], q[6]);
-    Eigen::Vector3d current_pos = ee_pose_base_.translation();
-    Eigen::Quaterniond current_quat(ee_pose_base_.rotation());
+    Eigen::Vector3d current_pos = ee_pose_world_.translation();
+    Eigen::Quaterniond current_quat(ee_pose_world_.rotation());
     RCLCPP_INFO(
         get_node()->get_logger(),
-        "First update: Current end-effector position: [%.3f, %.3f, %.3f]",
+        "First update: Current end-effector position (world): [%.3f, %.3f, %.3f]",
         current_pos.x(), current_pos.y(), current_pos.z());
     RCLCPP_INFO(
         get_node()->get_logger(),
-        "First update: Target end-effector position: [%.3f, %.3f, %.3f]",
+        "First update: Target end-effector position (world): [%.3f, %.3f, %.3f]",
         target_position_.x(), target_position_.y(), target_position_.z());
     first_update = false;
   }
 
-  // We consider translation and rotation separately to avoid unatural screw
-  // motions
-  //
-  error.head(3) = target_pose_.translation() - ee_pose_base_.translation();
+  // Compute error in WORLD frame (both target_pose_ and ee_pose_world_ are in world frame)
+  // We consider translation and rotation separately to avoid unnatural screw motions
+  error.head(3) = target_pose_.translation() - ee_pose_world_.translation();
   error.tail(3) = pinocchio::log3(target_pose_.rotation() *
-                                  ee_pose_base_.rotation().transpose());
+                                  ee_pose_world_.rotation().transpose());
 
   if (params_.limit_error) {
     max_delta_ << params_.task.error_clip.x, params_.task.error_clip.y,
@@ -189,25 +182,12 @@ CartesianController::update(const rclcpp::Time &time,
   }
 
   J.setZero();
-  auto reference_frame = params_.use_local_jacobian
-                             ? pinocchio::ReferenceFrame::LOCAL
-                             : pinocchio::ReferenceFrame::WORLD;
+  // Always use WORLD frame as reference - this is the most straightforward approach
   pinocchio::computeFrameJacobian(model_, data_, q_pin, ee_frame_id_,
-                                  reference_frame, J);
+                                  pinocchio::ReferenceFrame::WORLD, J);
 
-  // Transform Jacobian to base frame for consistency with pose transformations
-  if (params_.use_local_jacobian) {
-    // For LOCAL Jacobian: need to transform from end-effector frame to base
-    // frame J_base = Ad(base->ee) * J_local = Ad(ee->base)^-1 * J_local
-    Ad_be_ = ee_pose_base_.toActionMatrix();
-    J = Ad_be_ * J;
-  } else {
-    // For WORLD Jacobian: transform from world frame to base frame
-    // J_base = Ad(base->world)^-1 * J_world = Ad(world->base) * J_world
-    pinocchio::SE3 base_to_world = data_.oMf[base_frame_id_];
-    Ad_bw_ = base_to_world.inverse().toActionMatrix();
-    J = Ad_bw_ * J;
-  }
+  // No transformation needed - we'll work directly in the world frame
+  // The base_frame is only used for interpreting target poses, not for Jacobian computation
 
   J_pinv_ = pseudo_inverse(J, params_.nullspace.regularization);
 
@@ -257,7 +237,6 @@ CartesianController::update(const rclcpp::Time &time,
 
   if (params_.use_operational_space) {
     // Minv and Mx already computed above if needed
-
     task_force_total_ = Mx_ * (task_force_P_ - task_force_D_);
     tau_task = J.transpose() * task_force_total_;
   } else {
@@ -668,6 +647,33 @@ CallbackReturn CartesianController::on_configure(
   RCLCPP_INFO_STREAM(get_node()->get_logger(),
                      "Expecting target poses in frame: " << params_.base_frame);
 
+  // Validate that base frame doesn't go through any actuated joints
+  // This ensures base_frame_pose_world_ remains constant
+  const auto& base_frame = model_.frames[base_frame_id_];
+  if (base_frame.parentJoint != 0) { // If not attached to universe/root
+    // Check if any joint in the kinematic chain to root is actuated
+    pinocchio::JointIndex current_joint = base_frame.parentJoint;
+    while (current_joint != 0) {
+      const auto& joint_name = model_.names[current_joint];
+      if (std::find(params_.joints.begin(), params_.joints.end(), joint_name) !=
+          params_.joints.end()) {
+        RCLCPP_ERROR(get_node()->get_logger(),
+                     "Base frame '%s' goes through actuated joint '%s'!",
+                     params_.base_frame.c_str(), joint_name.c_str());
+        RCLCPP_ERROR(get_node()->get_logger(),
+                     "The base frame must be fixed relative to the world frame. "
+                     "Please choose a frame that doesn't move with any actuated joints.");
+        return CallbackReturn::ERROR;
+      }
+      // Move up the kinematic chain
+      current_joint = model_.parents[current_joint];
+    }
+  }
+
+  RCLCPP_INFO(get_node()->get_logger(),
+              "Base frame '%s' validated - it's fixed relative to world frame",
+              params_.base_frame.c_str());
+
   q = Eigen::VectorXd::Zero(model_.nv);
   q_raw = Eigen::VectorXd::Zero(model_.nv);
   q_pin = Eigen::VectorXd::Zero(model_.nq);
@@ -689,8 +695,7 @@ CallbackReturn CartesianController::on_configure(
   q_nullspace_update_ = Eigen::VectorXd::Zero(model_.nv);
   q_goal_new_ = Eigen::VectorXd::Zero(model_.nv);
   q_goal_delta_ = Eigen::VectorXd::Zero(model_.nv);
-  // Note: Ad_be_, Ad_bw_, task_velocity_, Mx_inv_, Mx_ are fixed-size and don't
-  // need initialization
+  // Note: task_velocity_, Mx_inv_, Mx_ are fixed-size and don't need initialization
 
   // Pre-calculate torque limits with safety factor
   tau_limits = model_.effortLimit * params_.torque_safety_factor;
@@ -939,19 +944,21 @@ CallbackReturn CartesianController::on_activate(
   pinocchio::updateFramePlacements(model_, data_);
 
   // Get end-effector pose in world frame (as Pinocchio provides it)
-  pinocchio::SE3 ee_pose_world = data_.oMf[ee_frame_id_];
+  ee_pose_world_ = data_.oMf[ee_frame_id_];
 
-  // Get base frame pose in world frame
-  pinocchio::SE3 base_frame_pose_world = data_.oMf[base_frame_id_];
+  // Compute base frame pose in world frame (should be constant, verified in on_configure)
+  base_frame_pose_world_ = data_.oMf[base_frame_id_];
 
-  // Transform end-effector pose to base frame for consistent initialization
-  ee_pose_base_ = base_frame_pose_world.inverse() * ee_pose_world;
+  RCLCPP_INFO(get_node()->get_logger(),
+              "Base frame pose in world: pos=[%.3f, %.3f, %.3f]",
+              base_frame_pose_world_.translation().x(),
+              base_frame_pose_world_.translation().y(),
+              base_frame_pose_world_.translation().z());
 
-  // Initialize target to current pose (now in base frame)
-  target_position_ = ee_pose_base_.translation();
-  target_orientation_ = Eigen::Quaterniond(ee_pose_base_.rotation());
-  target_pose_ =
-      pinocchio::SE3(target_orientation_.toRotationMatrix(), target_position_);
+  // Initialize target to current pose in WORLD frame
+  target_pose_ = ee_pose_world_;
+  target_position_ = target_pose_.translation();
+  target_orientation_ = Eigen::Quaterniond(target_pose_.rotation());
 
   // Log initial state to verify data quality
   RCLCPP_INFO(get_node()->get_logger(),
@@ -960,10 +967,10 @@ CallbackReturn CartesianController::on_activate(
               q[0], q[1], q[2], q[3], q[4], q[5], q[6]);
   RCLCPP_INFO(
       get_node()->get_logger(),
-      "on_activate: Computed initial end-effector position: [%.3f, %.3f, %.3f]",
+      "on_activate: Initial end-effector position (world): [%.3f, %.3f, %.3f]",
       target_position_.x(), target_position_.y(), target_position_.z());
   RCLCPP_INFO(get_node()->get_logger(),
-              "on_activate: Computed initial end-effector orientation (quat): "
+              "on_activate: Initial end-effector orientation (world, quat): "
               "[%.3f, %.3f, %.3f, %.3f]",
               target_orientation_.w(), target_orientation_.x(),
               target_orientation_.y(), target_orientation_.z());
@@ -995,8 +1002,8 @@ CallbackReturn CartesianController::on_activate(
     // to MIT mode This prevents the arm from falling by computing the full
     // control law at activation
     tau_init =
-        computeControlTorques(ee_pose_base_, // current pose
-                              target_pose_,  // target pose (same as current)
+        computeControlTorques(ee_pose_world_, // current pose in world frame
+                              target_pose_,  // target pose (same as current, in world frame)
                               q,             // joint positions
                               q_pin,         // pinocchio joint positions
                               dq, // joint velocities (should be near zero)
@@ -1083,10 +1090,15 @@ void CartesianController::parse_target_pose_() {
 
   pinocchio::SE3 target_in_base(quat_in_base.toRotationMatrix(), pose_in_base);
 
-  // Keep target in base frame to match the end-effector pose transformation
-  // Now both target_pose_ and end_effector_pose will be in base frame
-  target_position_ = target_in_base.translation();
-  target_orientation_ = Eigen::Quaterniond(target_in_base.rotation());
+  // Transform target from base frame to world frame for consistent computation
+  // target_pose_ will be stored in world frame
+  // We need to get the current base_frame_pose_world_ from forward kinematics
+  base_frame_pose_world_ = data_.oMf[base_frame_id_];
+  target_pose_ = base_frame_pose_world_ * target_in_base;
+
+  // Store the individual components in world frame
+  target_position_ = target_pose_.translation();
+  target_orientation_ = Eigen::Quaterniond(target_pose_.rotation());
 }
 
 void CartesianController::parse_target_joint_() {
@@ -1122,8 +1134,8 @@ void CartesianController::log_debug_info(const rclcpp::Time &time,
 
     RCLCPP_INFO_STREAM_THROTTLE(get_node()->get_logger(),
                                 *get_node()->get_clock(), DEBUG_LOG_THROTTLE_MS,
-                                "end_effector_pos"
-                                    << ee_pose_base_.translation());
+                                "end_effector_pos (world): "
+                                    << ee_pose_world_.translation());
     RCLCPP_INFO_STREAM_THROTTLE(get_node()->get_logger(),
                                 *get_node()->get_clock(), DEBUG_LOG_THROTTLE_MS,
                                 "q: " << q.transpose());
@@ -1248,8 +1260,9 @@ void CartesianController::log_debug_info(const rclcpp::Time &time,
     log_data.error_rot_magnitude = error.tail(3).norm();
     log_data.error_pos_magnitude = error.head(3).norm();
 
-    log_data.current_pose = ee_pose_base_;
-    log_data.target_pose = target_pose_;
+    // Log poses in world/universe frame (where computation happens)
+    log_data.current_pose = ee_pose_world_;
+    log_data.target_pose = target_pose_;  // Already in world frame
 
     for (int i = 0; i < 6; ++i) {
       log_data.stiffness_diag[i] = stiffness(i, i);
@@ -1318,18 +1331,11 @@ Eigen::VectorXd CartesianController::computeControlTorques(
     const Eigen::VectorXd &q, const Eigen::VectorXd &q_pin,
     const Eigen::VectorXd &dq, [[maybe_unused]] const rclcpp::Time &time) {
 
-  // Compute pose error
+  // Compute pose error in WORLD frame (both poses are in world frame)
   Eigen::VectorXd error = Eigen::VectorXd::Zero(6);
-  if (params_.use_local_jacobian) {
-    error.head(3) = current_pose.rotation().transpose() *
-                    (target_pose.translation() - current_pose.translation());
-    error.tail(3) = pinocchio::log3(current_pose.rotation().transpose() *
-                                    target_pose.rotation());
-  } else {
-    error.head(3) = target_pose.translation() - current_pose.translation();
-    error.tail(3) = pinocchio::log3(target_pose.rotation() *
-                                    current_pose.rotation().transpose());
-  }
+  error.head(3) = target_pose.translation() - current_pose.translation();
+  error.tail(3) = pinocchio::log3(target_pose.rotation() *
+                                  current_pose.rotation().transpose());
 
   // Apply error limits if configured
   if (params_.limit_error) {
@@ -1340,13 +1346,10 @@ Eigen::VectorXd CartesianController::computeControlTorques(
     error = error.cwiseMax(-max_delta).cwiseMin(max_delta);
   }
 
-  // Compute Jacobian
+  // Compute Jacobian in WORLD frame
   Eigen::MatrixXd J_local = Eigen::MatrixXd::Zero(6, model_.nv);
-  auto reference_frame = params_.use_local_jacobian
-                             ? pinocchio::ReferenceFrame::LOCAL
-                             : pinocchio::ReferenceFrame::WORLD;
   pinocchio::computeFrameJacobian(model_, data_, q_pin, ee_frame_id_,
-                                  reference_frame, J_local);
+                                  pinocchio::ReferenceFrame::WORLD, J_local);
 
   // Compute nullspace projection
   Eigen::MatrixXd J_pinv =
