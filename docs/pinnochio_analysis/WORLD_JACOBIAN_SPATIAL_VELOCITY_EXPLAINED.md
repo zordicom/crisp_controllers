@@ -27,7 +27,10 @@ $$
 A **spatial velocity** (or twist) describes the motion of a rigid body. For the end-effector:
 
 $$
-\mathcal{V}_{\text{ee}} = \begin{bmatrix} \boldsymbol{\omega} \\ \mathbf{v} \end{bmatrix}
+\mathcal{V}_{\text{ee}} = \begin{bmatrix}
+\boldsymbol{\omega} \\
+\mathbf{v}
+\end{bmatrix}
 $$
 
 where:
@@ -45,7 +48,10 @@ The end-effector is spinning and moving. You can describe this same motion with 
 
 
 $$
-\mathcal{V}_{\text{WORLD}} = \begin{bmatrix} \mathbf{v}_{\text{origin}} \\ \boldsymbol{\omega} \end{bmatrix} = J_{\text{WORLD}}(q) \, \dot{q}
+\mathcal{V}_{\text{WORLD}} = \begin{bmatrix}
+\mathbf{v}_{\text{origin}} \\
+\boldsymbol{\omega}
+\end{bmatrix} = J_{\text{WORLD}}(q) \, \dot{q}
 $$
 
 
@@ -56,7 +62,10 @@ $$
 
 
 $$
-\mathcal{V}_{\text{ALIGNED}} = \begin{bmatrix} \mathbf{v}_{\text{ee point}} \\ \boldsymbol{\omega} \end{bmatrix} = J_{\text{ALIGNED}}(q) \, \dot{q}
+\mathcal{V}_{\text{ALIGNED}} = \begin{bmatrix}
+\mathbf{v}_{\text{ee point}} \\
+\boldsymbol{\omega}
+\end{bmatrix} = J_{\text{ALIGNED}}(q) \, \dot{q}
 $$
 
 - **Top 3 rows**: $\mathbf{v}_{\text{ee}}$ = linear velocity of actual end-effector point
@@ -86,11 +95,25 @@ J(q) = \begin{bmatrix}
 \end{bmatrix}
 $$
 
-Each column $j$ is the partial derivative:  $\text{col}_j = \frac{\partial \mathcal{V}_{\text{ee}}}{\partial \dot{q}_j}$ , meaning "when only joint $j$ moves at 1 rad/s, this is the resulting spatial velocity (of an imaginary point attached to the ee going through the origin for $\mathcal{V}_\text{world}$ , or the ee itself for $\mathcal{V}_\text{aligned}$ )."
+Each column $j$ is the partial derivative:
+
+$$
+\text{col}_j = \frac{\partial \mathcal{V}_{\text{ee}}}{\partial \dot{q}_j}
+$$
+
+This means: "when only joint $j$ moves at 1 rad/s, this is the resulting spatial velocity."
+
+The velocity can be measured at:
+- An imaginary point attached to the ee going through the origin: $\mathcal{V}_{\text{world}}$
+- The ee itself: $\mathcal{V}_{\text{aligned}}$
 
 ### Concrete Example (2-link planar robot)
 
-Consider a 2-link planar robot with 0.5 m links at configuration $q = [0, 0]$ (straight up). End-effector position: $\mathbf{r}_{\text{ee}} = [0, 1.0, 0]$, Joint 2 at: $\mathbf{r}_{J2} = [0, 0.5, 0]$.
+Consider a 2-link planar robot with 0.5 m links at configuration $q = [0, 0]$ (straight up).
+
+End-effector position: $\mathbf{r}_{\text{ee}} = [0, 1.0, 0]$
+
+Joint 2 position: $\mathbf{r}_{J2} = [0, 0.5, 0]$
 
 **Key insight:** When computing $\mathbf{v}_{\text{origin}}$ (WORLD frame), imagine the end-effector rigid body extended back to the origin. When a joint rotates:
 
@@ -104,7 +127,13 @@ Consider a 2-link planar robot with 0.5 m links at configuration $q = [0, 0]$ (s
 | J1 only | $[0,0,1]$ | $[0,0,0]$ | $[1.0, 0, 0]$ |
 | J2 only | $[0,0,1]$ | $[-0.5, 0, 0]$ | $[0.5, 0, 0]$ |
 
-Using the velocity transport formula $\mathbf{v}_{\text{ee}} = \mathbf{v}_{\text{origin}} + \boldsymbol{\omega} \times \mathbf{r}_{\text{ee}}$ , we verify: for J2, $[-0.5,0,0] + [0,0,1] \times [0,1.0,0] = [0.5, 0, 0]$ ✓
+**Verification using velocity transport formula:**
+
+$$
+\mathbf{v}_{\text{ee}} = \mathbf{v}_{\text{origin}} + \boldsymbol{\omega} \times \mathbf{r}_{\text{ee}}
+$$
+
+For J2: $[-0.5,0,0] + [0,0,1] \times [0,1.0,0] = [0.5, 0, 0]$ ✓
 
 **Resulting Jacobians at $q = [0, 0]$:**
 
@@ -127,7 +156,10 @@ J_{\text{ALIGNED}} = \begin{bmatrix}
 \end{bmatrix}
 $$
 
-**Key observation:** $J_{\text{WORLD}}$ has zero linear terms in column 1 (origin is the pivot), while $J_{\text{ALIGNED}}$ has non-zero terms (measuring at distant EE point).
+**Key observation:**
+
+- $J_{\text{WORLD}}$ has zero linear terms in column 1 (origin is the pivot)
+- $J_{\text{ALIGNED}}$ has non-zero terms (measuring at distant EE point)
 
 ---
 
@@ -135,7 +167,9 @@ $$
 
 ### For WORLD Frame
 
-For a **revolute joint j** at position $\mathbf{p}_j(q)$ with rotation axis $\hat{z}_j$ in world coordinates:
+For a **revolute joint j** with:
+- Position: $\mathbf{p}_j(q)$
+- Rotation axis: $\hat{z}_j$ in world coordinates
 
 $$
 J_{\text{WORLD}}(q)[:, j] = \begin{bmatrix}
@@ -209,7 +243,8 @@ WORLD frame is not an arbitrary choice - it's **essential for dynamics algorithm
 **You MUST use WORLD frame Jacobian when:**
 
 1. Computing operational space mass matrix: $\Lambda = (J M^{-1} J^T)^{-1}$
-2. Computing dynamic nullspace projection: $N = I - J^T (J^\#)^T$ where $J^\# = M^{-1} J^T \Lambda$ is the dynamically consistent pseudoinverse
+2. Computing dynamic nullspace projection: $N = I - J^T (J^{\#})^T$
+   - Where $J^{\#} = M^{-1} J^T \Lambda$ is the dynamically consistent pseudoinverse
 3. Any control law that explicitly uses the joint-space mass matrix M or its inverse
 
 **Why?** Because M is computed by CRBA using spatial inertias at the world origin. To maintain frame consistency in the spatial algebra framework, the Jacobian must also use WORLD frame.
@@ -267,7 +302,7 @@ F_sensed_tool = J_local.T @ tau_sensed  # Force felt by the tool in tool coordin
 - **Don't use for world-relative Cartesian control**: If you want "move +X in the room," use LOCAL_WORLD_ALIGNED
 - **Don't use for visualization**: Velocity arrows would rotate with tool (confusing)
 - **Don't use for trajectory following in world frame**: Path would be interpreted in constantly rotating frame
-- **Don't use with dynamics (M, M^{-1})**: Breaks spatial algebra consistency
+- **Don't use with dynamics (M, $M^{-1}$)**: Breaks spatial algebra consistency
 
 **Key distinction:**
 - **LOCAL**: "Push the tool forward along its own nose" (tool-centric)
@@ -276,7 +311,16 @@ F_sensed_tool = J_local.T @ tau_sensed  # Force felt by the tool in tool coordin
 
 ### Spatial Dynamics Fundamentals
 
-The Newton-Euler equation in spatial form: $\mathcal{F} = \mathcal{I} \, \mathcal{V}$ where $\mathcal{F}$ = spatial force (6×1), $\mathcal{I}$ = spatial inertia (6×6), $\mathcal{V}$ = spatial velocity (6×1).
+The Newton-Euler equation in spatial form:
+
+$$
+\mathcal{F} = \mathcal{I} \, \mathcal{V}
+$$
+
+Where:
+- $\mathcal{F}$ = spatial force (6×1)
+- $\mathcal{I}$ = spatial inertia (6×6)
+- $\mathcal{V}$ = spatial velocity (6×1)
 
 **RNEA (Recursive Newton-Euler) propagates spatial quantities:**
 

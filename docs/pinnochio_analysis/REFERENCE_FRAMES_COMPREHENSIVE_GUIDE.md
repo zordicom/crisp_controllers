@@ -29,11 +29,14 @@ All three describe **the same physical motion**, differing only in measurement p
 Spatial velocity measured at an **imaginary point** rigidly attached to the EE body, located at the world origin. Used for dynamics algorithms.
 
 $$
-J_{\text{WORLD}}(q) \dot{q} = \begin{bmatrix} \mathbf{v}_{\text{origin}} \\ \boldsymbol{\omega} \end{bmatrix}
+J_{\text{WORLD}}(q) \dot{q} = \begin{bmatrix}
+\mathbf{v}_{\text{origin}} \\
+\boldsymbol{\omega}
+\end{bmatrix}
 $$
 
-- Top 3 rows: $\mathbf{v}_{\text{origin}}$ = velocity of imaginary point at origin (NOT actual EE!)
-- Bottom 3 rows: $\boldsymbol{\omega}$ = angular velocity of EE body
+- **Top 3 rows:** $\mathbf{v}_{\text{origin}}$ - velocity of imaginary point at origin (NOT actual EE!)
+- **Bottom 3 rows:** $\boldsymbol{\omega}$ - angular velocity of EE body
 
 ### LOCAL_WORLD_ALIGNED Frame
 
@@ -42,11 +45,15 @@ $$
 Velocity at the actual end-effector point, expressed in world axes. The familiar textbook Jacobian.
 
 $$
-J_{\text{ALIGNED}}(q) \dot{q} = \begin{bmatrix} \mathbf{v}_{\text{ee}} \\ \boldsymbol{\omega} \end{bmatrix}
+J_{\text{ALIGNED}}(q) \dot{q} = \begin{bmatrix}
+\mathbf{v}_{\text{ee}} \\
+\boldsymbol{\omega}
+\end{bmatrix}
 $$
 
-- Top 3 rows: $\mathbf{v}_{\text{ee}} = \frac{\partial \mathbf{p}_{\text{ee}}}{\partial q}$ = velocity of actual EE point (what you usually want!)
-- Bottom 3 rows: $\boldsymbol{\omega}$ = angular velocity of EE body
+- **Top 3 rows:** Velocity of actual EE point (what you usually want!)
+  - $\mathbf{v}_{\text{ee}} = \frac{\partial \mathbf{p}_{\text{ee}}}{\partial q}$
+- **Bottom 3 rows:** $\boldsymbol{\omega}$ - angular velocity of EE body
 
 ### LOCAL Frame
 
@@ -55,11 +62,14 @@ $$
 Velocity at the actual end-effector point, expressed in the EE's own body axes. For tool-centric control.
 
 $$
-J_{\text{LOCAL}}(q) \dot{q} = \begin{bmatrix} \mathbf{v}_{\text{ee}}^{\text{local}} \\ \boldsymbol{\omega}^{\text{local}} \end{bmatrix}
+J_{\text{LOCAL}}(q) \dot{q} = \begin{bmatrix}
+\mathbf{v}_{\text{ee}}^{\text{local}} \\
+\boldsymbol{\omega}^{\text{local}}
+\end{bmatrix}
 $$
 
-- Top 3 rows: $\mathbf{v}_{\text{ee}}^{\text{local}}$ = velocity of actual EE point in EE body frame
-- Bottom 3 rows: $\boldsymbol{\omega}^{\text{local}}$ = angular velocity in EE body frame
+- **Top 3 rows:** $\mathbf{v}_{\text{ee}}^{\text{local}}$ - velocity of actual EE point in EE body frame
+- **Bottom 3 rows:** $\boldsymbol{\omega}^{\text{local}}$ - angular velocity in EE body frame
 
 ---
 
