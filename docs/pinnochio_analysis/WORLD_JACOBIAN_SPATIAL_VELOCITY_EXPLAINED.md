@@ -27,7 +27,7 @@ $$
 A **spatial velocity** (or twist) describes the motion of a rigid body. For the end-effector:
 
 $$
-\mathcal{V}_{\text{ee}} = \begin{bmatrix} \mathbf{v} \\ \boldsymbol{\omega} \end{bmatrix}
+\mathcal{V}_{\text{ee}} = \begin{bmatrix} \boldsymbol{\omega} \\ \mathbf{v} \end{bmatrix}
 $$
 
 where:
@@ -42,14 +42,19 @@ The key: **$\mathbf{v}$ depends on which point you choose as the reference!**
 The end-effector is spinning and moving. You can describe this same motion with different reference points:
 
 **Measured at world origin (0,0,0):**
+
+
 $$
 \mathcal{V}_{\text{WORLD}} = \begin{bmatrix} \mathbf{v}_{\text{origin}} \\ \boldsymbol{\omega} \end{bmatrix} = J_{\text{WORLD}}(q) \, \dot{q}
 $$
+
 
 - **Top 3 rows**: $\mathbf{v}_{\text{origin}}$ = linear velocity of imaginary point at world origin
 - **Bottom 3 rows**: $\boldsymbol{\omega}$ = angular velocity of the end-effector body
 
 **Measured at end-effector point:**
+
+
 $$
 \mathcal{V}_{\text{ALIGNED}} = \begin{bmatrix} \mathbf{v}_{\text{ee point}} \\ \boldsymbol{\omega} \end{bmatrix} = J_{\text{ALIGNED}}(q) \, \dot{q}
 $$
@@ -58,6 +63,7 @@ $$
 - **Bottom 3 rows**: $\boldsymbol{\omega}$ = angular velocity of the end-effector body
 
 The linear velocities are related by the **velocity transport formula**:
+
 $$
 \mathbf{v}_{\text{ee point}} = \mathbf{v}_{\text{origin}} + \boldsymbol{\omega} \times \mathbf{r}_{\text{ee}}
 $$
@@ -80,7 +86,7 @@ J(q) = \begin{bmatrix}
 \end{bmatrix}
 $$
 
-Each column $j$ is the partial derivative: $\text{col}_j = \frac{\partial \mathcal{V}_{\text{ee}}}{\partial \dot{q}_j}$, meaning "when only joint $j$ moves at 1 rad/s, this is the resulting spatial velocity (of an imaginary point attached to the ee going through the origin for $\mathcal{V}_\text{world}$, or the ee itself for $\mathcal{V}_\text{aligned}$)."
+Each column $j$ is the partial derivative:  $\text{col}_j = \frac{\partial \mathcal{V}_{\text{ee}}}{\partial \dot{q}_j}$ , meaning "when only joint $j$ moves at 1 rad/s, this is the resulting spatial velocity (of an imaginary point attached to the ee going through the origin for $\mathcal{V}_\text{world}$ , or the ee itself for $\mathcal{V}_\text{aligned}$ )."
 
 ### Concrete Example (2-link planar robot)
 
@@ -98,7 +104,7 @@ Consider a 2-link planar robot with 0.5 m links at configuration $q = [0, 0]$ (s
 | J1 only | $[0,0,1]$ | $[0,0,0]$ | $[1.0, 0, 0]$ |
 | J2 only | $[0,0,1]$ | $[-0.5, 0, 0]$ | $[0.5, 0, 0]$ |
 
-Using the velocity transport formula $\mathbf{v}_{\text{ee}} = \mathbf{v}_{\text{origin}} + \boldsymbol{\omega} \times \mathbf{r}_{\text{ee}}$, we verify: for J2, $[-0.5,0,0] + [0,0,1] \times [0,1.0,0] = [0.5, 0, 0]$ ✓
+Using the velocity transport formula $\mathbf{v}_{\text{ee}} = \mathbf{v}_{\text{origin}} + \boldsymbol{\omega} \times \mathbf{r}_{\text{ee}}$ , we verify: for J2, $[-0.5,0,0] + [0,0,1] \times [0,1.0,0] = [0.5, 0, 0]$ ✓
 
 **Resulting Jacobians at $q = [0, 0]$:**
 
@@ -202,8 +208,8 @@ WORLD frame is not an arbitrary choice - it's **essential for dynamics algorithm
 
 **You MUST use WORLD frame Jacobian when:**
 
-1. Computing operational space mass matrix: Λ = (J M^{-1} J^T)^{-1}
-2. Computing dynamic nullspace projection: N = I - J^T J̄^T where J̄ uses M^{-1}
+1. Computing operational space mass matrix: $\Lambda = (J M^{-1} J^T)^{-1}$
+2. Computing dynamic nullspace projection: $N = I - J^T (J^\#)^T$ where $J^\# = M^{-1} J^T \Lambda$ is the dynamically consistent pseudoinverse
 3. Any control law that explicitly uses the joint-space mass matrix M or its inverse
 
 **Why?** Because M is computed by CRBA using spatial inertias at the world origin. To maintain frame consistency in the spatial algebra framework, the Jacobian must also use WORLD frame.
@@ -258,10 +264,10 @@ F_sensed_tool = J_local.T @ tau_sensed  # Force felt by the tool in tool coordin
 
 **When NOT to use LOCAL:**
 
-- ❌ **Don't use for world-relative Cartesian control**: If you want "move +X in the room," use LOCAL_WORLD_ALIGNED
-- ❌ **Don't use for visualization**: Velocity arrows would rotate with tool (confusing)
-- ❌ **Don't use for trajectory following in world frame**: Path would be interpreted in constantly rotating frame
-- ❌ **Don't use with dynamics (M, M^{-1})**: Breaks spatial algebra consistency
+- **Don't use for world-relative Cartesian control**: If you want "move +X in the room," use LOCAL_WORLD_ALIGNED
+- **Don't use for visualization**: Velocity arrows would rotate with tool (confusing)
+- **Don't use for trajectory following in world frame**: Path would be interpreted in constantly rotating frame
+- **Don't use with dynamics (M, M^{-1})**: Breaks spatial algebra consistency
 
 **Key distinction:**
 - **LOCAL**: "Push the tool forward along its own nose" (tool-centric)
