@@ -47,8 +47,6 @@ struct ControllerLogData {
   Eigen::VectorXd q_filtered;
   Eigen::VectorXd dq_raw;
   Eigen::VectorXd dq_filtered;
-  Eigen::VectorXd q_goal;
-  Eigen::VectorXd dq_goal;
 
   // Filter parameters
   double filter_q;

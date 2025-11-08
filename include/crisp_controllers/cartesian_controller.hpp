@@ -230,10 +230,6 @@ private:
   Eigen::VectorXd q_ref;
   /** @brief Reference joint velocities */
   Eigen::VectorXd dq_ref;
-  /** @brief Desired goal joint positions sent to position interface */
-  Eigen::VectorXd q_goal;
-  /** @brief Desired goal joint velocities sent to velocity interface */
-  Eigen::VectorXd dq_goal;
 
   /** @brief Previously computed torque */
   Eigen::VectorXd tau_previous;
@@ -316,14 +312,6 @@ private:
   Eigen::MatrixXd J_bar_;
   /** @brief Unclamped desired torque (before saturation) */
   Eigen::VectorXd tau_d_unclamped_;
-  /** @brief Task space joint position update (for position control) */
-  Eigen::VectorXd q_task_;
-  /** @brief Nullspace joint position update */
-  Eigen::VectorXd q_nullspace_update_;
-  /** @brief New goal joint positions */
-  Eigen::VectorXd q_goal_new_;
-  /** @brief Change in goal joint positions */
-  Eigen::VectorXd q_goal_delta_;
 
   /**
    * @brief Log debug information based on parameter settings

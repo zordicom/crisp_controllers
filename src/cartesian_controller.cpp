@@ -341,116 +341,10 @@ CartesianController::update(const rclcpp::Time &time,
     }
   }
 
-  // Calculate q_goal using differential IK with nullspace projection
-  // Primary task: Move toward target end-effector pose (J_pinv * error)
-  // Secondary task: Move toward preferred posture in nullspace
-  // (nullspace_projection * (q_ref - q)) This gives joint positions that
-  // satisfy both Cartesian goal and posture objective
-
-  // In gravity-only mode, set q_goal to current position (no position control)
-  if (params_.gravity_only_mode) {
-    q_goal = q;
-  } else {
-    // Compute goal position components
-    q_task_ = J_pinv_ * error;
-    q_nullspace_update_ = nullspace_projection * (q_ref - q);
-    q_goal_new_ = q + q_task_ + q_nullspace_update_;
-
-    // Check for discontinuities in q_goal (warn if jump > 1 radian)
-    static int goal_discontinuity_counter = 0;
-    if (goal_discontinuity_counter++ % 10 == 0) { // Check every 10 cycles
-      q_goal_delta_ = q_goal_new_ - q_goal;
-      double max_jump = q_goal_delta_.cwiseAbs().maxCoeff();
-      if (max_jump > 1.0) {
-        RCLCPP_WARN(
-            get_node()->get_logger(),
-            "Large q_goal discontinuity detected: %.2f rad (max safe: 1.0 rad)",
-            max_jump);
-        // Log which joint and the components
-        for (int i = 0; i < model_.nv; ++i) {
-          if (std::abs(q_goal_delta_[i]) > 1.0) {
-            RCLCPP_WARN(get_node()->get_logger(),
-                        "  Joint %d: delta=%.2f rad (q_task=%.2f, q_null=%.2f)",
-                        i, q_goal_delta_[i], q_task_[i],
-                        q_nullspace_update_[i]);
-          }
-        }
-      }
-    }
-
-    q_goal = q_goal_new_;
-  }
-
-  // Set dq_goal to zero - we're doing position control, not velocity tracking
-  // The old calculation was producing unrealistically large velocities (>1000
-  // rad/s) due to low damping values and Jacobian singularities
-  dq_goal.setZero();
-
-  // OLD CODE (removed):
-  // Calculate dq_goal using Cartesian velocity approach
-  // Task space velocity: x_dot = K * error / D (avoid matrix inverse for
-  // numerical stability) Use element-wise division to handle zero damping
-  // gracefully Eigen::VectorXd x_dot_desired = Eigen::VectorXd::Zero(6); for
-  // (int i = 0; i < 6; ++i) {
-  //   if (std::abs(damping(i, i)) > 1e-6) {
-  //     x_dot_desired[i] = stiffness(i, i) * error[i] / damping(i, i);
-  //   }
-  //   // else: leave as zero when damping is zero (no velocity command)
-  // }
-  //
-  // // Nullspace velocity: dq_null = K_null * (q_ref - q) / D_null
-  // // Use element-wise division to handle zero damping gracefully
-  // Eigen::VectorXd q_error_nullspace = q_ref - q;
-  // Eigen::VectorXd dq_nullspace = Eigen::VectorXd::Zero(model_.nv);
-  // for (int i = 0; i < model_.nv; ++i) {
-  //   if (std::abs(nullspace_damping(i, i)) > 1e-6) {
-  //     dq_nullspace[i] = nullspace_stiffness(i, i) * q_error_nullspace[i] /
-  //     nullspace_damping(i, i);
-  //   }
-  //   // else: leave as zero when nullspace damping is zero
-  // }
-  //
-  // // Map to joint space with nullspace projection
-  // dq_goal = J_pinv * x_dot_desired + nullspace_projection * dq_nullspace;
-
-  // Check for NaN or unreasonable values in dq_goal
-  static int dq_goal_check_counter = 0;
-  if (dq_goal_check_counter++ % 10 == 0) { // Check every 10 cycles
-    bool has_nan = false;
-    bool has_large = false;
-    double max_dq = 0.0;
-
-    for (int i = 0; i < model_.nv; ++i) {
-      if (std::isnan(dq_goal[i]) || std::isinf(dq_goal[i])) {
-        has_nan = true;
-      }
-      double abs_dq = std::abs(dq_goal[i]);
-      if (abs_dq > 10.0) { // 10 rad/s is very high for most joints
-        has_large = true;
-      }
-      max_dq = std::max(max_dq, abs_dq);
-    }
-
-    if (has_nan) {
-      RCLCPP_ERROR(get_node()->get_logger(),
-                   "NaN or Inf detected in dq_goal! This indicates numerical "
-                   "instability.");
-      RCLCPP_ERROR(get_node()->get_logger(),
-                   "  dq_goal: [%.3f, %.3f, %.3f, %.3f, %.3f, %.3f, %.3f]",
-                   dq_goal[0], dq_goal[1], dq_goal[2], dq_goal[3], dq_goal[4],
-                   dq_goal[5], dq_goal[6]);
-    } else if (has_large) {
-      RCLCPP_WARN(get_node()->get_logger(),
-                  "Large dq_goal detected: max=%.2f rad/s (consider if this is "
-                  "reasonable)",
-                  max_dq);
-    }
-  }
-
   if (not params_.stop_commands) {
     for (size_t i = 0; i < num_joints; ++i) {
-      command_interfaces_[i].set_value(q_goal[i]);
-      command_interfaces_[num_joints + i].set_value(dq_goal[i]);
+      command_interfaces_[i].set_value(0.0);
+      command_interfaces_[num_joints + i].set_value(0.0);
       command_interfaces_[2 * num_joints + i].set_value(tau_d[i]);
     }
   } else {
@@ -681,8 +575,6 @@ CallbackReturn CartesianController::on_configure(
   dq_raw = Eigen::VectorXd::Zero(model_.nv);
   q_ref = Eigen::VectorXd::Zero(model_.nv);
   dq_ref = Eigen::VectorXd::Zero(model_.nv);
-  q_goal = Eigen::VectorXd::Zero(model_.nv);
-  dq_goal = Eigen::VectorXd::Zero(model_.nv);
   tau_previous = Eigen::VectorXd::Zero(model_.nv);
   J = Eigen::MatrixXd::Zero(6, model_.nv);
 
@@ -691,10 +583,6 @@ CallbackReturn CartesianController::on_configure(
   Id_nv_ = Eigen::MatrixXd::Identity(model_.nv, model_.nv);
   J_bar_ = Eigen::MatrixXd::Zero(model_.nv, 6);
   tau_d_unclamped_ = Eigen::VectorXd::Zero(model_.nv);
-  q_task_ = Eigen::VectorXd::Zero(model_.nv);
-  q_nullspace_update_ = Eigen::VectorXd::Zero(model_.nv);
-  q_goal_new_ = Eigen::VectorXd::Zero(model_.nv);
-  q_goal_delta_ = Eigen::VectorXd::Zero(model_.nv);
   // Note: task_velocity_, Mx_inv_, Mx_ are fixed-size and don't need initialization
 
   // Pre-calculate torque limits with safety factor
@@ -933,11 +821,9 @@ CallbackReturn CartesianController::on_activate(
     }
 
     q_ref[i] = state_interfaces_[i].get_value();
-    q_goal[i] = state_interfaces_[i].get_value();
 
     dq[i] = state_interfaces_[num_joints + i].get_value();
     dq_ref[i] = state_interfaces_[num_joints + i].get_value();
-    dq_goal[i] = state_interfaces_[num_joints + i].get_value();
   }
 
   pinocchio::forwardKinematics(model_, data_, q_pin, dq);
@@ -1273,8 +1159,6 @@ void CartesianController::log_debug_info(const rclcpp::Time &time,
     log_data.q_filtered = q;
     log_data.dq_raw = dq_raw;
     log_data.dq_filtered = dq;
-    log_data.q_goal = q_goal;
-    log_data.dq_goal = dq_goal;
 
     log_data.filter_q = params_.filter.q;
     log_data.filter_dq = params_.filter.dq;

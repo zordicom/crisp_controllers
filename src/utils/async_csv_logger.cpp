@@ -241,12 +241,6 @@ void AsyncCSVLogger::processLogData(const ControllerLogData &data) {
   for (int i = 0; i < data.dq_filtered.size(); ++i) {
     csv_file_ << "," << data.dq_filtered[i];
   }
-  for (int i = 0; i < data.q_goal.size(); ++i) {
-    csv_file_ << "," << data.q_goal[i];
-  }
-  for (int i = 0; i < data.dq_goal.size(); ++i) {
-    csv_file_ << "," << data.dq_goal[i];
-  }
 
   // Write filter parameters
   csv_file_ << "," << data.filter_q << "," << data.filter_dq << ","
@@ -318,12 +312,6 @@ void AsyncCSVLogger::writeHeader(size_t num_joints) {
   }
   for (size_t i = 0; i < num_joints; ++i) {
     csv_file_ << ",dq_filtered_" << i;
-  }
-  for (size_t i = 0; i < num_joints; ++i) {
-    csv_file_ << ",q_goal_" << i;
-  }
-  for (size_t i = 0; i < num_joints; ++i) {
-    csv_file_ << ",dq_goal_" << i;
   }
 
   // Filter parameters header
