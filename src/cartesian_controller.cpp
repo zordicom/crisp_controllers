@@ -1,10 +1,6 @@
-#include "crisp_controllers/utils/csv_logger_interface.hpp"
-#include "crisp_controllers/utils/async_csv_logger.hpp"
-#include "crisp_controllers/utils/csv_logger.hpp"
-#include "crisp_controllers/utils/fiters.hpp"
-#include "crisp_controllers/utils/torque_rate_saturation.hpp"
-
 #include <Eigen/src/Core/Matrix.h>
+#include <fmt/format.h>
+
 #include <cmath>
 #include <controller_interface/controller_interface_base.hpp>
 #include <crisp_controllers/cartesian_controller.hpp>
@@ -12,10 +8,7 @@
 #include <crisp_controllers/utils/friction_model.hpp>
 #include <crisp_controllers/utils/joint_limits.hpp>
 #include <crisp_controllers/utils/pseudo_inverse.hpp>
-
-#include "pinocchio/algorithm/model.hpp"
 #include <cstddef>
-#include <fmt/format.h>
 #include <pinocchio/algorithm/aba.hpp>
 #include <pinocchio/algorithm/compute-all-terms.hpp>
 #include <pinocchio/algorithm/frames.hxx>
@@ -25,6 +18,13 @@
 #include <pinocchio/spatial/explog.hpp>
 #include <pinocchio/spatial/fwd.hpp>
 #include <rclcpp/logging.hpp>
+
+#include "crisp_controllers/utils/async_csv_logger.hpp"
+#include "crisp_controllers/utils/csv_logger.hpp"
+#include "crisp_controllers/utils/csv_logger_interface.hpp"
+#include "crisp_controllers/utils/fiters.hpp"
+#include "crisp_controllers/utils/torque_rate_saturation.hpp"
+#include "pinocchio/algorithm/model.hpp"
 
 namespace crisp_controllers {
 
@@ -61,21 +61,12 @@ CartesianController::state_interface_configuration() const {
   return config;
 }
 
-controller_interface::return_type
-CartesianController::update(const rclcpp::Time &time,
-                            const rclcpp::Duration & /*period*/) {
-
+controller_interface::return_type CartesianController::update(
+    const rclcpp::Time &time, const rclcpp::Duration & /*period*/) {
   // Start timing the control loop
   auto loop_start_time = get_node()->get_clock()->now();
 
   size_t num_joints = params_.joints.size();
-
-  // Log first update to compare with on_activate values
-  static bool first_update = true;
-  if (first_update) {
-    RCLCPP_INFO(get_node()->get_logger(),
-                "First update() call - checking joint positions...");
-  }
 
   for (size_t i = 0; i < num_joints; i++) {
     // Use cached joint IDs and models (moved from control loop to
@@ -91,25 +82,12 @@ CartesianController::update(const rclcpp::Time &time,
     dq[i] = exponential_moving_average(dq[i], dq_raw[i], params_.filter.dq);
 
     if (continous_joint_types.count(
-            joint.shortname())) { // Then we are handling a continous
-                                  // joint that is SO(2)
+            joint.shortname())) {  // Then we are handling a continous
+                                   // joint that is SO(2)
       q_pin[joint.idx_q()] = std::cos(q[i]);
       q_pin[joint.idx_q() + 1] = std::sin(q[i]);
-    } else { // simple revolute joint case
+    } else {  // simple revolute joint case
       q_pin[joint.idx_q()] = q[i];
-    }
-
-    // Log velocity filtering for first joint to verify it's working
-    if (i == 0) {
-      // Throttle logging to every LOG_CYCLE_INTERVAL cycles (~1Hz at 100Hz
-      // update rate)
-      static int vel_log_counter = 0;
-      if (vel_log_counter++ % LOG_CYCLE_INTERVAL == 0) {
-        RCLCPP_INFO(get_node()->get_logger(),
-                    "Joint0: q_raw=%.4f q_filt=%.4f dq_raw=%.4f dq_filt=%.4f "
-                    "alpha_dq=%.3f",
-                    q_raw[i], q[i], dq_raw[i], dq[i], params_.filter.dq);
-      }
     }
   }
 
@@ -129,7 +107,8 @@ CartesianController::update(const rclcpp::Time &time,
   pinocchio::forwardKinematics(model_, data_, q_pin, dq);
   pinocchio::updateFramePlacements(model_, data_);
 
-  // Apply filtering to target pose (already in world frame from parse_target_pose_)
+  // Apply filtering to target pose (already in world frame from
+  // parse_target_pose_)
   pinocchio::SE3 new_target_pose =
       pinocchio::SE3(target_orientation_.toRotationMatrix(), target_position_);
 
@@ -140,27 +119,9 @@ CartesianController::update(const rclcpp::Time &time,
   // Get end-effector pose in world frame (as Pinocchio provides it)
   ee_pose_world_ = data_.oMf[ee_frame_id_];
 
-  // Log first update to verify state interface data
-  if (first_update) {
-    RCLCPP_INFO(get_node()->get_logger(),
-                "First update: Joint positions: [%.3f, %.3f, %.3f, %.3f, %.3f, "
-                "%.3f, %.3f]",
-                q[0], q[1], q[2], q[3], q[4], q[5], q[6]);
-    Eigen::Vector3d current_pos = ee_pose_world_.translation();
-    Eigen::Quaterniond current_quat(ee_pose_world_.rotation());
-    RCLCPP_INFO(
-        get_node()->get_logger(),
-        "First update: Current end-effector position (world): [%.3f, %.3f, %.3f]",
-        current_pos.x(), current_pos.y(), current_pos.z());
-    RCLCPP_INFO(
-        get_node()->get_logger(),
-        "First update: Target end-effector position (world): [%.3f, %.3f, %.3f]",
-        target_position_.x(), target_position_.y(), target_position_.z());
-    first_update = false;
-  }
-
-  // Compute error in WORLD frame (both target_pose_ and ee_pose_world_ are in world frame)
-  // We consider translation and rotation separately to avoid unnatural screw motions
+  // Compute error in WORLD frame (both target_pose_ and ee_pose_world_ are in
+  // world frame) We consider translation and rotation separately to avoid
+  // unnatural screw motions
   error.head(3) = target_pose_.translation() - ee_pose_world_.translation();
   error.tail(3) = pinocchio::log3(target_pose_.rotation() *
                                   ee_pose_world_.rotation().transpose());
@@ -172,33 +133,23 @@ CartesianController::update(const rclcpp::Time &time,
     error = error.cwiseMax(-max_delta_).cwiseMin(max_delta_);
   }
 
-  // Log error every LOG_CYCLE_INTERVAL cycles (~1Hz at 100Hz update rate)
-  static int log_counter = 0;
-  if (log_counter++ % LOG_CYCLE_INTERVAL == 0) {
-    RCLCPP_INFO(
-        get_node()->get_logger(),
-        "Cartesian error: pos=[%.4f, %.4f, %.4f]m, ori=[%.4f, %.4f, %.4f]rad",
-        error[0], error[1], error[2], error[3], error[4], error[5]);
-  }
-
   J.setZero();
-  // Always use WORLD frame as reference - this is the most straightforward approach
+  // Always use WORLD frame as reference - this is the most straightforward
+  // approach
   pinocchio::computeFrameJacobian(model_, data_, q_pin, ee_frame_id_,
                                   pinocchio::ReferenceFrame::WORLD, J);
 
   // No transformation needed - we'll work directly in the world frame
-  // The base_frame is only used for interpreting target poses, not for Jacobian computation
+  // The base_frame is only used for interpreting target poses, not for Jacobian
+  // computation
 
   J_pinv_ = pseudo_inverse(J, params_.nullspace.regularization);
 
   // Compute Minverse once if needed by either dynamic nullspace or operational
   // space
-  bool minverse_computed = false; // Currently unused
-
   if (params_.nullspace.projector_type == "dynamic" ||
       params_.use_operational_space) {
     pinocchio::computeMinverse(model_, data_, q_pin);
-    minverse_computed = true;
 
     // Compute operational space mass matrix (used by both dynamic nullspace and
     // OSC)
@@ -222,18 +173,9 @@ CartesianController::update(const rclcpp::Time &time,
   }
 
   // Compute task space forces separately for logging
-  task_force_P_ = stiffness * error;        // Proportional term
-  task_velocity_ = J * dq;                  // Task space velocity
-  task_force_D_ = damping * task_velocity_; // Damping term
-
-  // Log damping force computation to verify filtering effect
-  static int damping_log_counter = 0;
-  if (damping_log_counter++ % LOG_CYCLE_INTERVAL == 0) {
-    RCLCPP_INFO(get_node()->get_logger(),
-                "Damping: task_vel_x=%.4f, d_pos=%.2f, force_D_x=%.4f (P=%.4f)",
-                task_velocity_[0], damping(0, 0), task_force_D_[0],
-                task_force_P_[0]);
-  }
+  task_force_P_ = stiffness * error;         // Proportional term
+  task_velocity_ = J * dq;                   // Task space velocity
+  task_force_D_ = damping * task_velocity_;  // Damping term
 
   if (params_.use_operational_space) {
     // Minv and Mx already computed above if needed
@@ -307,39 +249,7 @@ CartesianController::update(const rclcpp::Time &time,
   // Apply absolute torque limits from URDF/Pinocchio model
   // This ensures we never exceed motor torque capabilities
   // Using pre-calculated limits with safety factor for efficiency
-  tau_d_unclamped_ = tau_d;
-
-  // Vectorized clamping: tau_d = min(max(tau_d, -limits), limits)
   tau_d = tau_d.cwiseMin(tau_limits).cwiseMax(-tau_limits);
-
-  // Log commanded torques every LOG_CYCLE_INTERVAL cycles (~1Hz at 100Hz update
-  // rate)
-  static int torque_log_counter = 0;
-  if (torque_log_counter++ % LOG_CYCLE_INTERVAL == 0) {
-    RCLCPP_INFO(get_node()->get_logger(),
-                "Commanded torques: [%.3f, %.3f, %.3f, %.3f, %.3f, %.3f, %.3f] "
-                "Nm (stop_commands=%s, gravity_only=%s)",
-                tau_d[0], tau_d[1], tau_d[2], tau_d[3], tau_d[4], tau_d[5],
-                tau_d[6], params_.stop_commands ? "TRUE" : "FALSE",
-                params_.gravity_only_mode ? "TRUE" : "FALSE");
-
-    // Log if any torques were saturated
-    bool saturated = false;
-    for (size_t i = 0; i < num_joints; ++i) {
-      if (std::abs(tau_d_unclamped_[i] - tau_d[i]) > 0.01) {
-        saturated = true;
-        break;
-      }
-    }
-    if (saturated) {
-      RCLCPP_WARN(get_node()->get_logger(),
-                  "Torque saturation active! Unclamped: [%.3f, %.3f, %.3f, "
-                  "%.3f, %.3f, %.3f, %.3f] Nm",
-                  tau_d_unclamped_[0], tau_d_unclamped_[1], tau_d_unclamped_[2],
-                  tau_d_unclamped_[3], tau_d_unclamped_[4], tau_d_unclamped_[5],
-                  tau_d_unclamped_[6]);
-    }
-  }
 
   if (not params_.stop_commands) {
     for (size_t i = 0; i < num_joints; ++i) {
@@ -381,7 +291,6 @@ CallbackReturn CartesianController::on_init() {
 
 CallbackReturn CartesianController::on_configure(
     const rclcpp_lifecycle::State & /*previous_state*/) {
-
   RCLCPP_INFO(get_node()->get_logger(),
               "Starting CartesianController configuration...");
 
@@ -523,9 +432,9 @@ CallbackReturn CartesianController::on_configure(
 
   // Check if base frame exists in the model
   if (!model_.existFrame(params_.base_frame)) {
-    RCLCPP_ERROR_STREAM(get_node()->get_logger(),
-                        "Base frame '" << params_.base_frame
-                                       << "' not found in model!");
+    RCLCPP_ERROR_STREAM(
+        get_node()->get_logger(),
+        "Base frame '" << params_.base_frame << "' not found in model!");
     RCLCPP_ERROR(get_node()->get_logger(), "Available frames:");
     for (size_t i = 0; i < model_.frames.size(); i++) {
       RCLCPP_ERROR_STREAM(get_node()->get_logger(),
@@ -543,20 +452,22 @@ CallbackReturn CartesianController::on_configure(
 
   // Validate that base frame doesn't go through any actuated joints
   // This ensures base_frame_pose_world_ remains constant
-  const auto& base_frame = model_.frames[base_frame_id_];
-  if (base_frame.parentJoint != 0) { // If not attached to universe/root
+  const auto &base_frame = model_.frames[base_frame_id_];
+  if (base_frame.parentJoint != 0) {  // If not attached to universe/root
     // Check if any joint in the kinematic chain to root is actuated
     pinocchio::JointIndex current_joint = base_frame.parentJoint;
     while (current_joint != 0) {
-      const auto& joint_name = model_.names[current_joint];
+      const auto &joint_name = model_.names[current_joint];
       if (std::find(params_.joints.begin(), params_.joints.end(), joint_name) !=
           params_.joints.end()) {
         RCLCPP_ERROR(get_node()->get_logger(),
                      "Base frame '%s' goes through actuated joint '%s'!",
                      params_.base_frame.c_str(), joint_name.c_str());
-        RCLCPP_ERROR(get_node()->get_logger(),
-                     "The base frame must be fixed relative to the world frame. "
-                     "Please choose a frame that doesn't move with any actuated joints.");
+        RCLCPP_ERROR(
+            get_node()->get_logger(),
+            "The base frame must be fixed relative to the world frame. "
+            "Please choose a frame that doesn't move with any actuated "
+            "joints.");
         return CallbackReturn::ERROR;
       }
       // Move up the kinematic chain
@@ -582,8 +493,8 @@ CallbackReturn CartesianController::on_configure(
   J_pinv_ = Eigen::MatrixXd::Zero(model_.nv, 6);
   Id_nv_ = Eigen::MatrixXd::Identity(model_.nv, model_.nv);
   J_bar_ = Eigen::MatrixXd::Zero(model_.nv, 6);
-  tau_d_unclamped_ = Eigen::VectorXd::Zero(model_.nv);
-  // Note: task_velocity_, Mx_inv_, Mx_ are fixed-size and don't need initialization
+  // Note: task_velocity_, Mx_inv_, Mx_ are fixed-size and don't need
+  // initialization
 
   // Pre-calculate torque limits with safety factor
   tau_limits = model_.effortLimit * params_.torque_safety_factor;
@@ -755,7 +666,6 @@ CallbackReturn CartesianController::on_configure(
 }
 
 void CartesianController::setStiffnessAndDamping() {
-
   // Update torque limits if safety factor changed
   tau_limits = model_.effortLimit * params_.torque_safety_factor;
 
@@ -811,12 +721,12 @@ CallbackReturn CartesianController::on_activate(
 
     q[i] = state_interfaces_[i].get_value();
     if (continous_joint_types.count(
-            joint.shortname())) { // Then we are handling a continous
-                                  // joint that is SO(2)
+            joint.shortname())) {  // Then we are handling a continous
+                                   // joint that is SO(2)
       q_pin[joint.idx_q()] = std::cos(q[i]);
       q_pin[joint.idx_q() + 1] = std::sin(q[i]);
-    } else { // simple revolute joint case (handles ALL revolute types: RX, RY,
-             // RZ, RevoluteUnaligned, etc.)
+    } else {  // simple revolute joint case (handles ALL revolute types: RX, RY,
+              // RZ, RevoluteUnaligned, etc.)
       q_pin[joint.idx_q()] = q[i];
     }
 
@@ -832,7 +742,8 @@ CallbackReturn CartesianController::on_activate(
   // Get end-effector pose in world frame (as Pinocchio provides it)
   ee_pose_world_ = data_.oMf[ee_frame_id_];
 
-  // Compute base frame pose in world frame (should be constant, verified in on_configure)
+  // Compute base frame pose in world frame (should be constant, verified in
+  // on_configure)
   base_frame_pose_world_ = data_.oMf[base_frame_id_];
 
   RCLCPP_INFO(get_node()->get_logger(),
@@ -867,7 +778,7 @@ CallbackReturn CartesianController::on_activate(
   for (size_t i = 0; i < num_joints; ++i) {
     current_effort[i] = state_interfaces_[2 * num_joints + i].get_value();
     if (std::abs(current_effort[i]) >
-        0.01) { // Threshold for detecting active torques
+        0.01) {  // Threshold for detecting active torques
       has_nonzero_effort = true;
     }
   }
@@ -887,14 +798,14 @@ CallbackReturn CartesianController::on_activate(
     // Compute initial control torques to hold current position when switching
     // to MIT mode This prevents the arm from falling by computing the full
     // control law at activation
-    tau_init =
-        computeControlTorques(ee_pose_world_, // current pose in world frame
-                              target_pose_,  // target pose (same as current, in world frame)
-                              q,             // joint positions
-                              q_pin,         // pinocchio joint positions
-                              dq, // joint velocities (should be near zero)
-                              get_node()->get_clock()->now() // current time
-        );
+    tau_init = computeControlTorques(
+        ee_pose_world_,  // current pose in world frame
+        target_pose_,    // target pose (same as current, in world frame)
+        q,               // joint positions
+        q_pin,           // pinocchio joint positions
+        dq,              // joint velocities (should be near zero)
+        get_node()->get_clock()->now()  // current time
+    );
   }
 
   // Apply torque rate limiting and safety limits
@@ -925,8 +836,8 @@ CallbackReturn CartesianController::on_activate(
 
     if (params_.log.use_async_logging) {
       // Use async logger for better real-time performance
-      csv_logger_ = std::make_unique<AsyncCSVLogger>(
-          get_node()->get_name(), get_node()->get_logger());
+      csv_logger_ = std::make_unique<AsyncCSVLogger>(get_node()->get_name(),
+                                                     get_node()->get_logger());
 
       RCLCPP_INFO(get_node()->get_logger(),
                   "Using ASYNC CSV logging for improved real-time performance");
@@ -941,8 +852,7 @@ CallbackReturn CartesianController::on_activate(
     }
 
     if (!csv_logger_->initialize(num_joints, csv_log_start_time_)) {
-      RCLCPP_ERROR(get_node()->get_logger(),
-                   "Failed to initialize CSV logger");
+      RCLCPP_ERROR(get_node()->get_logger(), "Failed to initialize CSV logger");
       return CallbackReturn::ERROR;
     }
   }
@@ -1018,10 +928,10 @@ void CartesianController::log_debug_info(const rclcpp::Time &time,
                                 *get_node()->get_clock(), DEBUG_LOG_THROTTLE_MS,
                                 "nq: " << model_.nq << ", nv: " << model_.nv);
 
-    RCLCPP_INFO_STREAM_THROTTLE(get_node()->get_logger(),
-                                *get_node()->get_clock(), DEBUG_LOG_THROTTLE_MS,
-                                "end_effector_pos (world): "
-                                    << ee_pose_world_.translation());
+    RCLCPP_INFO_STREAM_THROTTLE(
+        get_node()->get_logger(), *get_node()->get_clock(),
+        DEBUG_LOG_THROTTLE_MS,
+        "end_effector_pos (world): " << ee_pose_world_.translation());
     RCLCPP_INFO_STREAM_THROTTLE(get_node()->get_logger(),
                                 *get_node()->get_clock(), DEBUG_LOG_THROTTLE_MS,
                                 "q: " << q.transpose());
@@ -1112,7 +1022,6 @@ void CartesianController::log_debug_info(const rclcpp::Time &time,
   }
 
   if (params_.log.timing) {
-
     auto t_end = get_node()->get_clock()->now();
     RCLCPP_INFO_STREAM_THROTTLE(
         get_node()->get_logger(), *get_node()->get_clock(),
@@ -1214,7 +1123,6 @@ Eigen::VectorXd CartesianController::computeControlTorques(
     const pinocchio::SE3 &current_pose, const pinocchio::SE3 &target_pose,
     const Eigen::VectorXd &q, const Eigen::VectorXd &q_pin,
     const Eigen::VectorXd &dq, [[maybe_unused]] const rclcpp::Time &time) {
-
   // Compute pose error in WORLD frame (both poses are in world frame)
   Eigen::VectorXd error = Eigen::VectorXd::Zero(6);
   error.head(3) = target_pose.translation() - current_pose.translation();
@@ -1319,7 +1227,7 @@ Eigen::VectorXd CartesianController::computeControlTorques(
   return tau_total;
 }
 
-} // namespace crisp_controllers
+}  // namespace crisp_controllers
 #include "pluginlib/class_list_macros.hpp"
 // NOLINTNEXTLINE
 PLUGINLIB_EXPORT_CLASS(crisp_controllers::CartesianController,

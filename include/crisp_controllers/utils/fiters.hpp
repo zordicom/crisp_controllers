@@ -41,7 +41,7 @@ void filterJointValues(
             continue;
         }
         auto it = name_to_index.find(msg_names[i]);
-        if (it != name_to_index.end() && i < msg_values.size()) {
+        if (it != name_to_index.end() && static_cast<Eigen::Index>(i) < msg_values.size()) {
             output(it->second) = msg_values[i];
         }
     }

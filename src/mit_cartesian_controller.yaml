@@ -1,0 +1,116 @@
+mit_cartesian_controller:
+  joints:
+    type: string_array
+    description: "Names of the joints to control"
+
+  end_effector_frame:
+    type: string
+    description: "Name of the end-effector frame in the URDF"
+
+  base_frame:
+    type: string
+    default_value: ""
+    description: "Name of the base frame for target poses"
+
+  k_pos_x:
+    type: double
+    default_value: 500.0
+    description: "Cartesian stiffness in x direction (N/m)"
+    validation:
+      bounds<>: [0.0, 5000.0]
+
+  k_pos_y:
+    type: double
+    default_value: 500.0
+    description: "Cartesian stiffness in y direction (N/m)"
+    validation:
+      bounds<>: [0.0, 5000.0]
+
+  k_pos_z:
+    type: double
+    default_value: 500.0
+    description: "Cartesian stiffness in z direction (N/m)"
+    validation:
+      bounds<>: [0.0, 5000.0]
+
+  k_rot_x:
+    type: double
+    default_value: 30.0
+    description: "Cartesian stiffness in rotation x (Nm/rad)"
+    validation:
+      bounds<>: [0.0, 500.0]
+
+  k_rot_y:
+    type: double
+    default_value: 30.0
+    description: "Cartesian stiffness in rotation y (Nm/rad)"
+    validation:
+      bounds<>: [0.0, 500.0]
+
+  k_rot_z:
+    type: double
+    default_value: 30.0
+    description: "Cartesian stiffness in rotation z (Nm/rad)"
+    validation:
+      bounds<>: [0.0, 500.0]
+
+  alpha:
+    type: double
+    default_value: 1.0
+    description: "Velocity gain for computing desired joint velocities from position error"
+    validation:
+      bounds<>: [0.0, 10.0]
+
+  dt_goal:
+    type: double
+    default_value: 0.01
+    description: "Time step for computing goal position from goal velocity (seconds). Should be small since MIT mode runs at high frequency."
+    validation:
+      bounds<>: [0.001, 0.1]
+
+  lambda:
+    type: double
+    default_value: 0.01
+    description: "Damping factor for Jacobian pseudo-inverse"
+    validation:
+      bounds<>: [0.0001, 0.1]
+
+  limit_commands:
+    type: bool
+    default_value: true
+    description: "Whether to clip commands to joint limits"
+
+  torque_safety_factor:
+    type: double
+    default_value: 1.0
+    description: "Safety factor for torque limits (0.0-1.0)"
+    validation:
+      bounds<>: [0.0, 1.0]
+
+  stop_commands:
+    type: bool
+    default_value: false
+    description: "If true, stop sending commands to hardware (for debugging)"
+
+  use_gravity_compensation:
+    type: bool
+    default_value: true
+    description: "Add gravity compensation to feedforward torques"
+
+  gravity_scale:
+    type: double
+    default_value: 1.0
+    description: "Scale factor for gravity compensation torques. Use this to tune gravity compensation if URDF masses are not perfectly accurate."
+    validation:
+      bounds<>: [0.0, 2.0]
+
+  use_feedforward_forces:
+    type: bool
+    default_value: true
+    description: "Add task space forces to feedforward torques. If false, only sends goal positions/velocities and relies on MIT mode's internal PD controller for impedance."
+
+  log:
+    enabled:
+      type: bool
+      default_value: false
+      description: "Enable debug logging"

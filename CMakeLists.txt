@@ -16,7 +16,7 @@ if(NOT CMAKE_CXX_STANDARD)
 endif()
 
 # Enable precompiled headers
-option(USE_PRECOMPILED_HEADERS "Use precompiled headers" ON)
+option(USE_PRECOMPILED_HEADERS "Use precompiled headers" OFF)
 
 if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
     add_compile_options(-Wall -Wextra -Wpedantic)
@@ -36,35 +36,43 @@ find_package(pinocchio REQUIRED)
 find_package(realtime_tools REQUIRED)
 find_package(generate_parameter_library REQUIRED)
 
-generate_parameter_library(
-  cartesian_impedance_controller_parameters
-  src/cartesian_impedance_controller.yaml
-)
+# Temporarily disabled old controller parameters
+# generate_parameter_library(
+#   cartesian_impedance_controller_parameters
+#   src/cartesian_impedance_controller.yaml
+# )
+#
+# generate_parameter_library(
+#   pose_broadcaster_parameters
+#   src/pose_broadcaster.yaml
+# )
+#
+# generate_parameter_library(
+#   torque_feedback_controller_parameters
+#   src/torque_feedback_controller.yaml
+# )
+#
+# generate_parameter_library(
+#   twist_broadcaster_parameters
+#   src/twist_broadcaster.yaml
+# )
 
 generate_parameter_library(
-  pose_broadcaster_parameters
-  src/pose_broadcaster.yaml
-)
-
-generate_parameter_library(
-  torque_feedback_controller_parameters
-  src/torque_feedback_controller.yaml
-)
-
-generate_parameter_library(
-  twist_broadcaster_parameters
-  src/twist_broadcaster.yaml
+  mit_cartesian_controller_parameters
+  src/mit_cartesian_controller.yaml
 )
 
 add_library(
         ${PROJECT_NAME}
         SHARED
-        src/cartesian_controller.cpp
-        src/pose_broadcaster.cpp
-        src/torque_feedback_controller.cpp
-        src/twist_broadcaster.cpp
-        src/utils/csv_logger.cpp
-        src/utils/async_csv_logger.cpp
+        # Temporarily disabled old controllers due to Pinocchio/Eigen compatibility issues
+        # src/cartesian_controller.cpp
+        # src/pose_broadcaster.cpp
+        # src/torque_feedback_controller.cpp
+        # src/twist_broadcaster.cpp
+        src/mit_cartesian_controller.cpp
+        # src/utils/csv_logger.cpp
+        # src/utils/async_csv_logger.cpp
 )
 
 target_include_directories(${PROJECT_NAME}
@@ -83,10 +91,12 @@ endif()
 # Link parameter libraries to the main library
 target_link_libraries(${PROJECT_NAME}
   PRIVATE
-    cartesian_impedance_controller_parameters
-    pose_broadcaster_parameters
-    torque_feedback_controller_parameters
-    twist_broadcaster_parameters
+    # Temporarily disabled old controller parameters
+    # cartesian_impedance_controller_parameters
+    # pose_broadcaster_parameters
+    # torque_feedback_controller_parameters
+    # twist_broadcaster_parameters
+    mit_cartesian_controller_parameters
 )
 
 
