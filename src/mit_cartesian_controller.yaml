@@ -114,3 +114,7 @@ mit_cartesian_controller:
       type: bool
       default_value: false
       description: "Enable debug logging"
+    use_async_logging:
+      type: bool
+      default_value: true
+      description: "If true, use asynchronous CSV logging in a background thread for better real-time performance. If false, use synchronous logging (may impact control loop timing)."

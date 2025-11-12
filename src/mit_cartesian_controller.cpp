@@ -1,5 +1,7 @@
 #include <crisp_controllers/mit_cartesian_controller.hpp>
 #include <crisp_controllers/pch.hpp>
+#include <crisp_controllers/utils/async_csv_logger.hpp>
+#include <crisp_controllers/utils/csv_logger.hpp>
 #include <crisp_controllers/utils/pseudo_inverse.hpp>
 #include <pinocchio/algorithm/frames.hxx>
 #include <pinocchio/algorithm/rnea.hpp>
@@ -45,8 +47,10 @@ MITCartesianController::state_interface_configuration() const {
 }
 
 controller_interface::return_type
-MITCartesianController::update(const rclcpp::Time & /*time*/,
+MITCartesianController::update(const rclcpp::Time &time,
                                const rclcpp::Duration & /*period*/) {
+  // Start timing the control loop for logging
+  auto loop_start_time = get_node()->get_clock()->now();
 
   size_t num_joints = params_.joints.size();
 
@@ -164,6 +168,75 @@ MITCartesianController::update(const rclcpp::Time & /*time*/,
     RCLCPP_INFO_STREAM_THROTTLE(get_node()->get_logger(),
                                 *get_node()->get_clock(), DEBUG_LOG_THROTTLE_MS,
                                 "tau_ff: " << tau_ff_.transpose());
+  }
+
+  // Write CSV data if logging is enabled
+  if (csv_logger_ && csv_logger_->isLoggingEnabled()) {
+    ControllerLogData log_data;
+
+    // Populate log data structure
+    // Calculate timestamp correctly as time since start
+    log_data.timestamp = (time - csv_log_start_time_).seconds();
+
+    // Task space forces (for MIT controller, we compute these from impedance law)
+    log_data.task_force_P = K_cart_ * error;
+    log_data.task_force_D = -D_cart_ * dx;
+    log_data.task_force_total = F_task;
+    log_data.task_velocity = dx;
+
+    // Torque components - MIT controller primarily uses feedforward torques
+    log_data.tau_task = J_.transpose() * F_task;
+    log_data.tau_nullspace = Eigen::VectorXd::Zero(num_joints); // No nullspace control in MIT controller
+    log_data.tau_joint_limits = Eigen::VectorXd::Zero(num_joints); // Not explicitly computed
+    log_data.tau_friction = Eigen::VectorXd::Zero(num_joints); // No friction compensation
+    log_data.tau_coriolis = Eigen::VectorXd::Zero(num_joints); // Not explicitly computed
+
+    // Gravity compensation if enabled
+    if (params_.use_gravity_compensation) {
+      log_data.tau_gravity = params_.gravity_scale *
+                             pinocchio::computeGeneralizedGravity(model_, data_, q_pin_);
+    } else {
+      log_data.tau_gravity = Eigen::VectorXd::Zero(num_joints);
+    }
+
+    log_data.tau_wrench = Eigen::VectorXd::Zero(num_joints); // No external wrench
+    log_data.tau_total = tau_ff_;
+
+    // Error metrics
+    log_data.error = error;
+    log_data.error_rot_magnitude = error.tail(3).norm();
+    log_data.error_pos_magnitude = error.head(3).norm();
+
+    // Poses
+    log_data.current_pose = ee_pose_world_;
+    log_data.target_pose = target_pose_;
+
+    // Stiffness and damping (diagonal elements)
+    log_data.stiffness_diag = K_cart_.diagonal();
+    log_data.damping_diag = D_cart_.diagonal();
+
+    // Joint states - MIT controller doesn't use filtering
+    log_data.q_raw = q_;
+    log_data.q_filtered = q_;
+    log_data.dq_raw = dq_;
+    log_data.dq_filtered = dq_;
+
+    // MIT controller specific: goal positions and velocities
+    log_data.q_goal = q_goal_;
+    log_data.dq_goal = dq_goal_;
+
+    // Filter parameters (no filtering used)
+    log_data.filter_q = 0.0;
+    log_data.filter_dq = 0.0;
+    log_data.filter_output_torque = 0.0;
+
+    // Calculate control loop duration
+    auto loop_end_time = get_node()->get_clock()->now();
+    log_data.loop_duration_ms =
+        (loop_end_time - loop_start_time).nanoseconds() * 1e-6;
+
+    // Log the data using the unified interface
+    csv_logger_->logData(log_data, time);
   }
 
   return controller_interface::return_type::OK;
@@ -356,11 +429,45 @@ CallbackReturn MITCartesianController::on_activate(
       ee_pose_world_.translation().x(), ee_pose_world_.translation().y(),
       ee_pose_world_.translation().z());
 
+  // Initialize CSV logger if enabled
+  if (params_.log.enabled) {
+    // Store the start time for consistent timestamp calculations
+    csv_log_start_time_ = get_node()->now();
+
+    if (params_.log.use_async_logging) {
+      // Use async logger for better real-time performance
+      csv_logger_ = std::make_unique<AsyncCSVLogger>(get_node()->get_name(),
+                                                     get_node()->get_logger());
+
+      RCLCPP_INFO(get_node()->get_logger(),
+                  "Using ASYNC CSV logging for improved real-time performance");
+    } else {
+      // Fallback to synchronous logger
+      csv_logger_ = std::make_unique<ControllerCSVLogger>(
+          get_node()->get_name(), get_node()->get_logger());
+
+      RCLCPP_WARN(
+          get_node()->get_logger(),
+          "Using SYNCHRONOUS CSV logging - may impact real-time performance!");
+    }
+
+    if (!csv_logger_->initialize(num_joints, csv_log_start_time_)) {
+      RCLCPP_ERROR(get_node()->get_logger(), "Failed to initialize CSV logger");
+      return CallbackReturn::ERROR;
+    }
+  }
+
   return CallbackReturn::SUCCESS;
 }
 
 CallbackReturn MITCartesianController::on_deactivate(
     const rclcpp_lifecycle::State & /*previous_state*/) {
+  // Close CSV logger if it was opened
+  if (csv_logger_) {
+    csv_logger_->close();
+    csv_logger_.reset();
+  }
+
   RCLCPP_INFO(get_node()->get_logger(), "MITCartesianController deactivated.");
   return CallbackReturn::SUCCESS;
 }

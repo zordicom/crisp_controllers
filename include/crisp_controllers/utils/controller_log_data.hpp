@@ -48,6 +48,10 @@ struct ControllerLogData {
   Eigen::VectorXd dq_raw;
   Eigen::VectorXd dq_filtered;
 
+  // MIT controller specific: goal positions and velocities sent to motors
+  Eigen::VectorXd q_goal;
+  Eigen::VectorXd dq_goal;
+
   // Filter parameters
   double filter_q;
   double filter_dq;

@@ -18,6 +18,7 @@
 #include <rclcpp/rclcpp.hpp>
 #include <string>
 
+#include "crisp_controllers/utils/csv_logger_interface.hpp"
 #include "realtime_tools/realtime_buffer.hpp"
 
 using CallbackReturn =
@@ -152,6 +153,11 @@ private:
    * @brief Parse target pose from realtime buffer
    */
   void parse_target_pose_();
+
+  /** @brief CSV logger for controller data */
+  std::unique_ptr<CSVLoggerInterface> csv_logger_;
+  /** @brief Start time for CSV logging timestamp calculations */
+  rclcpp::Time csv_log_start_time_;
 
   // Throttle debug logs
   static constexpr int DEBUG_LOG_THROTTLE_MS = 1000;
