@@ -71,8 +71,8 @@ add_library(
         # src/twist_broadcaster.cpp
         src/pose_broadcaster.cpp
         src/mit_cartesian_controller.cpp
-        # src/utils/csv_logger.cpp
-        # src/utils/async_csv_logger.cpp
+        src/utils/csv_logger.cpp
+        src/utils/async_csv_logger.cpp
 )
 
 target_include_directories(${PROJECT_NAME}
