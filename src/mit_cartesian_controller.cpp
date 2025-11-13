@@ -2,6 +2,7 @@
 #include <crisp_controllers/pch.hpp>
 #include <crisp_controllers/utils/async_csv_logger.hpp>
 #include <crisp_controllers/utils/csv_logger.hpp>
+#include <crisp_controllers/utils/mit_controller_log_data.hpp>
 #include <crisp_controllers/utils/pseudo_inverse.hpp>
 #include <pinocchio/algorithm/frames.hxx>
 #include <pinocchio/algorithm/rnea.hpp>
@@ -25,6 +26,12 @@ MITCartesianController::command_interface_configuration() const {
   }
   for (const auto &joint_name : params_.joints) {
     config.names.push_back(joint_name + "/effort");
+  }
+  for (const auto &joint_name : params_.joints) {
+    config.names.push_back(joint_name + "/kp");
+  }
+  for (const auto &joint_name : params_.joints) {
+    config.names.push_back(joint_name + "/kd");
   }
 
   return config;
@@ -86,49 +93,37 @@ MITCartesianController::update(const rclcpp::Time &time,
   pinocchio::computeFrameJacobian(model_, data_, q_pin_, ee_frame_id_,
                                   pinocchio::ReferenceFrame::WORLD, J_);
 
-  // Compute task space velocity
-  Eigen::Vector<double, 6> dx = J_ * dq_;
-
-  // Compute task space forces (impedance control law)
-  Eigen::Vector<double, 6> F_task = K_cart_ * error - D_cart_ * dx;
-
   // Compute Jacobian pseudo-inverse
   // NOTE: pseudo_inverse() may allocate internally via SVD. For stricter
   // realtime compliance, consider implementing a damped least-squares solver
   // with fully pre-allocated matrices.
-  J_pinv_ = pseudo_inverse(J_, params_.lambda);
+  // J_pinv_ = pseudo_inverse(J_, params_.lambda);
+  J_t_ = J_.transpose();
 
-  // Compute desired joint velocities from task space velocity error
-  Eigen::Vector<double, 6> dx_desired = params_.alpha * error;
-  dq_goal_ = J_pinv_ * dx_desired;
+  // Position term
+  q_goal_ = J_t_ * K_cart_ * error + q_;
+  // Gains are set to 1 at on_activate.
+  // mot_K_p_ = Eigen::VectorXd::One(num_joints);
+
+  // Goals is set to 0 in on_activate
+  // dq_goal_ = Eigen::VectorXd::Zero(num_joints);
+  mot_K_d_ = J_t_ * D_cart_ * J_;
 
   // Compute feedforward torques
   tau_ff_.setZero();
 
-  // Add task space forces if enabled
-  if (params_.use_feedforward_forces) {
-    tau_ff_ = J_.transpose() * F_task;
-  }
-
   // Add gravity compensation if enabled
+  // Note: Task-space forces are applied via q_goal and dq_goal,
+  // not via tau_ff, to avoid double-counting with motor impedance controller
   if (params_.use_gravity_compensation) {
     Eigen::VectorXd tau_gravity =
         params_.gravity_scale *
         pinocchio::computeGeneralizedGravity(model_, data_, q_pin_);
-    tau_ff_ += tau_gravity;
+    tau_ff_ = tau_gravity;
   }
-
-  // Compute goal joint positions (current + velocity * dt)
-  // Using a small dt since MIT mode runs at high frequency
-  double dt = params_.dt_goal;
-  q_goal_ = q_ + dq_goal_ * dt;
 
   // Apply joint limits if configured
   if (params_.limit_commands) {
-    // Clip goal positions to joint limits
-    q_goal_ = q_goal_.cwiseMax(model_.lowerPositionLimit)
-                  .cwiseMin(model_.upperPositionLimit);
-
     // Clip goal velocities
     dq_goal_ =
         dq_goal_.cwiseMax(-model_.velocityLimit).cwiseMin(model_.velocityLimit);
@@ -142,9 +137,11 @@ MITCartesianController::update(const rclcpp::Time &time,
   // Send commands to hardware
   if (!params_.stop_commands) {
     for (size_t i = 0; i < num_joints; ++i) {
-      command_interfaces_[i].set_value(q_goal_[i]);
-      command_interfaces_[num_joints + i].set_value(dq_goal_[i]);
+      command_interfaces_[0 * num_joints + i].set_value(q_goal_[i]);
+      command_interfaces_[1 * num_joints + i].set_value(dq_goal_[i]);
       command_interfaces_[2 * num_joints + i].set_value(tau_ff_[i]);
+      command_interfaces_[3 * num_joints + i].set_value(mot_K_p_[i]);
+      command_interfaces_[4 * num_joints + i].set_value(mot_K_d_[i]);
     }
   } else {
     RCLCPP_WARN_THROTTLE(
@@ -167,76 +164,54 @@ MITCartesianController::update(const rclcpp::Time &time,
                                 "dq_goal: " << dq_goal_.transpose());
     RCLCPP_INFO_STREAM_THROTTLE(get_node()->get_logger(),
                                 *get_node()->get_clock(), DEBUG_LOG_THROTTLE_MS,
+                                "mot_K_p: " << mot_K_p_.transpose());
+    RCLCPP_INFO_STREAM_THROTTLE(get_node()->get_logger(),
+                                *get_node()->get_clock(), DEBUG_LOG_THROTTLE_MS,
+                                "mot_K_d: " << mot_K_d_.transpose());
+    RCLCPP_INFO_STREAM_THROTTLE(get_node()->get_logger(),
+                                *get_node()->get_clock(), DEBUG_LOG_THROTTLE_MS,
                                 "tau_ff: " << tau_ff_.transpose());
   }
 
   // Write CSV data if logging is enabled
   if (csv_logger_ && csv_logger_->isLoggingEnabled()) {
-    ControllerLogData log_data;
+    MITControllerLogData log_data;
 
-    // Populate log data structure
-    // Calculate timestamp correctly as time since start
+    // Populate log data structure - only what MIT controller actually computes
     log_data.timestamp = (time - csv_log_start_time_).seconds();
-
-    // Task space forces (for MIT controller, we compute these from impedance law)
-    log_data.task_force_P = K_cart_ * error;
-    log_data.task_force_D = -D_cart_ * dx;
-    log_data.task_force_total = F_task;
-    log_data.task_velocity = dx;
-
-    // Torque components - MIT controller primarily uses feedforward torques
-    log_data.tau_task = J_.transpose() * F_task;
-    log_data.tau_nullspace = Eigen::VectorXd::Zero(num_joints); // No nullspace control in MIT controller
-    log_data.tau_joint_limits = Eigen::VectorXd::Zero(num_joints); // Not explicitly computed
-    log_data.tau_friction = Eigen::VectorXd::Zero(num_joints); // No friction compensation
-    log_data.tau_coriolis = Eigen::VectorXd::Zero(num_joints); // Not explicitly computed
-
-    // Gravity compensation if enabled
-    if (params_.use_gravity_compensation) {
-      log_data.tau_gravity = params_.gravity_scale *
-                             pinocchio::computeGeneralizedGravity(model_, data_, q_pin_);
-    } else {
-      log_data.tau_gravity = Eigen::VectorXd::Zero(num_joints);
-    }
-
-    log_data.tau_wrench = Eigen::VectorXd::Zero(num_joints); // No external wrench
-    log_data.tau_total = tau_ff_;
-
-    // Error metrics
-    log_data.error = error;
-    log_data.error_rot_magnitude = error.tail(3).norm();
-    log_data.error_pos_magnitude = error.head(3).norm();
 
     // Poses
     log_data.current_pose = ee_pose_world_;
     log_data.target_pose = target_pose_;
 
-    // Stiffness and damping (diagonal elements)
-    log_data.stiffness_diag = K_cart_.diagonal();
-    log_data.damping_diag = D_cart_.diagonal();
+    // Cartesian error
+    log_data.error = error;
 
-    // Joint states - MIT controller doesn't use filtering
-    log_data.q_raw = q_;
-    log_data.q_filtered = q_;
-    log_data.dq_raw = dq_;
-    log_data.dq_filtered = dq_;
+    // Joint states
+    log_data.q = q_;
+    log_data.dq = dq_;
 
-    // MIT controller specific: goal positions and velocities
+    // MIT controller specific: goal positions and velocities sent to motors
     log_data.q_goal = q_goal_;
     log_data.dq_goal = dq_goal_;
 
-    // Filter parameters (no filtering used)
-    log_data.filter_q = 0.0;
-    log_data.filter_dq = 0.0;
-    log_data.filter_output_torque = 0.0;
+    // Feedforward torques sent to motors
+    log_data.tau_ff = tau_ff_;
+
+    // Cartesian impedance parameters
+    log_data.stiffness_diag = K_cart_.diagonal();
+    log_data.damping_diag = D_cart_.diagonal();
+
+    // Control parameters
+    log_data.alpha = params_.alpha;
 
     // Calculate control loop duration
     auto loop_end_time = get_node()->get_clock()->now();
     log_data.loop_duration_ms =
         (loop_end_time - loop_start_time).nanoseconds() * 1e-6;
 
-    // Log the data using the unified interface
-    csv_logger_->logData(log_data, time);
+    // Log the data using the interface
+    csv_logger_->logData(log_data);
   }
 
   return controller_interface::return_type::OK;
@@ -347,7 +322,10 @@ CallbackReturn MITCartesianController::on_configure(
   dq_goal_ = Eigen::VectorXd::Zero(num_joints);
   tau_ff_ = Eigen::VectorXd::Zero(num_joints);
   J_ = Eigen::MatrixXd::Zero(6, num_joints);
-  J_pinv_ = Eigen::MatrixXd::Zero(num_joints, 6);
+  J_t_ = Eigen::MatrixXd::Zero(num_joints, 6);
+  mot_K_p_ = Eigen::VectorXd::Ones(num_joints);
+  mot_K_d_ = Eigen::VectorXd::Ones(num_joints);
+  // J_pinv_ = Eigen::MatrixXd::Zero(num_joints, 6);
 
   // Set stiffness and damping
   K_cart_.setZero();
@@ -434,6 +412,9 @@ CallbackReturn MITCartesianController::on_activate(
     // Store the start time for consistent timestamp calculations
     csv_log_start_time_ = get_node()->now();
 
+    // Create a dummy log data object just for header generation
+    MITControllerLogData dummy_log;
+
     if (params_.log.use_async_logging) {
       // Use async logger for better real-time performance
       csv_logger_ = std::make_unique<AsyncCSVLogger>(get_node()->get_name(),
@@ -451,7 +432,7 @@ CallbackReturn MITCartesianController::on_activate(
           "Using SYNCHRONOUS CSV logging - may impact real-time performance!");
     }
 
-    if (!csv_logger_->initialize(num_joints, csv_log_start_time_)) {
+    if (!csv_logger_->initialize(csv_log_start_time_, dummy_log)) {
       RCLCPP_ERROR(get_node()->get_logger(), "Failed to initialize CSV logger");
       return CallbackReturn::ERROR;
     }
@@ -490,7 +471,7 @@ void MITCartesianController::parse_target_pose_() {
   target_pose_ = base_frame_pose_world_ * target_in_base;
 }
 
-}  // namespace crisp_controllers
+} // namespace crisp_controllers
 
 #include "pluginlib/class_list_macros.hpp"
 PLUGINLIB_EXPORT_CLASS(crisp_controllers::MITCartesianController,

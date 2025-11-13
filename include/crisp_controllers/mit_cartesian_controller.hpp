@@ -140,14 +140,19 @@ private:
   /** @brief Feedforward torques to send to motors (nv) */
   Eigen::VectorXd tau_ff_;
 
+  /** @brief Motor Kp control loop parameter. */
+  Eigen::VectorXd mot_K_p_;
+  /** @brief Motor Kd control loop parameter. */
+  Eigen::VectorXd mot_K_d_;
+
   /** @brief Current end effector pose in world frame */
   pinocchio::SE3 ee_pose_world_;
   /** @brief End effector Jacobian matrix (6 x nv) */
   pinocchio::Data::Matrix6x J_;
+  /** @brief End effector Jacobian matrix (nv x 6) */
+  Eigen::MatrixXd J_t_;
   /** @brief Pre-allocated Jacobian pseudo-inverse for realtime compliance */
   Eigen::MatrixXd J_pinv_;
-  /** @brief Pre-allocated temporary matrix for damped least squares (6x6) */
-  Eigen::Matrix<double, 6, 6> JJt_damped_;
 
   /**
    * @brief Parse target pose from realtime buffer

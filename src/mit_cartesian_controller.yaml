@@ -56,8 +56,8 @@ mit_cartesian_controller:
 
   alpha:
     type: double
-    default_value: 1.0
-    description: "Velocity gain for computing desired joint velocities from position error"
+    default_value: 5.0
+    description: "Velocity gain for computing desired joint velocities from position error. Higher values make the controller more aggressive in tracking position errors."
     validation:
       bounds<>: [0.0, 10.0]
 
@@ -103,11 +103,6 @@ mit_cartesian_controller:
     description: "Scale factor for gravity compensation torques. Use this to tune gravity compensation if URDF masses are not perfectly accurate."
     validation:
       bounds<>: [0.0, 2.0]
-
-  use_feedforward_forces:
-    type: bool
-    default_value: true
-    description: "Add task space forces to feedforward torques. If false, only sends goal positions/velocities and relies on MIT mode's internal PD controller for impedance."
 
   log:
     enabled:
