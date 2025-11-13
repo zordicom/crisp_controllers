@@ -346,10 +346,8 @@ CallbackReturn MITCartesianController::on_configure(
       params_.k_rot_x, params_.k_rot_y, params_.k_rot_z;
 
   D_cart_.setZero();
-  D_cart_.diagonal() << 2.0 * std::sqrt(params_.k_pos_x),
-      2.0 * std::sqrt(params_.k_pos_y), 2.0 * std::sqrt(params_.k_pos_z),
-      2.0 * std::sqrt(params_.k_rot_x), 2.0 * std::sqrt(params_.k_rot_y),
-      2.0 * std::sqrt(params_.k_rot_z);
+  D_cart_.diagonal() << params_.d_pos_x, params_.d_pos_y, params_.d_pos_z,
+      params_.d_rot_x, params_.d_rot_y, params_.d_rot_z;
 
   // Initialize target pose
   target_pose_ = pinocchio::SE3::Identity();

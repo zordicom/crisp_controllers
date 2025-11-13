@@ -54,6 +54,48 @@ mit_cartesian_controller:
     validation:
       bounds<>: [0.0, 500.0]
 
+  d_pos_x:
+    type: double
+    default_value: 44.72
+    description: "Cartesian damping in x direction (Ns/m)"
+    validation:
+      bounds<>: [0.0, 500.0]
+
+  d_pos_y:
+    type: double
+    default_value: 44.72
+    description: "Cartesian damping in y direction (Ns/m)"
+    validation:
+      bounds<>: [0.0, 500.0]
+
+  d_pos_z:
+    type: double
+    default_value: 44.72
+    description: "Cartesian damping in z direction (Ns/m)"
+    validation:
+      bounds<>: [0.0, 500.0]
+
+  d_rot_x:
+    type: double
+    default_value: 10.95
+    description: "Cartesian damping in rotation x (Nms/rad)"
+    validation:
+      bounds<>: [0.0, 100.0]
+
+  d_rot_y:
+    type: double
+    default_value: 10.95
+    description: "Cartesian damping in rotation y (Nms/rad)"
+    validation:
+      bounds<>: [0.0, 100.0]
+
+  d_rot_z:
+    type: double
+    default_value: 10.95
+    description: "Cartesian damping in rotation z (Nms/rad)"
+    validation:
+      bounds<>: [0.0, 100.0]
+
   alpha:
     type: double
     default_value: 5.0
