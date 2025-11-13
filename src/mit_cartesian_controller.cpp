@@ -427,6 +427,13 @@ CallbackReturn MITCartesianController::on_activate(
 
     // Create a dummy log data object just for header generation
     MITControllerLogData dummy_log;
+    dummy_log.q = Eigen::VectorXd::Zero(num_joints);
+    dummy_log.dq = Eigen::VectorXd::Zero(num_joints);
+    dummy_log.q_goal = Eigen::VectorXd::Zero(num_joints);
+    dummy_log.dq_goal = Eigen::VectorXd::Zero(num_joints);
+    dummy_log.tau_ff = Eigen::VectorXd::Zero(num_joints);
+    dummy_log.mot_K_p = Eigen::VectorXd::Zero(num_joints);
+    dummy_log.mot_K_d = Eigen::VectorXd::Zero(num_joints);
 
     if (params_.log.use_async_logging) {
       // Use async logger for better real-time performance
