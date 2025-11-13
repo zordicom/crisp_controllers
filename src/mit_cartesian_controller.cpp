@@ -100,14 +100,23 @@ MITCartesianController::update(const rclcpp::Time &time,
   // J_pinv_ = pseudo_inverse(J_, params_.lambda);
   J_t_ = J_.transpose();
 
-  // Position term
-  q_goal_ = J_t_ * K_cart_ * error + q_;
-  // Gains are set to 1 at on_activate.
-  // mot_K_p_ = Eigen::VectorXd::One(num_joints);
+  // Position command
+  if (params_.use_position_command) {
+    q_goal_ = J_t_ * K_cart_ * error + q_;
+    mot_K_p_ = Eigen::VectorXd::Ones(num_joints);
+  } else {
+    q_goal_ = q_;  // Set to current position
+    mot_K_p_ = Eigen::VectorXd::Zero(num_joints);  // Disable position control
+  }
 
-  // Goals is set to 0 in on_activate
-  // dq_goal_ = Eigen::VectorXd::Zero(num_joints);
-  mot_K_d_ = J_t_ * D_cart_ * J_;
+  // Velocity command
+  if (params_.use_velocity_command) {
+    // dq_goal is computed elsewhere or set to desired value
+    mot_K_d_ = J_t_ * D_cart_ * J_;
+  } else {
+    dq_goal_ = dq_;  // Set to current velocity
+    mot_K_d_ = Eigen::VectorXd::Ones(num_joints);  // Use default damping
+  }
 
   // Compute feedforward torques
   tau_ff_.setZero();
@@ -197,6 +206,10 @@ MITCartesianController::update(const rclcpp::Time &time,
 
     // Feedforward torques sent to motors
     log_data.tau_ff = tau_ff_;
+
+    // Motor PD gains sent to motors
+    log_data.mot_K_p = mot_K_p_;
+    log_data.mot_K_d = mot_K_d_;
 
     // Cartesian impedance parameters
     log_data.stiffness_diag = K_cart_.diagonal();

@@ -32,14 +32,6 @@ public:
   pinocchio::SE3 target_pose;
   Eigen::Vector<double, 6> error;  // [position_error; orientation_error]
 
-  // Task space velocity
-  Eigen::Vector<double, 6> task_velocity;  // J*dq
-
-  // Impedance control intermediate values
-  Eigen::Vector<double, 6> task_force;  // F_task = K*error - D*dx
-  Eigen::Vector<double, 6> task_acceleration_desired;  // ddx_desired = alpha * F_task
-  Eigen::Vector<double, 6> task_velocity_desired;  // dx_desired (after integration)
-
   // Joint states (current)
   Eigen::VectorXd q;
   Eigen::VectorXd dq;
@@ -51,13 +43,16 @@ public:
   // Feedforward torques (sent to motors)
   Eigen::VectorXd tau_ff;
 
+  // Motor PD gains (sent to motors)
+  Eigen::VectorXd mot_K_p;
+  Eigen::VectorXd mot_K_d;
+
   // Cartesian impedance parameters
   Eigen::Vector<double, 6> stiffness_diag;
   Eigen::Vector<double, 6> damping_diag;
 
   // Control parameters
   double alpha;  // Velocity gain
-  double dt_goal;  // Time step for computing q_goal
 
   // Timing
   double loop_duration_ms;
@@ -87,14 +82,6 @@ public:
     ss << ",error_rx,error_ry,error_rz";
     ss << ",error_pos_magnitude,error_rot_magnitude";
 
-    // Task space velocity (J*dq)
-    ss << ",dx,dy,dz,drx,dry,drz";
-
-    // Impedance control intermediate values
-    ss << ",F_task_x,F_task_y,F_task_z,F_task_rx,F_task_ry,F_task_rz";
-    ss << ",ddx_desired_x,ddx_desired_y,ddx_desired_z,ddx_desired_rx,ddx_desired_ry,ddx_desired_rz";
-    ss << ",dx_desired_x,dx_desired_y,dx_desired_z,dx_desired_rx,dx_desired_ry,dx_desired_rz";
-
     // Joint states
     for (size_t i = 0; i < num_joints; ++i) {
       ss << ",q_" << i;
@@ -116,12 +103,20 @@ public:
       ss << ",tau_ff_" << i;
     }
 
+    // Motor PD gains
+    for (size_t i = 0; i < num_joints; ++i) {
+      ss << ",mot_K_p_" << i;
+    }
+    for (size_t i = 0; i < num_joints; ++i) {
+      ss << ",mot_K_d_" << i;
+    }
+
     // Cartesian impedance parameters
     ss << ",k_pos_x,k_pos_y,k_pos_z,k_rot_x,k_rot_y,k_rot_z";
     ss << ",d_pos_x,d_pos_y,d_pos_z,d_rot_x,d_rot_y,d_rot_z";
 
     // Control parameters
-    ss << ",alpha,dt_goal";
+    ss << ",alpha";
 
     // Timing
     ss << ",loop_duration_ms";
@@ -151,22 +146,6 @@ public:
     ss << "," << error.head(3).norm();  // position error magnitude
     ss << "," << error.tail(3).norm();  // rotation error magnitude
 
-    // Task space velocity
-    for (int i = 0; i < 6; ++i) {
-      ss << "," << task_velocity[i];
-    }
-
-    // Impedance control intermediate values
-    for (int i = 0; i < 6; ++i) {
-      ss << "," << task_force[i];
-    }
-    for (int i = 0; i < 6; ++i) {
-      ss << "," << task_acceleration_desired[i];
-    }
-    for (int i = 0; i < 6; ++i) {
-      ss << "," << task_velocity_desired[i];
-    }
-
     // Joint states
     for (int i = 0; i < q.size(); ++i) {
       ss << "," << q[i];
@@ -188,6 +167,14 @@ public:
       ss << "," << tau_ff[i];
     }
 
+    // Motor PD gains
+    for (int i = 0; i < mot_K_p.size(); ++i) {
+      ss << "," << mot_K_p[i];
+    }
+    for (int i = 0; i < mot_K_d.size(); ++i) {
+      ss << "," << mot_K_d[i];
+    }
+
     // Cartesian impedance parameters
     for (int i = 0; i < 6; ++i) {
       ss << "," << stiffness_diag[i];
@@ -198,7 +185,6 @@ public:
 
     // Control parameters
     ss << "," << alpha;
-    ss << "," << dt_goal;
 
     // Timing
     ss << "," << loop_duration_ms;

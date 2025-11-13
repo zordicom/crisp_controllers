@@ -104,6 +104,16 @@ mit_cartesian_controller:
     validation:
       bounds<>: [0.0, 2.0]
 
+  use_position_command:
+    type: bool
+    default_value: true
+    description: "Send position commands (q_goal) to motors. If false, q_goal will be set to current position."
+
+  use_velocity_command:
+    type: bool
+    default_value: false
+    description: "Send velocity commands (dq_goal) to motors. If false, dq_goal will be set to zero."
+
   log:
     enabled:
       type: bool
