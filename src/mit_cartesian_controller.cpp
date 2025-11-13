@@ -69,14 +69,19 @@ MITCartesianController::update(const rclcpp::Time &time,
     q_pin_[i] = q_[i];
   }
 
+  // Apply low-pass filter to velocity feedback to reduce 12-bit quantization noise
+  // EMA filter: dq_filtered = alpha * dq_measured + (1-alpha) * dq_filtered_prev
+  dq_filtered_ = params_.dq_filter_alpha * dq_ +
+                 (1.0 - params_.dq_filter_alpha) * dq_filtered_;
+
   // Update target pose if new one received
   if (new_target_pose_) {
     parse_target_pose_();
     new_target_pose_ = false;
   }
 
-  // Compute forward kinematics
-  pinocchio::forwardKinematics(model_, data_, q_pin_, dq_);
+  // Compute forward kinematics using filtered velocity
+  pinocchio::forwardKinematics(model_, data_, q_pin_, dq_filtered_);
   pinocchio::updateFramePlacements(model_, data_);
 
   // Get end-effector pose in world frame
@@ -199,6 +204,7 @@ MITCartesianController::update(const rclcpp::Time &time,
     // Joint states
     log_data.q = q_;
     log_data.dq = dq_;
+    log_data.dq_filtered = dq_filtered_;
 
     // MIT controller specific: goal positions and velocities sent to motors
     log_data.q_goal = q_goal_;
@@ -331,6 +337,7 @@ CallbackReturn MITCartesianController::on_configure(
   q_ = Eigen::VectorXd::Zero(num_joints);
   q_pin_ = Eigen::VectorXd::Zero(model_.nq);
   dq_ = Eigen::VectorXd::Zero(num_joints);
+  dq_filtered_ = Eigen::VectorXd::Zero(num_joints);
   q_goal_ = Eigen::VectorXd::Zero(num_joints);
   dq_goal_ = Eigen::VectorXd::Zero(num_joints);
   tau_ff_ = Eigen::VectorXd::Zero(num_joints);
@@ -396,8 +403,11 @@ CallbackReturn MITCartesianController::on_activate(
     dq_[i] = state_interfaces_[num_joints + i].get_value();
   }
 
+  // Initialize filtered velocity to current velocity
+  dq_filtered_ = dq_;
+
   // Compute forward kinematics
-  pinocchio::forwardKinematics(model_, data_, q_pin_, dq_);
+  pinocchio::forwardKinematics(model_, data_, q_pin_, dq_filtered_);
   pinocchio::updateFramePlacements(model_, data_);
 
   // Get current pose
@@ -427,6 +437,7 @@ CallbackReturn MITCartesianController::on_activate(
     MITControllerLogData dummy_log;
     dummy_log.q = Eigen::VectorXd::Zero(num_joints);
     dummy_log.dq = Eigen::VectorXd::Zero(num_joints);
+    dummy_log.dq_filtered = Eigen::VectorXd::Zero(num_joints);
     dummy_log.q_goal = Eigen::VectorXd::Zero(num_joints);
     dummy_log.dq_goal = Eigen::VectorXd::Zero(num_joints);
     dummy_log.tau_ff = Eigen::VectorXd::Zero(num_joints);

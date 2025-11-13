@@ -35,6 +35,7 @@ public:
   // Joint states (current)
   Eigen::VectorXd q;
   Eigen::VectorXd dq;
+  Eigen::VectorXd dq_filtered;  // Low-pass filtered velocity
 
   // Joint goals (sent to motors)
   Eigen::VectorXd q_goal;
@@ -88,6 +89,9 @@ public:
     }
     for (size_t i = 0; i < num_joints; ++i) {
       ss << ",dq_" << i;
+    }
+    for (size_t i = 0; i < num_joints; ++i) {
+      ss << ",dq_filtered_" << i;
     }
 
     // Joint goals (sent to motors)
@@ -152,6 +156,9 @@ public:
     }
     for (int i = 0; i < dq.size(); ++i) {
       ss << "," << dq[i];
+    }
+    for (int i = 0; i < dq_filtered.size(); ++i) {
+      ss << "," << dq_filtered[i];
     }
 
     // Joint goals

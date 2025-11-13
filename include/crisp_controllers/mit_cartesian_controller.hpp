@@ -132,6 +132,8 @@ private:
   Eigen::VectorXd q_pin_;
   /** @brief Current joint velocities (nv) */
   Eigen::VectorXd dq_;
+  /** @brief Filtered joint velocities (nv) - reduces 12-bit quantization noise */
+  Eigen::VectorXd dq_filtered_;
 
   /** @brief Goal joint positions to send to motors (nv) */
   Eigen::VectorXd q_goal_;

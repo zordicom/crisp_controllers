@@ -156,6 +156,13 @@ mit_cartesian_controller:
     default_value: false
     description: "Send velocity commands (dq_goal) to motors. If false, dq_goal will be set to zero."
 
+  dq_filter_alpha:
+    type: double
+    default_value: 0.3
+    description: "Low-pass filter coefficient for velocity feedback (0.0-1.0). Lower values = more filtering. Set to 1.0 to disable filtering. Recommended: 0.2-0.5 to reduce 12-bit velocity quantization noise."
+    validation:
+      bounds<>: [0.0, 1.0]
+
   log:
     enabled:
       type: bool
