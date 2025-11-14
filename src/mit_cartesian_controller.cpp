@@ -89,10 +89,39 @@ MITCartesianController::update(const rclcpp::Time &time,
   ee_pose_world_ = data_.oMf[ee_frame_id_];
 
   // Compute Cartesian error in world frame
-  Eigen::Vector<double, 6> error;
-  error.head(3) = target_pose_.translation() - ee_pose_world_.translation();
-  error.tail(3) = pinocchio::log3(target_pose_.rotation() *
+  x_error_.head(3) = target_pose_.translation() - ee_pose_world_.translation();
+  x_error_.tail(3) = pinocchio::log3(target_pose_.rotation() *
                                   ee_pose_world_.rotation().transpose());
+
+  // Clip Cartesian error to prevent large jumps
+  Eigen::Vector<double, 6> error_clip_max;
+  error_clip_max << params_.error_clip.x, params_.error_clip.y, params_.error_clip.z,
+                    params_.error_clip.rx, params_.error_clip.ry, params_.error_clip.rz;
+  x_error_ = x_error_.cwiseMax(-error_clip_max).cwiseMin(error_clip_max);
+
+  // Update error history for oscillation detection
+  if (params_.oscillation_detection.enabled) {
+    double pos_error_magnitude = x_error_.head(3).norm();
+    error_history_[error_history_idx_] = pos_error_magnitude;
+    error_history_idx_ = (error_history_idx_ + 1) % MAX_ERROR_HISTORY;
+    if (error_history_count_ < MAX_ERROR_HISTORY) {
+      error_history_count_++;
+    }
+
+    // Check for oscillations
+    if (detect_oscillation_(period.seconds())) {
+      oscillation_detected_ = true;
+      RCLCPP_ERROR(get_node()->get_logger(),
+                   "Oscillation detected! Stopping controller.");
+    }
+  }
+
+  // Stop sending commands if oscillation detected
+  if (oscillation_detected_) {
+    RCLCPP_ERROR_THROTTLE(get_node()->get_logger(), *get_node()->get_clock(), 5000,
+                          "Controller stopped due to oscillation detection!");
+    return controller_interface::return_type::ERROR;
+  }
 
   // Compute Jacobian in world frame
   J_.setZero();
@@ -102,31 +131,19 @@ MITCartesianController::update(const rclcpp::Time &time,
   // Compute Jacobian pseudo-inverse for IK
   J_pinv_ = pseudo_inverse(J_, params_.lambda);
 
-  // Position command: Set to current position (no position control)
-  // All Cartesian control happens via feedforward torque to avoid double-counting
-  q_goal_ = q_;
-  mot_K_p_ = Eigen::VectorXd::Zero(num_joints);  // No position stiffness
-
-  // Velocity command: Set to zero with small damping for stability
-  dq_goal_.setZero();
-  mot_K_d_ = Eigen::VectorXd::Constant(num_joints, 1.0);  // Small damping for stability
-
-  // Feedforward torques: Cartesian impedance + gravity compensation
-  tau_ff_.setZero();
-
-  // Add Cartesian impedance via feedforward torque
-  // tau = J^T * (K * error - D * x_dot)
-  Eigen::Vector<double, 6> task_velocity = J_ * dq_filtered_;
-  Eigen::Vector<double, 6> cart_force =
-      K_cart_ * error - D_cart_ * task_velocity;
-  tau_ff_ = J_.transpose() * cart_force;
-
-  // Add gravity compensation if enabled
-  if (params_.use_gravity_compensation) {
-    Eigen::VectorXd tau_gravity =
-        params_.gravity_scale *
-        pinocchio::computeGeneralizedGravity(model_, data_, q_pin_);
-    tau_ff_ += tau_gravity;
+  // Call the appropriate control mode function
+  if (params_.control_mode == "gravity_compensation_only") {
+    compute_gravity_compensation_only_();
+  } else if (params_.control_mode == "gravity_velocity") {
+    compute_gravity_velocity_();
+  } else if (params_.control_mode == "gravity_velocity_ik") {
+    compute_gravity_velocity_ik_();
+  } else if (params_.control_mode == "gravity_xforce") {
+    compute_gravity_xforce_();
+  } else {
+    RCLCPP_ERROR_THROTTLE(get_node()->get_logger(), *get_node()->get_clock(), 1000,
+                          "Unknown control mode: %s", params_.control_mode.c_str());
+    return controller_interface::return_type::ERROR;
   }
 
   // Apply joint limits if configured
@@ -165,9 +182,12 @@ MITCartesianController::update(const rclcpp::Time &time,
   if (params_.log.enabled) {
     RCLCPP_INFO_STREAM_THROTTLE(get_node()->get_logger(),
                                 *get_node()->get_clock(), DEBUG_LOG_THROTTLE_MS,
-                                "Error: pos=" << error.head(3).transpose()
+                                "Mode: " << params_.control_mode);
+    RCLCPP_INFO_STREAM_THROTTLE(get_node()->get_logger(),
+                                *get_node()->get_clock(), DEBUG_LOG_THROTTLE_MS,
+                                "Error: pos=" << x_error_.head(3).transpose()
                                               << " ori="
-                                              << error.tail(3).transpose());
+                                              << x_error_.tail(3).transpose());
     RCLCPP_INFO_STREAM_THROTTLE(get_node()->get_logger(),
                                 *get_node()->get_clock(), DEBUG_LOG_THROTTLE_MS,
                                 "q_goal: " << q_goal_.transpose());
@@ -191,13 +211,14 @@ MITCartesianController::update(const rclcpp::Time &time,
 
     // Populate log data structure - only what MIT controller actually computes
     log_data.timestamp = (time - csv_log_start_time_).seconds();
+    log_data.control_mode = params_.control_mode;
 
     // Poses
     log_data.current_pose = ee_pose_world_;
     log_data.target_pose = target_pose_;
 
     // Cartesian error
-    log_data.error = error;
+    log_data.error = x_error_;
 
     // Joint states
     log_data.q = q_;
@@ -344,6 +365,13 @@ CallbackReturn MITCartesianController::on_configure(
   J_pinv_ = Eigen::MatrixXd::Zero(num_joints, 6);
   mot_K_p_ = Eigen::VectorXd::Ones(num_joints);
   mot_K_d_ = Eigen::VectorXd::Ones(num_joints);
+  x_error_ = Eigen::Vector<double, 6>::Zero();
+
+  // Initialize oscillation detection
+  error_history_.fill(0.0);
+  error_history_idx_ = 0;
+  error_history_count_ = 0;
+  oscillation_detected_ = false;
 
   // Set stiffness and damping
   K_cart_.setZero();
@@ -496,6 +524,158 @@ void MITCartesianController::parse_target_pose_() {
 
   // Transform target from base frame to world frame
   target_pose_ = base_frame_pose_world_ * target_in_base;
+}
+
+void MITCartesianController::compute_gravity_compensation_only_() {
+  size_t num_joints = params_.joints.size();
+
+  // Set position, velocity, kp, and kd to zero
+  q_goal_ = q_;  // Current position
+  dq_goal_.setZero();
+  mot_K_p_ = Eigen::VectorXd::Zero(num_joints);
+  mot_K_d_ = Eigen::VectorXd::Zero(num_joints);
+
+  // Only gravity compensation
+  tau_ff_.setZero();
+  if (params_.use_gravity_compensation) {
+    Eigen::VectorXd tau_gravity =
+        params_.gravity_scale *
+        pinocchio::computeGeneralizedGravity(model_, data_, q_pin_);
+    tau_ff_ = tau_gravity;
+  }
+}
+
+void MITCartesianController::compute_gravity_velocity_() {
+  size_t num_joints = params_.joints.size();
+
+  // Set position and velocity goals
+  q_goal_ = q_;  // Current position
+  dq_goal_.setZero();  // Goal velocity is zero
+
+  // Set motor gains
+  mot_K_p_ = Eigen::VectorXd::Zero(num_joints);  // No position control
+
+  // Use configurable kd values from parameters
+  for (size_t i = 0; i < num_joints && i < params_.motor_kd.size(); ++i) {
+    mot_K_d_[i] = params_.motor_kd[i];
+  }
+
+  // Gravity compensation
+  tau_ff_.setZero();
+  if (params_.use_gravity_compensation) {
+    Eigen::VectorXd tau_gravity =
+        params_.gravity_scale *
+        pinocchio::computeGeneralizedGravity(model_, data_, q_pin_);
+    tau_ff_ = tau_gravity;
+  }
+}
+
+void MITCartesianController::compute_gravity_velocity_ik_() {
+  size_t num_joints = params_.joints.size();
+
+  // Compute goal position using IK
+  Eigen::VectorXd delta_q = J_pinv_ * x_error_;
+  q_goal_ = q_ + delta_q;
+  dq_goal_.setZero();  // Goal velocity is zero
+
+  // Use configurable kp and kd values from parameters
+  for (size_t i = 0; i < num_joints && i < params_.motor_kp.size(); ++i) {
+    mot_K_p_[i] = params_.motor_kp[i];
+  }
+  for (size_t i = 0; i < num_joints && i < params_.motor_kd.size(); ++i) {
+    mot_K_d_[i] = params_.motor_kd[i];
+  }
+
+  // Gravity compensation
+  tau_ff_.setZero();
+  if (params_.use_gravity_compensation) {
+    Eigen::VectorXd tau_gravity =
+        params_.gravity_scale *
+        pinocchio::computeGeneralizedGravity(model_, data_, q_pin_);
+    tau_ff_ = tau_gravity;
+  }
+}
+
+void MITCartesianController::compute_gravity_xforce_() {
+  size_t num_joints = params_.joints.size();
+
+  // Set position and velocity goals
+  q_goal_ = q_;  // Current position
+  dq_goal_.setZero();  // Goal velocity is zero
+
+  // Set motor gains
+  mot_K_p_ = Eigen::VectorXd::Zero(num_joints);  // No position control
+
+  // Use configurable kd values from parameters
+  for (size_t i = 0; i < num_joints && i < params_.motor_kd.size(); ++i) {
+    mot_K_d_[i] = params_.motor_kd[i];
+  }
+
+  // Compute desired task force: F_task = K_cart * x_error
+  Eigen::Vector<double, 6> task_force = K_cart_ * x_error_;
+
+  // Convert Cartesian force to joint torques: tau = J^T * F_task
+  Eigen::VectorXd tau_task = J_.transpose() * task_force;
+
+  // Gravity compensation + task force
+  tau_ff_.setZero();
+  if (params_.use_gravity_compensation) {
+    Eigen::VectorXd tau_gravity =
+        params_.gravity_scale *
+        pinocchio::computeGeneralizedGravity(model_, data_, q_pin_);
+    tau_ff_ = tau_gravity;
+  }
+
+  // Add task force torques
+  tau_ff_ += tau_task;
+}
+
+bool MITCartesianController::detect_oscillation_(double dt) {
+  // Need minimum samples to detect oscillation
+  size_t window_size = std::min(static_cast<size_t>(params_.oscillation_detection.window),
+                                 error_history_count_);
+  if (window_size < 10) {
+    return false;  // Not enough data
+  }
+
+  // Count zero crossings in the error signal (around the mean)
+  // This detects oscillations around any offset, not just zero
+  int zero_crossings = 0;
+  double mean = 0.0;
+
+  // Calculate mean of the window
+  for (size_t i = 0; i < window_size; ++i) {
+    size_t idx = (error_history_idx_ + MAX_ERROR_HISTORY - window_size + i) % MAX_ERROR_HISTORY;
+    mean += error_history_[idx];
+  }
+  mean /= window_size;
+
+  // Count zero crossings relative to mean
+  for (size_t i = 1; i < window_size; ++i) {
+    size_t idx_prev = (error_history_idx_ + MAX_ERROR_HISTORY - window_size + i - 1) % MAX_ERROR_HISTORY;
+    size_t idx_curr = (error_history_idx_ + MAX_ERROR_HISTORY - window_size + i) % MAX_ERROR_HISTORY;
+
+    double val_prev = error_history_[idx_prev] - mean;
+    double val_curr = error_history_[idx_curr] - mean;
+
+    if ((val_prev < 0 && val_curr >= 0) || (val_prev >= 0 && val_curr < 0)) {
+      zero_crossings++;
+    }
+  }
+
+  // Calculate the frequency of oscillation using actual control period
+  double window_duration_sec = window_size * dt;
+  double oscillation_freq = (zero_crossings / 2.0) / window_duration_sec;
+
+  // Oscillation detected if frequency exceeds threshold
+  if (oscillation_freq >= params_.oscillation_detection.frequency) {
+    RCLCPP_WARN(get_node()->get_logger(),
+                "Detected oscillation at %.2f Hz (threshold: %.2f Hz, zero crossings: %d, dt: %.6f)",
+                oscillation_freq, params_.oscillation_detection.frequency, zero_crossings, dt);
+    return true;
+  }
+
+  return false;
 }
 
 } // namespace crisp_controllers

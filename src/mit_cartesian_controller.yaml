@@ -3,6 +3,27 @@ mit_cartesian_controller:
     type: string_array
     description: "Names of the joints to control"
 
+  control_mode:
+    type: string
+    default_value: "gravity_compensation_only"
+    description: "Control mode: gravity_compensation_only, gravity_velocity, gravity_velocity_ik, or gravity_xforce"
+    validation:
+      one_of<>: [["gravity_compensation_only", "gravity_velocity", "gravity_velocity_ik", "gravity_xforce"]]
+
+  motor_kd:
+    type: double_array
+    default_value: [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0]
+    description: "Motor Kd gains for velocity damping (0-5 for each joint)"
+    validation:
+      element_bounds<>: [0.0, 5.0]
+
+  motor_kp:
+    type: double_array
+    default_value: [50.0, 50.0, 50.0, 50.0, 50.0, 50.0, 50.0]
+    description: "Motor Kp gains for position control (0-500 for each joint)"
+    validation:
+      element_bounds<>: [0.0, 500.0]
+
   end_effector_frame:
     type: string
     description: "Name of the end-effector frame in the URDF"
@@ -162,6 +183,62 @@ mit_cartesian_controller:
     description: "Low-pass filter coefficient for velocity feedback (0.0-1.0). Lower values = more filtering. Set to 1.0 to disable filtering. Recommended: 0.2-0.5 to reduce 12-bit velocity quantization noise."
     validation:
       bounds<>: [0.0, 1.0]
+
+  error_clip:
+    x:
+      type: double
+      default_value: 0.5
+      description: "Maximum allowed position error in x direction (meters)"
+      validation:
+        bounds<>: [0.0, 2.0]
+    y:
+      type: double
+      default_value: 0.5
+      description: "Maximum allowed position error in y direction (meters)"
+      validation:
+        bounds<>: [0.0, 2.0]
+    z:
+      type: double
+      default_value: 0.5
+      description: "Maximum allowed position error in z direction (meters)"
+      validation:
+        bounds<>: [0.0, 2.0]
+    rx:
+      type: double
+      default_value: 1.0
+      description: "Maximum allowed rotation error around x axis (radians)"
+      validation:
+        bounds<>: [0.0, 3.14159]
+    ry:
+      type: double
+      default_value: 1.0
+      description: "Maximum allowed rotation error around y axis (radians)"
+      validation:
+        bounds<>: [0.0, 3.14159]
+    rz:
+      type: double
+      default_value: 1.0
+      description: "Maximum allowed rotation error around z axis (radians)"
+      validation:
+        bounds<>: [0.0, 3.14159]
+
+  oscillation_detection:
+    enabled:
+      type: bool
+      default_value: false
+      description: "Enable oscillation detection and auto-stop"
+    window:
+      type: int
+      default_value: 35
+      description: "Number of samples to check for oscillation detection. At 350Hz control rate, 35 samples = 0.1 seconds"
+      validation:
+        bounds<>: [10, 500]
+    frequency:
+      type: double
+      default_value: 2.0
+      description: "Minimum oscillation frequency to detect (Hz)"
+      validation:
+        bounds<>: [0.5, 20.0]
 
   log:
     enabled:

@@ -27,6 +27,9 @@ public:
   // Timestamp
   double timestamp;
 
+  // Control mode
+  std::string control_mode;
+
   // Cartesian pose and error
   pinocchio::SE3 current_pose;
   pinocchio::SE3 target_pose;
@@ -66,7 +69,7 @@ public:
     size_t num_joints = q.size();
 
     // Basic info
-    ss << "timestamp";
+    ss << "timestamp,control_mode";
 
     // Current pose (position + quaternion)
     ss << ",current_x,current_y,current_z";
@@ -133,7 +136,7 @@ public:
     ss << std::fixed << std::setprecision(6);
 
     // Timestamp
-    ss << timestamp;
+    ss << timestamp << "," << control_mode;
 
     // Current pose
     writePose(ss, current_pose);

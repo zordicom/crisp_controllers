@@ -9,6 +9,7 @@
  */
 
 #include <Eigen/Dense>
+#include <array>
 #include <controller_interface/controller_interface.hpp>
 #include <crisp_controllers/mit_cartesian_controller_parameters.hpp>
 #include <geometry_msgs/msg/pose_stamped.hpp>
@@ -161,10 +162,50 @@ private:
    */
   void parse_target_pose_();
 
+  /**
+   * @brief Control mode 1: Gravity compensation only
+   */
+  void compute_gravity_compensation_only_();
+
+  /**
+   * @brief Control mode 2: Gravity compensation + velocity damping
+   */
+  void compute_gravity_velocity_();
+
+  /**
+   * @brief Control mode 3: Gravity compensation + velocity damping + IK position control
+   */
+  void compute_gravity_velocity_ik_();
+
+  /**
+   * @brief Control mode 4: Gravity compensation + velocity damping + Cartesian force
+   */
+  void compute_gravity_xforce_();
+
   /** @brief CSV logger for controller data */
   std::unique_ptr<CSVLoggerInterface> csv_logger_;
   /** @brief Start time for CSV logging timestamp calculations */
   rclcpp::Time csv_log_start_time_;
+
+  /** @brief Cartesian error for use across control modes */
+  Eigen::Vector<double, 6> x_error_;
+
+  /** @brief Circular buffer for position error magnitude history (for oscillation detection) */
+  static constexpr size_t MAX_ERROR_HISTORY = 500;
+  std::array<double, MAX_ERROR_HISTORY> error_history_;
+  /** @brief Current index in error history buffer */
+  size_t error_history_idx_;
+  /** @brief Number of valid samples in error history */
+  size_t error_history_count_;
+  /** @brief Flag to indicate controller should stop due to oscillation */
+  bool oscillation_detected_;
+
+  /**
+   * @brief Detect oscillations in position error
+   * @param dt Control loop period in seconds
+   * @return true if oscillation detected
+   */
+  bool detect_oscillation_(double dt);
 
   // Throttle debug logs
   static constexpr int DEBUG_LOG_THROTTLE_MS = 1000;
