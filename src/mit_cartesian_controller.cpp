@@ -55,7 +55,7 @@ MITCartesianController::state_interface_configuration() const {
 
 controller_interface::return_type
 MITCartesianController::update(const rclcpp::Time &time,
-                               const rclcpp::Duration & /*period*/) {
+                               const rclcpp::Duration &period) {
   // Start timing the control loop for logging
   auto loop_start_time = get_node()->get_clock()->now();
 
@@ -69,8 +69,9 @@ MITCartesianController::update(const rclcpp::Time &time,
     q_pin_[i] = q_[i];
   }
 
-  // Apply low-pass filter to velocity feedback to reduce 12-bit quantization noise
-  // EMA filter: dq_filtered = alpha * dq_measured + (1-alpha) * dq_filtered_prev
+  // Apply low-pass filter to velocity feedback to reduce 12-bit quantization
+  // noise EMA filter: dq_filtered = alpha * dq_measured + (1-alpha) *
+  // dq_filtered_prev
   dq_filtered_ = params_.dq_filter_alpha * dq_ +
                  (1.0 - params_.dq_filter_alpha) * dq_filtered_;
 
@@ -107,11 +108,15 @@ MITCartesianController::update(const rclcpp::Time &time,
 
   // Position command
   if (params_.use_position_command) {
-    q_goal_ = J_t_ * K_cart_ * error + q_;
+    // Map Cartesian error to desired joint velocity via Jacobian transpose
+    Eigen::VectorXd dq_desired = J_t_ * K_cart_ * error;
+    // Integrate to get position goal
+    double dt = period.seconds();
+    q_goal_ = q_ + dq_desired * dt;
     mot_K_p_ = Eigen::VectorXd::Ones(num_joints);
   } else {
-    q_goal_ = q_;  // Set to current position
-    mot_K_p_ = Eigen::VectorXd::Zero(num_joints);  // Disable position control
+    q_goal_ = q_;                                 // Set to current position
+    mot_K_p_ = Eigen::VectorXd::Zero(num_joints); // Disable position control
   }
 
   // Velocity command
@@ -119,8 +124,8 @@ MITCartesianController::update(const rclcpp::Time &time,
     // dq_goal is computed elsewhere or set to desired value
     mot_K_d_ = J_t_ * D_cart_ * J_;
   } else {
-    dq_goal_ = dq_;  // Set to current velocity
-    mot_K_d_ = Eigen::VectorXd::Ones(num_joints);  // Use default damping
+    dq_goal_ = dq_;                               // Set to current velocity
+    mot_K_d_ = Eigen::VectorXd::Ones(num_joints); // Use default damping
   }
 
   // Compute feedforward torques

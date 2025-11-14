@@ -36,11 +36,10 @@ find_package(pinocchio REQUIRED)
 find_package(realtime_tools REQUIRED)
 find_package(generate_parameter_library REQUIRED)
 
-# Temporarily disabled old controller parameters
-# generate_parameter_library(
-#   cartesian_impedance_controller_parameters
-#   src/cartesian_impedance_controller.yaml
-# )
+generate_parameter_library(
+  cartesian_impedance_controller_parameters
+  src/cartesian_impedance_controller.yaml
+)
 
 generate_parameter_library(
   pose_broadcaster_parameters
@@ -66,9 +65,9 @@ add_library(
         ${PROJECT_NAME}
         SHARED
         # Temporarily disabled old controllers due to Pinocchio/Eigen compatibility issues
-        # src/cartesian_controller.cpp
         # src/torque_feedback_controller.cpp
         # src/twist_broadcaster.cpp
+        src/cartesian_controller.cpp
         src/pose_broadcaster.cpp
         src/mit_cartesian_controller.cpp
         src/utils/csv_logger.cpp
@@ -92,7 +91,7 @@ endif()
 target_link_libraries(${PROJECT_NAME}
   PRIVATE
     # Temporarily disabled old controller parameters
-    # cartesian_impedance_controller_parameters
+    cartesian_impedance_controller_parameters
     pose_broadcaster_parameters
     # torque_feedback_controller_parameters
     # twist_broadcaster_parameters

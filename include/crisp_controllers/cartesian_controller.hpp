@@ -7,9 +7,6 @@
  * @author Your Organization
  */
 
-#include <Eigen/src/Core/Matrix.h>
-#include <Eigen/src/Geometry/Transform.h>
-
 #include <Eigen/Dense>
 #include <controller_interface/controller_interface.hpp>
 #include <crisp_controllers/cartesian_impedance_controller_parameters.hpp>

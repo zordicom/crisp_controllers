@@ -1,4 +1,3 @@
-#include <Eigen/src/Core/Matrix.h>
 #include <fmt/format.h>
 
 #include <cmath>
@@ -20,6 +19,7 @@
 #include <rclcpp/logging.hpp>
 
 #include "crisp_controllers/utils/async_csv_logger.hpp"
+#include "crisp_controllers/utils/controller_log_data.hpp"
 #include "crisp_controllers/utils/csv_logger.hpp"
 #include "crisp_controllers/utils/csv_logger_interface.hpp"
 #include "crisp_controllers/utils/fiters.hpp"
@@ -834,6 +834,21 @@ CallbackReturn CartesianController::on_activate(
     // Store the start time for consistent timestamp calculations
     csv_log_start_time_ = get_node()->now();
 
+    // Create a dummy log data object just for header generation
+    ControllerLogData dummy_log;
+    dummy_log.q_raw = Eigen::VectorXd::Zero(num_joints);
+    dummy_log.q_filtered = Eigen::VectorXd::Zero(num_joints);
+    dummy_log.dq_raw = Eigen::VectorXd::Zero(num_joints);
+    dummy_log.dq_filtered = Eigen::VectorXd::Zero(num_joints);
+    dummy_log.tau_task = Eigen::VectorXd::Zero(num_joints);
+    dummy_log.tau_nullspace = Eigen::VectorXd::Zero(num_joints);
+    dummy_log.tau_joint_limits = Eigen::VectorXd::Zero(num_joints);
+    dummy_log.tau_friction = Eigen::VectorXd::Zero(num_joints);
+    dummy_log.tau_coriolis = Eigen::VectorXd::Zero(num_joints);
+    dummy_log.tau_gravity = Eigen::VectorXd::Zero(num_joints);
+    dummy_log.tau_wrench = Eigen::VectorXd::Zero(num_joints);
+    dummy_log.tau_total = Eigen::VectorXd::Zero(num_joints);
+
     if (params_.log.use_async_logging) {
       // Use async logger for better real-time performance
       csv_logger_ = std::make_unique<AsyncCSVLogger>(get_node()->get_name(),
@@ -851,7 +866,7 @@ CallbackReturn CartesianController::on_activate(
           "Using SYNCHRONOUS CSV logging - may impact real-time performance!");
     }
 
-    if (!csv_logger_->initialize(num_joints, csv_log_start_time_)) {
+    if (!csv_logger_->initialize(csv_log_start_time_, dummy_log)) {
       RCLCPP_ERROR(get_node()->get_logger(), "Failed to initialize CSV logger");
       return CallbackReturn::ERROR;
     }
@@ -1079,7 +1094,7 @@ void CartesianController::log_debug_info(const rclcpp::Time &time,
         (loop_end_time - loop_start_time).nanoseconds() * 1e-6;
 
     // Log the data using the unified interface
-    csv_logger_->logData(log_data, time);
+    csv_logger_->logData(log_data);
   }
 }
 
