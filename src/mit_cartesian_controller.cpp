@@ -102,21 +102,14 @@ MITCartesianController::update(const rclcpp::Time &time,
   // Compute Jacobian pseudo-inverse for IK
   J_pinv_ = pseudo_inverse(J_, params_.lambda);
 
-  // Position command: Use pseudo-inverse IK to find goal joint positions
-  if (params_.use_position_command) {
-    // Iterative pseudo-inverse Jacobian IK
-    // Start from current position and take a step toward the target
-    Eigen::VectorXd delta_q = J_pinv_ * error;
-    q_goal_ = q_ + delta_q;
-    mot_K_p_ = Eigen::VectorXd::Ones(num_joints);
-  } else {
-    q_goal_ = q_;                                 // Set to current position
-    mot_K_p_ = Eigen::VectorXd::Zero(num_joints); // Disable position control
-  }
+  // Position command: Set to current position (no position control)
+  // All Cartesian control happens via feedforward torque to avoid double-counting
+  q_goal_ = q_;
+  mot_K_p_ = Eigen::VectorXd::Zero(num_joints);  // No position stiffness
 
-  // Velocity command: Set to zero (let motor PD handle it)
+  // Velocity command: Set to zero with small damping for stability
   dq_goal_.setZero();
-  mot_K_d_ = Eigen::VectorXd::Ones(num_joints);
+  mot_K_d_ = Eigen::VectorXd::Constant(num_joints, 1.0);  // Small damping for stability
 
   // Feedforward torques: Cartesian impedance + gravity compensation
   tau_ff_.setZero();
