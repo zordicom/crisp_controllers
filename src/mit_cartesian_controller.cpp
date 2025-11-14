@@ -99,46 +99,41 @@ MITCartesianController::update(const rclcpp::Time &time,
   pinocchio::computeFrameJacobian(model_, data_, q_pin_, ee_frame_id_,
                                   pinocchio::ReferenceFrame::WORLD, J_);
 
-  // Compute Jacobian pseudo-inverse
-  // NOTE: pseudo_inverse() may allocate internally via SVD. For stricter
-  // realtime compliance, consider implementing a damped least-squares solver
-  // with fully pre-allocated matrices.
-  // J_pinv_ = pseudo_inverse(J_, params_.lambda);
-  J_t_ = J_.transpose();
+  // Compute Jacobian pseudo-inverse for IK
+  J_pinv_ = pseudo_inverse(J_, params_.lambda);
 
-  // Position command
+  // Position command: Use pseudo-inverse IK to find goal joint positions
   if (params_.use_position_command) {
-    // Map Cartesian error to desired joint velocity via Jacobian transpose
-    Eigen::VectorXd dq_desired = J_t_ * K_cart_ * error;
-    // Integrate to get position goal
-    double dt = period.seconds();
-    q_goal_ = q_ + dq_desired * dt;
+    // Iterative pseudo-inverse Jacobian IK
+    // Start from current position and take a step toward the target
+    Eigen::VectorXd delta_q = J_pinv_ * error;
+    q_goal_ = q_ + delta_q;
     mot_K_p_ = Eigen::VectorXd::Ones(num_joints);
   } else {
     q_goal_ = q_;                                 // Set to current position
     mot_K_p_ = Eigen::VectorXd::Zero(num_joints); // Disable position control
   }
 
-  // Velocity command
-  if (params_.use_velocity_command) {
-    // dq_goal is computed elsewhere or set to desired value
-    mot_K_d_ = J_t_ * D_cart_ * J_;
-  } else {
-    dq_goal_ = dq_;                               // Set to current velocity
-    mot_K_d_ = Eigen::VectorXd::Ones(num_joints); // Use default damping
-  }
+  // Velocity command: Set to zero (let motor PD handle it)
+  dq_goal_.setZero();
+  mot_K_d_ = Eigen::VectorXd::Ones(num_joints);
 
-  // Compute feedforward torques
+  // Feedforward torques: Cartesian impedance + gravity compensation
   tau_ff_.setZero();
 
+  // Add Cartesian impedance via feedforward torque
+  // tau = J^T * (K * error - D * x_dot)
+  Eigen::Vector<double, 6> task_velocity = J_ * dq_filtered_;
+  Eigen::Vector<double, 6> cart_force =
+      K_cart_ * error - D_cart_ * task_velocity;
+  tau_ff_ = J_.transpose() * cart_force;
+
   // Add gravity compensation if enabled
-  // Note: Task-space forces are applied via q_goal and dq_goal,
-  // not via tau_ff, to avoid double-counting with motor impedance controller
   if (params_.use_gravity_compensation) {
     Eigen::VectorXd tau_gravity =
         params_.gravity_scale *
         pinocchio::computeGeneralizedGravity(model_, data_, q_pin_);
-    tau_ff_ = tau_gravity;
+    tau_ff_ += tau_gravity;
   }
 
   // Apply joint limits if configured
@@ -152,6 +147,11 @@ MITCartesianController::update(const rclcpp::Time &time,
         tau_ff_.cwiseMax(-model_.effortLimit * params_.torque_safety_factor)
             .cwiseMin(model_.effortLimit * params_.torque_safety_factor);
   }
+
+  // Clamp motor gains to safe limits for MIT actuators
+  // Kp must be in [0, 500], Kd must be in [0, 5]
+  mot_K_p_ = mot_K_p_.cwiseMax(0.0).cwiseMin(500.0);
+  mot_K_d_ = mot_K_d_.cwiseMax(0.0).cwiseMin(5.0);
 
   // Send commands to hardware
   if (!params_.stop_commands) {
@@ -348,9 +348,9 @@ CallbackReturn MITCartesianController::on_configure(
   tau_ff_ = Eigen::VectorXd::Zero(num_joints);
   J_ = Eigen::MatrixXd::Zero(6, num_joints);
   J_t_ = Eigen::MatrixXd::Zero(num_joints, 6);
+  J_pinv_ = Eigen::MatrixXd::Zero(num_joints, 6);
   mot_K_p_ = Eigen::VectorXd::Ones(num_joints);
   mot_K_d_ = Eigen::VectorXd::Ones(num_joints);
-  // J_pinv_ = Eigen::MatrixXd::Zero(num_joints, 6);
 
   // Set stiffness and damping
   K_cart_.setZero();
