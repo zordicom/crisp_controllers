@@ -112,14 +112,16 @@ MITCartesianController::update(const rclcpp::Time &time,
     if (detect_oscillation_(period.seconds())) {
       oscillation_detected_ = true;
       RCLCPP_ERROR(get_node()->get_logger(),
-                   "Oscillation detected! Stopping controller.");
+                   "Oscillation detected! Setting stop_commands=true.");
+      // Set stop_commands to true to prevent further commands
+      params_.stop_commands = true;
     }
   }
 
   // Stop sending commands if oscillation detected
   if (oscillation_detected_) {
     RCLCPP_ERROR_THROTTLE(get_node()->get_logger(), *get_node()->get_clock(), 5000,
-                          "Controller stopped due to oscillation detection!");
+                          "Controller stopped due to oscillation detection! stop_commands=true");
     return controller_interface::return_type::ERROR;
   }
 
