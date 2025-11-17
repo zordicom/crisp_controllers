@@ -1,6 +1,9 @@
 cmake_minimum_required(VERSION 3.5)
 project(crisp_controllers)
 
+# Disable tests for faster builds
+option(BUILD_TESTING "Build tests" OFF)
+
 find_program(CCACHE_PROGRAM ccache)
 if(CCACHE_PROGRAM)
   message(STATUS "Using ccache")
@@ -18,8 +21,26 @@ endif()
 # Enable precompiled headers
 option(USE_PRECOMPILED_HEADERS "Use precompiled headers" ON)
 
+# Enable unity builds for faster compilation
+option(USE_UNITY_BUILD "Use unity build" ON)
+
+# Disable debug symbols for faster compilation (especially on ARM)
+option(DISABLE_DEBUG_SYMBOLS "Disable debug symbols to speed up compilation" ON)
+
 if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
     add_compile_options(-Wall -Wextra -Wpedantic)
+
+    if(DISABLE_DEBUG_SYMBOLS)
+        # Remove debug symbols and use minimal debug info
+        add_compile_options(-g0)
+        message(STATUS "Debug symbols disabled for faster compilation")
+    endif()
+
+    # Disable optimization for fastest compilation (especially template instantiation)
+    # This significantly reduces compile time at the cost of runtime performance
+    # For development builds where build speed > runtime speed
+    add_compile_options(-O0)  # Override -O3 from release mixin
+    message(STATUS "Using -O0 (no optimization) for fastest compilation")
 endif()
 
 option(CHECK_TIDY "Adds clang-tidy tests" OFF)
@@ -32,37 +53,45 @@ find_package(pluginlib REQUIRED)
 find_package(rclcpp_lifecycle REQUIRED)
 find_package(hardware_interface REQUIRED)
 find_package(Eigen3 REQUIRED)
+set(Boost_NO_WARN_NEW_VERSIONS ON)
 find_package(pinocchio REQUIRED)
 find_package(realtime_tools REQUIRED)
 find_package(generate_parameter_library REQUIRED)
 
-generate_parameter_library(
-  cartesian_impedance_controller_parameters
-  src/cartesian_impedance_controller.yaml
-)
+# generate_parameter_library(
+#   cartesian_impedance_controller_parameters
+#   src/cartesian_impedance_controller.yaml
+# )
 
 generate_parameter_library(
   pose_broadcaster_parameters
   src/pose_broadcaster.yaml
 )
 
-generate_parameter_library(
-  torque_feedback_controller_parameters
-  src/torque_feedback_controller.yaml
-)
+# generate_parameter_library(
+#   torque_feedback_controller_parameters
+#   src/torque_feedback_controller.yaml
+# )
+
+# generate_parameter_library(
+#   twist_broadcaster_parameters
+#   src/twist_broadcaster.yaml
+# )
 
 generate_parameter_library(
-  twist_broadcaster_parameters
-  src/twist_broadcaster.yaml
+  mit_cartesian_controller_parameters
+  src/mit_cartesian_controller.yaml
 )
 
 add_library(
         ${PROJECT_NAME}
         SHARED
-        src/cartesian_controller.cpp
+        # Temporarily disabled old controllers due to Pinocchio/Eigen compatibility issues
+        # src/torque_feedback_controller.cpp
+        # src/twist_broadcaster.cpp
+        # src/cartesian_controller.cpp
         src/pose_broadcaster.cpp
-        src/torque_feedback_controller.cpp
-        src/twist_broadcaster.cpp
+        src/mit_cartesian_controller.cpp
         src/utils/csv_logger.cpp
         src/utils/async_csv_logger.cpp
 )
@@ -74,19 +103,30 @@ target_include_directories(${PROJECT_NAME}
 )
 
 if(USE_PRECOMPILED_HEADERS)
-    target_precompile_headers(${PROJECT_NAME} 
+    target_precompile_headers(${PROJECT_NAME}
         PRIVATE
         include/crisp_controllers/pch.hpp
     )
 endif()
 
+# Configure unity build
+if(USE_UNITY_BUILD)
+    set_target_properties(${PROJECT_NAME} PROPERTIES
+        UNITY_BUILD ON
+        UNITY_BUILD_BATCH_SIZE 2  # Group sources into batches of 2 for parallel compilation
+    )
+    message(STATUS "Unity build enabled for ${PROJECT_NAME} with batch size 2")
+endif()
+
 # Link parameter libraries to the main library
 target_link_libraries(${PROJECT_NAME}
   PRIVATE
-    cartesian_impedance_controller_parameters
+    # Temporarily disabled old controller parameters
+    # cartesian_impedance_controller_parameters
     pose_broadcaster_parameters
-    torque_feedback_controller_parameters
-    twist_broadcaster_parameters
+    # torque_feedback_controller_parameters
+    # twist_broadcaster_parameters
+    mit_cartesian_controller_parameters
 )
 
 

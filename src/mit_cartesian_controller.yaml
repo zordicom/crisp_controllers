@@ -1,0 +1,251 @@
+mit_cartesian_controller:
+  joints:
+    type: string_array
+    description: "Names of the joints to control"
+
+  control_mode:
+    type: string
+    default_value: "gravity_compensation_only"
+    description: "Control mode: gravity_compensation_only, gravity_velocity, gravity_velocity_ik, or gravity_xforce"
+    validation:
+      one_of<>: [["gravity_compensation_only", "gravity_velocity", "gravity_velocity_ik", "gravity_xforce"]]
+
+  motor_kd:
+    type: double_array
+    default_value: [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0]
+    description: "Motor Kd gains for velocity damping (0-5 for each joint)"
+    validation:
+      element_bounds<>: [0.0, 5.0]
+
+  motor_kp:
+    type: double_array
+    default_value: [50.0, 50.0, 50.0, 50.0, 50.0, 50.0, 50.0]
+    description: "Motor Kp gains for position control (0-500 for each joint)"
+    validation:
+      element_bounds<>: [0.0, 500.0]
+
+  end_effector_frame:
+    type: string
+    description: "Name of the end-effector frame in the URDF"
+
+  base_frame:
+    type: string
+    default_value: ""
+    description: "Name of the base frame for target poses"
+
+  k_pos_x:
+    type: double
+    default_value: 500.0
+    description: "Cartesian stiffness in x direction (N/m)"
+    validation:
+      bounds<>: [0.0, 5000.0]
+
+  k_pos_y:
+    type: double
+    default_value: 500.0
+    description: "Cartesian stiffness in y direction (N/m)"
+    validation:
+      bounds<>: [0.0, 5000.0]
+
+  k_pos_z:
+    type: double
+    default_value: 500.0
+    description: "Cartesian stiffness in z direction (N/m)"
+    validation:
+      bounds<>: [0.0, 5000.0]
+
+  k_rot_x:
+    type: double
+    default_value: 30.0
+    description: "Cartesian stiffness in rotation x (Nm/rad)"
+    validation:
+      bounds<>: [0.0, 500.0]
+
+  k_rot_y:
+    type: double
+    default_value: 30.0
+    description: "Cartesian stiffness in rotation y (Nm/rad)"
+    validation:
+      bounds<>: [0.0, 500.0]
+
+  k_rot_z:
+    type: double
+    default_value: 30.0
+    description: "Cartesian stiffness in rotation z (Nm/rad)"
+    validation:
+      bounds<>: [0.0, 500.0]
+
+  d_pos_x:
+    type: double
+    default_value: 44.72
+    description: "Cartesian damping in x direction (Ns/m)"
+    validation:
+      bounds<>: [0.0, 500.0]
+
+  d_pos_y:
+    type: double
+    default_value: 44.72
+    description: "Cartesian damping in y direction (Ns/m)"
+    validation:
+      bounds<>: [0.0, 500.0]
+
+  d_pos_z:
+    type: double
+    default_value: 44.72
+    description: "Cartesian damping in z direction (Ns/m)"
+    validation:
+      bounds<>: [0.0, 500.0]
+
+  d_rot_x:
+    type: double
+    default_value: 10.95
+    description: "Cartesian damping in rotation x (Nms/rad)"
+    validation:
+      bounds<>: [0.0, 100.0]
+
+  d_rot_y:
+    type: double
+    default_value: 10.95
+    description: "Cartesian damping in rotation y (Nms/rad)"
+    validation:
+      bounds<>: [0.0, 100.0]
+
+  d_rot_z:
+    type: double
+    default_value: 10.95
+    description: "Cartesian damping in rotation z (Nms/rad)"
+    validation:
+      bounds<>: [0.0, 100.0]
+
+  alpha:
+    type: double
+    default_value: 5.0
+    description: "Velocity gain for computing desired joint velocities from position error. Higher values make the controller more aggressive in tracking position errors."
+    validation:
+      bounds<>: [0.0, 10.0]
+
+  dt_goal:
+    type: double
+    default_value: 0.01
+    description: "Time step for computing goal position from goal velocity (seconds). Should be small since MIT mode runs at high frequency."
+    validation:
+      bounds<>: [0.001, 0.1]
+
+  lambda:
+    type: double
+    default_value: 0.01
+    description: "Damping factor for Jacobian pseudo-inverse"
+    validation:
+      bounds<>: [0.0001, 0.1]
+
+  limit_commands:
+    type: bool
+    default_value: true
+    description: "Whether to clip commands to joint limits"
+
+  torque_safety_factor:
+    type: double
+    default_value: 1.0
+    description: "Safety factor for torque limits (0.0-1.0)"
+    validation:
+      bounds<>: [0.0, 1.0]
+
+  stop_commands:
+    type: bool
+    default_value: false
+    description: "If true, stop sending commands to hardware (for debugging)"
+
+  use_gravity_compensation:
+    type: bool
+    default_value: true
+    description: "Add gravity compensation to feedforward torques"
+
+  gravity_scale:
+    type: double
+    default_value: 1.0
+    description: "Scale factor for gravity compensation torques. Use this to tune gravity compensation if URDF masses are not perfectly accurate."
+    validation:
+      bounds<>: [0.0, 2.0]
+
+  use_position_command:
+    type: bool
+    default_value: true
+    description: "Send position commands (q_goal) to motors. If false, q_goal will be set to current position."
+
+  use_velocity_command:
+    type: bool
+    default_value: false
+    description: "Send velocity commands (dq_goal) to motors. If false, dq_goal will be set to zero."
+
+  dq_filter_alpha:
+    type: double
+    default_value: 0.3
+    description: "Low-pass filter coefficient for velocity feedback (0.0-1.0). Lower values = more filtering. Set to 1.0 to disable filtering. Recommended: 0.2-0.5 to reduce 12-bit velocity quantization noise."
+    validation:
+      bounds<>: [0.0, 1.0]
+
+  error_clip:
+    x:
+      type: double
+      default_value: 0.5
+      description: "Maximum allowed position error in x direction (meters)"
+      validation:
+        bounds<>: [0.0, 2.0]
+    y:
+      type: double
+      default_value: 0.5
+      description: "Maximum allowed position error in y direction (meters)"
+      validation:
+        bounds<>: [0.0, 2.0]
+    z:
+      type: double
+      default_value: 0.5
+      description: "Maximum allowed position error in z direction (meters)"
+      validation:
+        bounds<>: [0.0, 2.0]
+    rx:
+      type: double
+      default_value: 1.0
+      description: "Maximum allowed rotation error around x axis (radians)"
+      validation:
+        bounds<>: [0.0, 3.14159]
+    ry:
+      type: double
+      default_value: 1.0
+      description: "Maximum allowed rotation error around y axis (radians)"
+      validation:
+        bounds<>: [0.0, 3.14159]
+    rz:
+      type: double
+      default_value: 1.0
+      description: "Maximum allowed rotation error around z axis (radians)"
+      validation:
+        bounds<>: [0.0, 3.14159]
+
+  oscillation_detection:
+    enabled:
+      type: bool
+      default_value: false
+      description: "Enable oscillation detection and auto-stop"
+    window:
+      type: int
+      default_value: 35
+      description: "Number of samples to check for oscillation detection. At 350Hz control rate, 35 samples = 0.1 seconds"
+      validation:
+        bounds<>: [10, 500]
+    frequency:
+      type: double
+      default_value: 2.0
+      description: "Minimum oscillation frequency to detect (Hz)"
+      validation:
+        bounds<>: [0.5, 20.0]
+
+  log:
+    enabled:
+      type: bool
+      default_value: false
+      description: "Enable debug logging"
+    use_async_logging:
+      type: bool
+      default_value: true
+      description: "If true, use asynchronous CSV logging in a background thread for better real-time performance. If false, use synchronous logging (may impact control loop timing)."

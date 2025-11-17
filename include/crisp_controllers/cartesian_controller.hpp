@@ -8,24 +8,21 @@
  */
 
 #include <Eigen/Dense>
-
-#include <Eigen/src/Core/Matrix.h>
-#include <Eigen/src/Geometry/Transform.h>
 #include <controller_interface/controller_interface.hpp>
-#include <geometry_msgs/msg/pose_stamped.hpp>
-#include <geometry_msgs/msg/wrench_stamped.hpp>
-#include <pinocchio/algorithm/kinematics.hpp>
-#include <pinocchio/multibody/fwd.hpp>
-#include <rclcpp/rclcpp.hpp>
-
-#include "realtime_tools/realtime_buffer.hpp"
 #include <crisp_controllers/cartesian_impedance_controller_parameters.hpp>
 #include <filesystem>
 #include <fstream>
+#include <geometry_msgs/msg/pose_stamped.hpp>
+#include <geometry_msgs/msg/wrench_stamped.hpp>
 #include <memory>
+#include <pinocchio/algorithm/kinematics.hpp>
+#include <pinocchio/multibody/fwd.hpp>
+#include <rclcpp/rclcpp.hpp>
 #include <sensor_msgs/msg/joint_state.hpp>
 #include <string>
 #include <unordered_set>
+
+#include "realtime_tools/realtime_buffer.hpp"
 
 using CallbackReturn =
     rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn;
@@ -44,7 +41,7 @@ class CSVLoggerInterface;
  * desired position and orientation targets.
  */
 class CartesianController : public controller_interface::ControllerInterface {
-public:
+ public:
   /**
    * @brief Get the command interface configuration
    * @return Interface configuration specifying required command interfaces
@@ -65,8 +62,8 @@ public:
    * @param period Time since last update
    * @return Success/failure of update
    */
-  controller_interface::return_type
-  update(const rclcpp::Time &time, const rclcpp::Duration &period) override;
+  controller_interface::return_type update(
+      const rclcpp::Time &time, const rclcpp::Duration &period) override;
 
   /**
    * @brief Initialize the controller
@@ -79,28 +76,28 @@ public:
    * @param previous_state Previous lifecycle state
    * @return Success/failure of configuration
    */
-  CallbackReturn
-  on_configure(const rclcpp_lifecycle::State &previous_state) override;
+  CallbackReturn on_configure(
+      const rclcpp_lifecycle::State &previous_state) override;
 
   /**
    * @brief Activate the controller
    * @param previous_state Previous lifecycle state
    * @return Success/failure of activation
    */
-  CallbackReturn
-  on_activate(const rclcpp_lifecycle::State &previous_state) override;
+  CallbackReturn on_activate(
+      const rclcpp_lifecycle::State &previous_state) override;
 
   /**
    * @brief Deactivate the controller
    * @param previous_state Previous lifecycle state
    * @return Success/failure of deactivation
    */
-  CallbackReturn
-  on_deactivate(const rclcpp_lifecycle::State &previous_state) override;
+  CallbackReturn on_deactivate(
+      const rclcpp_lifecycle::State &previous_state) override;
 
   /*CartesianImpedanceController();*/
 
-private:
+ private:
   /**
    * @brief Compute control torques based on current state
    * @param current_pose Current end-effector pose
@@ -189,6 +186,9 @@ private:
   int ee_frame_id_;
   /** @brief Frame ID of the base frame in the robot model */
   int base_frame_id_;
+  /** @brief Static transformation from world to base frame (computed once at
+   * configure) */
+  pinocchio::SE3 base_frame_pose_world_;
 
   /** @brief Cached joint IDs for each configured joint (to avoid lookups in
    * control loop) */
@@ -228,10 +228,6 @@ private:
   Eigen::VectorXd q_ref;
   /** @brief Reference joint velocities */
   Eigen::VectorXd dq_ref;
-  /** @brief Desired goal joint positions sent to position interface */
-  Eigen::VectorXd q_goal;
-  /** @brief Desired goal joint velocities sent to velocity interface */
-  Eigen::VectorXd dq_goal;
 
   /** @brief Previously computed torque */
   Eigen::VectorXd tau_previous;
@@ -239,8 +235,8 @@ private:
   /** @brief Pre-calculated torque limits with safety factor applied */
   Eigen::VectorXd tau_limits;
 
-  /** @brief Current end effector pose */
-  pinocchio::SE3 ee_pose_base_;
+  /** @brief Current end effector pose in world frame */
+  pinocchio::SE3 ee_pose_world_;
   /** @brief End effector Jacobian matrix */
   pinocchio::Data::Matrix6x J;
 
@@ -299,10 +295,6 @@ private:
 
   // Pre-allocated matrices for real-time control loop (avoiding per-cycle
   // allocations)
-  /** @brief Adjoint matrix for base-to-end-effector transformation */
-  Eigen::Matrix<double, 6, 6> Ad_be_;
-  /** @brief Adjoint matrix for base-to-world transformation */
-  Eigen::Matrix<double, 6, 6> Ad_bw_;
   /** @brief Jacobian pseudo-inverse */
   Eigen::MatrixXd J_pinv_;
   /** @brief Identity matrix (nv x nv) */
@@ -316,16 +308,6 @@ private:
   Eigen::Matrix<double, 6, 6> Mx_;
   /** @brief Dynamically consistent Jacobian inverse */
   Eigen::MatrixXd J_bar_;
-  /** @brief Unclamped desired torque (before saturation) */
-  Eigen::VectorXd tau_d_unclamped_;
-  /** @brief Task space joint position update (for position control) */
-  Eigen::VectorXd q_task_;
-  /** @brief Nullspace joint position update */
-  Eigen::VectorXd q_nullspace_update_;
-  /** @brief New goal joint positions */
-  Eigen::VectorXd q_goal_new_;
-  /** @brief Change in goal joint positions */
-  Eigen::VectorXd q_goal_delta_;
 
   /**
    * @brief Log debug information based on parameter settings
@@ -341,28 +323,18 @@ private:
    */
   bool check_topic_publisher_count(const std::string &topic_name);
 
-  // Logging constants
-  static constexpr int LOG_CYCLE_INTERVAL = 100; // Log every 100 cycles
-  static constexpr int CSV_FLUSH_INTERVAL = 50;  // Flush CSV every 50 cycles
-
   // Throttle debug logs to 1Hz
   static constexpr int DEBUG_LOG_THROTTLE_MS = 1000;
-  static constexpr int TIMING_LOG_THROTTLE_MS = 2000; // Throttle timing logs
+  static constexpr int TIMING_LOG_THROTTLE_MS = 2000;  // Throttle timing logs
 
   // Parameter refresh rate limiting
   static constexpr double PARAM_REFRESH_INTERVAL_MS = 50.0;
 
   rclcpp::Time last_param_refresh_time_;
-  /** @brief CSV log file stream for controller diagnostics */
-  std::ofstream csv_log_file_;
-  /** @brief Flag to track if CSV logging is enabled */
-  bool csv_logging_enabled_ = false;
   /** @brief Start time for CSV logging (to compute relative timestamps) */
   rclcpp::Time csv_log_start_time_;
-  /** @brief Counter to track cycles for periodic CSV flushing */
-  size_t csv_flush_counter_ = 0;
   /** @brief CSV logger instance (can be sync or async) */
   std::unique_ptr<CSVLoggerInterface> csv_logger_;
 };
 
-} // namespace crisp_controllers
+}  // namespace crisp_controllers

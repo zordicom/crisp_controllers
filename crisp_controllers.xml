@@ -1,14 +1,9 @@
 <library path="crisp_controllers">
+    <!-- Temporarily disabled old controllers due to Pinocchio/Eigen compatibility issues
     <class name="crisp_controllers/CartesianController"
            type="crisp_controllers::CartesianController" base_class_type="controller_interface::ControllerInterface">
         <description>
             Control the 3D pose of the end-effector using impedance control or OSC with pinocchio model.
-        </description>
-    </class>
-    <class name="crisp_controllers/PoseBroadcaster"
-           type="crisp_controllers::PoseBroadcaster" base_class_type="controller_interface::ControllerInterface">
-        <description>
-            Simple broadcaster for the pose.
         </description>
     </class>
     <class name="crisp_controllers/TorqueFeedbackController"
@@ -21,6 +16,20 @@
            type="crisp_controllers::TwistBroadcaster" base_class_type="controller_interface::ControllerInterface">
         <description>
             Simple broadcaster for the twist velocity.
+        </description>
+    </class>
+    -->
+
+    <class name="crisp_controllers/PoseBroadcaster"
+           type="crisp_controllers::PoseBroadcaster" base_class_type="controller_interface::ControllerInterface">
+        <description>
+            Simple broadcaster for the pose.
+        </description>
+    </class>
+    <class name="crisp_controllers/MITCartesianController"
+           type="crisp_controllers::MITCartesianController" base_class_type="controller_interface::ControllerInterface">
+        <description>
+            Simplified Cartesian impedance controller for MIT mode motors. Sends goal positions, velocities, and feedforward torques to leverage high-frequency motor control.
         </description>
     </class>
 </library>

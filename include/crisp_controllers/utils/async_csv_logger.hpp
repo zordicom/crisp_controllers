@@ -13,7 +13,7 @@
 #include <Eigen/Dense>
 #include <rclcpp/rclcpp.hpp>
 #include <pinocchio/spatial/se3.hpp>
-#include "crisp_controllers/utils/controller_log_data.hpp"
+#include "crisp_controllers/utils/controller_log_data_interface.hpp"
 #include "crisp_controllers/utils/csv_logger_interface.hpp"
 
 namespace crisp_controllers {
@@ -30,16 +30,17 @@ public:
   AsyncCSVLogger(const std::string& controller_name, rclcpp::Logger logger);
   ~AsyncCSVLogger() override;
 
-  bool initialize(size_t num_joints, const rclcpp::Time& start_time) override;
+  bool initialize(const rclcpp::Time& start_time,
+                 const ControllerLogDataInterface& header_generator) override;
 
   /**
    * @brief Queue data for logging (non-blocking for real-time thread)
    *
-   * This method copies the data to a lock-free circular buffer.
+   * This method copies the data string to a queue.
    * If the buffer is full, the oldest data is overwritten (data loss).
    * Returns immediately without blocking.
    */
-  void logData(const ControllerLogData& data, const rclcpp::Time& current_time) override;
+  void logData(const ControllerLogDataInterface& data) override;
 
   void close() override;
   bool isLoggingEnabled() const override { return logging_enabled_.load(); }
@@ -52,19 +53,18 @@ public:
   /**
    * @brief Get current queue size
    */
-  size_t getQueueSize() const { return queue_size_.load(); }
+  size_t getQueueSize() const {
+    size_t write_idx = write_index_.load(std::memory_order_relaxed);
+    size_t read_idx = read_index_.load(std::memory_order_relaxed);
+    return (write_idx - read_idx) & (RING_BUFFER_SIZE - 1);
+  }
 
 private:
   void writerThread();
-  void writeHeader(size_t num_joints);
-  void writePose(const pinocchio::SE3& pose);
-  void writeRPY(const pinocchio::SE3& pose);
-  void processLogData(const ControllerLogData& data);
 
   // Configuration
   std::string controller_name_;
   rclcpp::Logger logger_;
-  size_t num_joints_ = 0;
   rclcpp::Time start_time_;
 
   // Thread management
@@ -72,15 +72,14 @@ private:
   std::atomic<bool> logging_enabled_{false};
   std::atomic<bool> shutdown_requested_{false};
 
-  // Data queue with mutex for simplicity (can upgrade to lock-free queue if needed)
-  // Using a simple mutex-based queue initially, as std::deque with mutex
-  // is often fast enough and easier to maintain than a full lock-free implementation
-  mutable std::mutex queue_mutex_;
-  std::condition_variable queue_cv_;
-  std::deque<ControllerLogData> data_queue_;
+  // Lock-free ring buffer for CSV strings
+  // Each element stores a pre-formatted CSV line
+  static constexpr size_t RING_BUFFER_SIZE = 1024;  // Must be power of 2
+  std::array<std::string, RING_BUFFER_SIZE> ring_buffer_;
+  std::atomic<size_t> write_index_{0};
+  std::atomic<size_t> read_index_{0};
 
   // Statistics
-  std::atomic<size_t> queue_size_{0};
   std::atomic<size_t> dropped_samples_{0};
   std::atomic<size_t> total_samples_{0};
 
@@ -88,9 +87,8 @@ private:
   std::ofstream csv_file_;
 
   // Configuration parameters
-  static constexpr size_t MAX_QUEUE_SIZE = 1000;  // Maximum buffered samples
-  static constexpr size_t BATCH_WRITE_SIZE = 10;  // Write in batches for efficiency
   static constexpr int WRITER_THREAD_PRIORITY = 10; // Lower priority than control thread
+  static constexpr int WRITER_SLEEP_US = 100; // Sleep time when buffer is empty (microseconds)
 };
 
 } // namespace crisp_controllers
