@@ -151,6 +151,10 @@ MITCartesianController::update(const rclcpp::Time &time,
     compute_gravity_velocity_ik_();
   } else if (params_.control_mode == "gravity_xforce") {
     compute_gravity_xforce_();
+  } else if (params_.control_mode == "gravity_nullspace") {
+    compute_gravity_nullspace_();
+  } else if (params_.control_mode == "gravity_coriolis_nullspace") {
+    compute_gravity_coriolis_nullspace_();
   } else {
     RCLCPP_ERROR_THROTTLE(get_node()->get_logger(), *get_node()->get_clock(),
                           1000, "Unknown control mode: %s",
@@ -390,6 +394,21 @@ CallbackReturn MITCartesianController::on_configure(
   error_history_count_ = 0;
   oscillation_detected_ = false;
 
+  // Initialize nullspace control
+  q_ref_ = Eigen::VectorXd::Zero(num_joints);
+  nullspace_stiffness_ = Eigen::MatrixXd::Zero(num_joints, num_joints);
+  nullspace_damping_ = Eigen::MatrixXd::Zero(num_joints, num_joints);
+  Id_nv_ = Eigen::MatrixXd::Identity(num_joints, num_joints);
+
+  // Set nullspace gains
+  nullspace_stiffness_.diagonal() = Eigen::VectorXd::Constant(num_joints, params_.nullspace.stiffness);
+  if (params_.nullspace.damping > 0) {
+    nullspace_damping_.diagonal() = Eigen::VectorXd::Constant(num_joints, params_.nullspace.damping);
+  } else {
+    // Critical damping: 2*sqrt(k)
+    nullspace_damping_.diagonal() = 2.0 * nullspace_stiffness_.diagonal().cwiseSqrt();
+  }
+
   // Set stiffness and damping
   K_cart_.setZero();
   K_cart_.diagonal() << params_.k_pos_x, params_.k_pos_y, params_.k_pos_z,
@@ -464,6 +483,9 @@ CallbackReturn MITCartesianController::on_activate(
   q_goal_ = q_;
   dq_goal_ = dq_;
   tau_ff_.setZero();
+
+  // Initialize nullspace reference to current position
+  q_ref_ = q_;
 
   RCLCPP_INFO(
       get_node()->get_logger(),
@@ -739,6 +761,64 @@ bool MITCartesianController::detect_oscillation_(double dt) {
   }
 
   return false;
+}
+
+void MITCartesianController::compute_gravity_nullspace_() {
+  size_t num_joints = params_.joints.size();
+
+  // Set position and velocity goals to current state
+  q_goal_ = q_;
+  dq_goal_.setZero();
+  mot_K_p_ = Eigen::VectorXd::Zero(num_joints);
+  mot_K_d_ = Eigen::VectorXd::Zero(num_joints);
+
+  // Compute gravity compensation
+  Eigen::VectorXd tau_gravity =
+      params_.gravity_scale *
+      pinocchio::computeGeneralizedGravity(model_, data_, q_pin_);
+
+  // Compute nullspace projection (kinematic nullspace)
+  Eigen::MatrixXd nullspace_projection = Id_nv_ - J_pinv_ * J_;
+
+  // Compute nullspace torques to drive joints toward reference
+  Eigen::VectorXd tau_secondary =
+      nullspace_stiffness_ * (q_ref_ - q_) - nullspace_damping_ * dq_filtered_;
+  Eigen::VectorXd tau_nullspace = nullspace_projection * tau_secondary;
+
+  // Combine gravity and nullspace torques
+  tau_ff_ = tau_gravity + tau_nullspace;
+}
+
+void MITCartesianController::compute_gravity_coriolis_nullspace_() {
+  size_t num_joints = params_.joints.size();
+
+  // Set position and velocity goals to current state
+  q_goal_ = q_;
+  dq_goal_.setZero();
+  mot_K_p_ = Eigen::VectorXd::Zero(num_joints);
+  mot_K_d_ = Eigen::VectorXd::Zero(num_joints);
+
+  // Compute gravity compensation
+  Eigen::VectorXd tau_gravity =
+      params_.gravity_scale *
+      pinocchio::computeGeneralizedGravity(model_, data_, q_pin_);
+
+  // Compute Coriolis compensation
+  pinocchio::computeAllTerms(model_, data_, q_pin_, dq_filtered_);
+  Eigen::VectorXd tau_coriolis =
+      pinocchio::computeCoriolisMatrix(model_, data_, q_pin_, dq_filtered_) *
+      dq_filtered_;
+
+  // Compute nullspace projection (kinematic nullspace)
+  Eigen::MatrixXd nullspace_projection = Id_nv_ - J_pinv_ * J_;
+
+  // Compute nullspace torques to drive joints toward reference
+  Eigen::VectorXd tau_secondary =
+      nullspace_stiffness_ * (q_ref_ - q_) - nullspace_damping_ * dq_filtered_;
+  Eigen::VectorXd tau_nullspace = nullspace_projection * tau_secondary;
+
+  // Combine gravity, coriolis, and nullspace torques
+  tau_ff_ = tau_gravity + tau_coriolis + tau_nullspace;
 }
 
 } // namespace crisp_controllers

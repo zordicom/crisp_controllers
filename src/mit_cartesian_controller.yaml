@@ -6,9 +6,9 @@ mit_cartesian_controller:
   control_mode:
     type: string
     default_value: "gravity"
-    description: "Control mode: gravity, gravity_coriolis, gravity_velocity, gravity_velocity_ik, or gravity_xforce"
+    description: "Control mode: gravity, gravity_coriolis, gravity_velocity, gravity_velocity_ik, gravity_xforce, gravity_nullspace, or gravity_coriolis_nullspace"
     validation:
-      one_of<>: [["gravity", "gravity_coriolis", "gravity_velocity", "gravity_velocity_ik", "gravity_xforce"]]
+      one_of<>: [["gravity", "gravity_coriolis", "gravity_velocity", "gravity_velocity_ik", "gravity_xforce", "gravity_nullspace", "gravity_coriolis_nullspace"]]
 
   motor_kd:
     type: double_array
@@ -245,6 +245,26 @@ mit_cartesian_controller:
       description: "Minimum peak-to-peak oscillation amplitude to detect (radians). Filters out small noise oscillations."
       validation:
         bounds<>: [0.0, 1.0]
+
+  nullspace:
+    stiffness:
+      type: double
+      default_value: 5.0
+      description: "Stiffness of the nullspace controller (applied to all joints)"
+      validation:
+        bounds<>: [0.0, 500.0]
+    damping:
+      type: double
+      default_value: -1.0
+      description: "Damping of the nullspace controller. If negative, then 2*sqrt(stiffness) is used (critical damping)"
+      validation:
+        bounds<>: [-1.0, 500.0]
+    lambda:
+      type: double
+      default_value: 0.01
+      description: "Regularization parameter for Jacobian pseudo-inverse computation"
+      validation:
+        bounds<>: [0.0001, 0.1]
 
   log:
     enabled:

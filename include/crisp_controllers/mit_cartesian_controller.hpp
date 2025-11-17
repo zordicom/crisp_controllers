@@ -157,6 +157,15 @@ private:
   /** @brief Pre-allocated Jacobian pseudo-inverse for realtime compliance */
   Eigen::MatrixXd J_pinv_;
 
+  /** @brief Reference joint positions for nullspace control */
+  Eigen::VectorXd q_ref_;
+  /** @brief Nullspace stiffness matrix (diagonal) */
+  Eigen::MatrixXd nullspace_stiffness_;
+  /** @brief Nullspace damping matrix (diagonal) */
+  Eigen::MatrixXd nullspace_damping_;
+  /** @brief Identity matrix (nv x nv) for nullspace projection */
+  Eigen::MatrixXd Id_nv_;
+
   /**
    * @brief Parse target pose from realtime buffer
    */
@@ -186,6 +195,16 @@ private:
    * @brief Gravity compensation + velocity damping + Cartesian force
    */
   void compute_gravity_xforce_();
+
+  /**
+   * @brief Gravity compensation + nullspace control
+   */
+  void compute_gravity_nullspace_();
+
+  /**
+   * @brief Gravity + Coriolis compensation + nullspace control
+   */
+  void compute_gravity_coriolis_nullspace_();
 
   /** @brief CSV logger for controller data */
   std::unique_ptr<CSVLoggerInterface> csv_logger_;
