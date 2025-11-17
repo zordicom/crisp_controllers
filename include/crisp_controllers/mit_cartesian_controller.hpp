@@ -163,22 +163,27 @@ private:
   void parse_target_pose_();
 
   /**
-   * @brief Control mode 1: Gravity compensation only
+   * @brief Gravity compensation only
    */
-  void compute_gravity_compensation_only_();
+  void compute_gravity_();
 
   /**
-   * @brief Control mode 2: Gravity compensation + velocity damping
+   * @brief Gravity + Coriolis compensation
+   */
+  void compute_gravity_coriolis_();
+
+  /**
+   * @brief Gravity compensation + velocity damping
    */
   void compute_gravity_velocity_();
 
   /**
-   * @brief Control mode 3: Gravity compensation + velocity damping + IK position control
+   * @brief Gravity compensation + velocity damping + IK position control
    */
   void compute_gravity_velocity_ik_();
 
   /**
-   * @brief Control mode 4: Gravity compensation + velocity damping + Cartesian force
+   * @brief Gravity compensation + velocity damping + Cartesian force
    */
   void compute_gravity_xforce_();
 

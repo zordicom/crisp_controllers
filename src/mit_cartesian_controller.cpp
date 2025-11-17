@@ -6,6 +6,7 @@
 #include <crisp_controllers/utils/pseudo_inverse.hpp>
 #include <pinocchio/algorithm/frames.hxx>
 #include <pinocchio/algorithm/rnea.hpp>
+#include <pinocchio/algorithm/compute-all-terms.hpp>
 #include <pinocchio/parsers/urdf.hpp>
 #include <pinocchio/spatial/explog.hpp>
 #include <rclcpp/logging.hpp>
@@ -91,12 +92,13 @@ MITCartesianController::update(const rclcpp::Time &time,
   // Compute Cartesian error in world frame
   x_error_.head(3) = target_pose_.translation() - ee_pose_world_.translation();
   x_error_.tail(3) = pinocchio::log3(target_pose_.rotation() *
-                                  ee_pose_world_.rotation().transpose());
+                                     ee_pose_world_.rotation().transpose());
 
   // Clip Cartesian error to prevent large jumps
   Eigen::Vector<double, 6> error_clip_max;
-  error_clip_max << params_.error_clip.x, params_.error_clip.y, params_.error_clip.z,
-                    params_.error_clip.rx, params_.error_clip.ry, params_.error_clip.rz;
+  error_clip_max << params_.error_clip.x, params_.error_clip.y,
+      params_.error_clip.z, params_.error_clip.rx, params_.error_clip.ry,
+      params_.error_clip.rz;
   x_error_ = x_error_.cwiseMax(-error_clip_max).cwiseMin(error_clip_max);
 
   // Update error history for oscillation detection
@@ -120,8 +122,9 @@ MITCartesianController::update(const rclcpp::Time &time,
 
   // Stop sending commands if oscillation detected
   if (oscillation_detected_) {
-    RCLCPP_ERROR_THROTTLE(get_node()->get_logger(), *get_node()->get_clock(), 5000,
-                          "Controller stopped due to oscillation detection! stop_commands=true");
+    RCLCPP_ERROR_THROTTLE(
+        get_node()->get_logger(), *get_node()->get_clock(), 5000,
+        "Controller stopped due to oscillation detection! stop_commands=true");
     return controller_interface::return_type::ERROR;
   }
 
@@ -134,8 +137,10 @@ MITCartesianController::update(const rclcpp::Time &time,
   J_pinv_ = pseudo_inverse(J_, params_.lambda);
 
   // Call the appropriate control mode function
-  if (params_.control_mode == "gravity_compensation_only") {
-    compute_gravity_compensation_only_();
+  if (params_.control_mode == "gravity") {
+    compute_gravity_();
+  } else if (params_.control_mode == "gravity_coriolis") {
+    compute_gravity_coriolis_();
   } else if (params_.control_mode == "gravity_velocity") {
     compute_gravity_velocity_();
   } else if (params_.control_mode == "gravity_velocity_ik") {
@@ -143,8 +148,9 @@ MITCartesianController::update(const rclcpp::Time &time,
   } else if (params_.control_mode == "gravity_xforce") {
     compute_gravity_xforce_();
   } else {
-    RCLCPP_ERROR_THROTTLE(get_node()->get_logger(), *get_node()->get_clock(), 1000,
-                          "Unknown control mode: %s", params_.control_mode.c_str());
+    RCLCPP_ERROR_THROTTLE(get_node()->get_logger(), *get_node()->get_clock(),
+                          1000, "Unknown control mode: %s",
+                          params_.control_mode.c_str());
     return controller_interface::return_type::ERROR;
   }
 
@@ -528,34 +534,57 @@ void MITCartesianController::parse_target_pose_() {
   target_pose_ = base_frame_pose_world_ * target_in_base;
 }
 
-void MITCartesianController::compute_gravity_compensation_only_() {
+void MITCartesianController::compute_gravity_() {
   size_t num_joints = params_.joints.size();
 
   // Set position, velocity, kp, and kd to zero
-  q_goal_ = q_;  // Current position
+  q_goal_ = q_; // Current position
   dq_goal_.setZero();
   mot_K_p_ = Eigen::VectorXd::Zero(num_joints);
   mot_K_d_ = Eigen::VectorXd::Zero(num_joints);
 
   // Only gravity compensation
   tau_ff_.setZero();
-  if (params_.use_gravity_compensation) {
-    Eigen::VectorXd tau_gravity =
-        params_.gravity_scale *
-        pinocchio::computeGeneralizedGravity(model_, data_, q_pin_);
-    tau_ff_ = tau_gravity;
-  }
+  Eigen::VectorXd tau_gravity =
+      params_.gravity_scale *
+      pinocchio::computeGeneralizedGravity(model_, data_, q_pin_);
+  tau_ff_ = tau_gravity;
+}
+
+void MITCartesianController::compute_gravity_coriolis_() {
+  size_t num_joints = params_.joints.size();
+
+  // Set position, velocity, kp, and kd to zero
+  q_goal_ = q_; // Current position
+  dq_goal_.setZero();
+  mot_K_p_ = Eigen::VectorXd::Zero(num_joints);
+  mot_K_d_ = Eigen::VectorXd::Zero(num_joints);
+
+  // Gravity + Coriolis compensation
+  tau_ff_.setZero();
+
+  // Gravity compensation
+  Eigen::VectorXd tau_gravity =
+      params_.gravity_scale *
+      pinocchio::computeGeneralizedGravity(model_, data_, q_pin_);
+
+  // Coriolis compensation
+  pinocchio::computeAllTerms(model_, data_, q_pin_, dq_filtered_);
+  Eigen::VectorXd tau_coriolis =
+      pinocchio::computeCoriolisMatrix(model_, data_, q_pin_, dq_filtered_) * dq_filtered_;
+
+  tau_ff_ = tau_gravity + tau_coriolis;
 }
 
 void MITCartesianController::compute_gravity_velocity_() {
   size_t num_joints = params_.joints.size();
 
   // Set position and velocity goals
-  q_goal_ = q_;  // Current position
-  dq_goal_.setZero();  // Goal velocity is zero
+  q_goal_ = q_;       // Current position
+  dq_goal_.setZero(); // Goal velocity is zero
 
   // Set motor gains
-  mot_K_p_ = Eigen::VectorXd::Zero(num_joints);  // No position control
+  mot_K_p_ = Eigen::VectorXd::Zero(num_joints); // No position control
 
   // Use configurable kd values from parameters
   for (size_t i = 0; i < num_joints && i < params_.motor_kd.size(); ++i) {
@@ -563,13 +592,10 @@ void MITCartesianController::compute_gravity_velocity_() {
   }
 
   // Gravity compensation
-  tau_ff_.setZero();
-  if (params_.use_gravity_compensation) {
-    Eigen::VectorXd tau_gravity =
-        params_.gravity_scale *
-        pinocchio::computeGeneralizedGravity(model_, data_, q_pin_);
-    tau_ff_ = tau_gravity;
-  }
+  Eigen::VectorXd tau_gravity =
+      params_.gravity_scale *
+      pinocchio::computeGeneralizedGravity(model_, data_, q_pin_);
+  tau_ff_ = tau_gravity;
 }
 
 void MITCartesianController::compute_gravity_velocity_ik_() {
@@ -578,7 +604,7 @@ void MITCartesianController::compute_gravity_velocity_ik_() {
   // Compute goal position using IK
   Eigen::VectorXd delta_q = J_pinv_ * x_error_;
   q_goal_ = q_ + delta_q;
-  dq_goal_.setZero();  // Goal velocity is zero
+  dq_goal_.setZero(); // Goal velocity is zero
 
   // Use configurable kp and kd values from parameters
   for (size_t i = 0; i < num_joints && i < params_.motor_kp.size(); ++i) {
@@ -589,24 +615,21 @@ void MITCartesianController::compute_gravity_velocity_ik_() {
   }
 
   // Gravity compensation
-  tau_ff_.setZero();
-  if (params_.use_gravity_compensation) {
-    Eigen::VectorXd tau_gravity =
-        params_.gravity_scale *
-        pinocchio::computeGeneralizedGravity(model_, data_, q_pin_);
-    tau_ff_ = tau_gravity;
-  }
+  Eigen::VectorXd tau_gravity =
+      params_.gravity_scale *
+      pinocchio::computeGeneralizedGravity(model_, data_, q_pin_);
+  tau_ff_ = tau_gravity;
 }
 
 void MITCartesianController::compute_gravity_xforce_() {
   size_t num_joints = params_.joints.size();
 
   // Set position and velocity goals
-  q_goal_ = q_;  // Current position
-  dq_goal_.setZero();  // Goal velocity is zero
+  q_goal_ = q_;       // Current position
+  dq_goal_.setZero(); // Goal velocity is zero
 
   // Set motor gains
-  mot_K_p_ = Eigen::VectorXd::Zero(num_joints);  // No position control
+  mot_K_p_ = Eigen::VectorXd::Zero(num_joints); // No position control
 
   // Use configurable kd values from parameters
   for (size_t i = 0; i < num_joints && i < params_.motor_kd.size(); ++i) {
@@ -634,10 +657,11 @@ void MITCartesianController::compute_gravity_xforce_() {
 
 bool MITCartesianController::detect_oscillation_(double dt) {
   // Need minimum samples to detect oscillation
-  size_t window_size = std::min(static_cast<size_t>(params_.oscillation_detection.window),
-                                 error_history_count_);
+  size_t window_size =
+      std::min(static_cast<size_t>(params_.oscillation_detection.window),
+               error_history_count_);
   if (window_size < 10) {
-    return false;  // Not enough data
+    return false; // Not enough data
   }
 
   // Count zero crossings in the error signal (around the mean)
@@ -647,15 +671,20 @@ bool MITCartesianController::detect_oscillation_(double dt) {
 
   // Calculate mean of the window
   for (size_t i = 0; i < window_size; ++i) {
-    size_t idx = (error_history_idx_ + MAX_ERROR_HISTORY - window_size + i) % MAX_ERROR_HISTORY;
+    size_t idx = (error_history_idx_ + MAX_ERROR_HISTORY - window_size + i) %
+                 MAX_ERROR_HISTORY;
     mean += error_history_[idx];
   }
   mean /= window_size;
 
   // Count zero crossings relative to mean
   for (size_t i = 1; i < window_size; ++i) {
-    size_t idx_prev = (error_history_idx_ + MAX_ERROR_HISTORY - window_size + i - 1) % MAX_ERROR_HISTORY;
-    size_t idx_curr = (error_history_idx_ + MAX_ERROR_HISTORY - window_size + i) % MAX_ERROR_HISTORY;
+    size_t idx_prev =
+        (error_history_idx_ + MAX_ERROR_HISTORY - window_size + i - 1) %
+        MAX_ERROR_HISTORY;
+    size_t idx_curr =
+        (error_history_idx_ + MAX_ERROR_HISTORY - window_size + i) %
+        MAX_ERROR_HISTORY;
 
     double val_prev = error_history_[idx_prev] - mean;
     double val_curr = error_history_[idx_curr] - mean;
@@ -672,8 +701,10 @@ bool MITCartesianController::detect_oscillation_(double dt) {
   // Oscillation detected if frequency exceeds threshold
   if (oscillation_freq >= params_.oscillation_detection.frequency) {
     RCLCPP_WARN(get_node()->get_logger(),
-                "Detected oscillation at %.2f Hz (threshold: %.2f Hz, zero crossings: %d, dt: %.6f)",
-                oscillation_freq, params_.oscillation_detection.frequency, zero_crossings, dt);
+                "Detected oscillation at %.2f Hz (threshold: %.2f Hz, zero "
+                "crossings: %d, dt: %.6f)",
+                oscillation_freq, params_.oscillation_detection.frequency,
+                zero_crossings, dt);
     return true;
   }
 
