@@ -135,10 +135,12 @@ MITJointController::update(const rclcpp::Time &time,
     return controller_interface::return_type::ERROR;
   }
 
-  // Apply joint limits if enabled
+  // Apply joint limits with safety buffer if enabled
   if (params_.limit_commands) {
-    q_goal_ = q_goal_.cwiseMax(model_.lowerPositionLimit)
-                  .cwiseMin(model_.upperPositionLimit);
+    double buffer = params_.joint_limit_buffer;
+    Eigen::VectorXd lower_limit = model_.lowerPositionLimit.array() + buffer;
+    Eigen::VectorXd upper_limit = model_.upperPositionLimit.array() - buffer;
+    q_goal_ = q_goal_.cwiseMax(lower_limit).cwiseMin(upper_limit);
   }
 
   // Apply torque safety limits

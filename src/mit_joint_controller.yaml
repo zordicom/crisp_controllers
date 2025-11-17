@@ -51,6 +51,13 @@ mit_joint_controller:
     default_value: true
     description: "Whether to clip commands to joint limits"
 
+  joint_limit_buffer:
+    type: double
+    default_value: 0.05
+    description: "Safety buffer (radians) to stay away from joint limits. The usable range will be reduced by this amount on each side."
+    validation:
+      bounds<>: [0.0, 0.5]
+
   torque_safety_factor:
     type: double
     default_value: 1.0
