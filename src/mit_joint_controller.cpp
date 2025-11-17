@@ -304,14 +304,68 @@ CallbackReturn MITJointController::on_configure(
   // Initialize target to zero (will be set to current position on activate)
   new_target_ = false;
 
-  // Setup target joint state subscription
+  // Create publisher for target pose
+  std::string node_name = get_node()->get_name();
+  std::string pose_topic = node_name + "/target_pose";
+  target_pose_pub_ =
+      get_node()->create_publisher<geometry_msgs::msg::PoseStamped>(
+          pose_topic, rclcpp::QoS(1));
+
+  RCLCPP_INFO_STREAM(get_node()->get_logger(),
+                     "Publishing target pose to: " << pose_topic);
+
+  // Find end-effector frame index
+  pinocchio::FrameIndex ee_frame_id = model_.getFrameId(params_.end_effector_frame);
+  if (ee_frame_id >= static_cast<pinocchio::FrameIndex>(model_.nframes)) {
+    RCLCPP_ERROR_STREAM(get_node()->get_logger(),
+                       "End-effector frame '" << params_.end_effector_frame
+                       << "' not found in model!");
+    return CallbackReturn::ERROR;
+  }
+
+  // Setup target joint state subscription with FK publishing
   auto target_joint_callback =
-      [this](const std::shared_ptr<sensor_msgs::msg::JointState> msg) -> void {
+      [this, ee_frame_id](const std::shared_ptr<sensor_msgs::msg::JointState> msg) -> void {
     target_joint_buffer_.writeFromNonRT(msg);
     new_target_ = true;
+
+    // Compute forward kinematics and publish target pose
+    if (msg->position.size() >= static_cast<size_t>(model_.nv)) {
+      // Create temporary configuration vector
+      Eigen::VectorXd q_temp = Eigen::VectorXd::Zero(model_.nq);
+      for (size_t i = 0; i < static_cast<size_t>(model_.nv); ++i) {
+        q_temp[i] = msg->position[i];
+      }
+
+      // Compute forward kinematics
+      pinocchio::Data data_temp(model_);
+      pinocchio::forwardKinematics(model_, data_temp, q_temp);
+      pinocchio::updateFramePlacements(model_, data_temp);
+
+      // Get end-effector frame placement
+      const auto &ee_placement = data_temp.oMf[ee_frame_id];
+
+      // Create and publish pose message
+      geometry_msgs::msg::PoseStamped pose_msg;
+      pose_msg.header.stamp = get_node()->now();
+      pose_msg.header.frame_id = params_.base_frame;
+
+      // Position
+      pose_msg.pose.position.x = ee_placement.translation()[0];
+      pose_msg.pose.position.y = ee_placement.translation()[1];
+      pose_msg.pose.position.z = ee_placement.translation()[2];
+
+      // Orientation (convert rotation matrix to quaternion)
+      Eigen::Quaterniond quat(ee_placement.rotation());
+      pose_msg.pose.orientation.x = quat.x();
+      pose_msg.pose.orientation.y = quat.y();
+      pose_msg.pose.orientation.z = quat.z();
+      pose_msg.pose.orientation.w = quat.w();
+
+      target_pose_pub_->publish(pose_msg);
+    }
   };
 
-  std::string node_name = get_node()->get_name();
   std::string joint_topic = node_name + "/target_joint";
 
   RCLCPP_INFO_STREAM(get_node()->get_logger(),

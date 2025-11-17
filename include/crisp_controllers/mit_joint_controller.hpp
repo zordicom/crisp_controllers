@@ -12,6 +12,7 @@
 #include <array>
 #include <controller_interface/controller_interface.hpp>
 #include <crisp_controllers/mit_joint_controller_parameters.hpp>
+#include <geometry_msgs/msg/pose_stamped.hpp>
 #include <memory>
 #include <pinocchio/algorithm/kinematics.hpp>
 #include <pinocchio/multibody/fwd.hpp>
@@ -99,6 +100,10 @@ private:
   /** @brief Subscription for target joint state messages */
   rclcpp::Subscription<sensor_msgs::msg::JointState>::SharedPtr
       joint_target_sub_;
+
+  /** @brief Publisher for target end-effector pose (for visualization) */
+  rclcpp::Publisher<geometry_msgs::msg::PoseStamped>::SharedPtr
+      target_pose_pub_;
 
   /** @brief Realtime buffer for target joint state */
   realtime_tools::RealtimeBuffer<std::shared_ptr<sensor_msgs::msg::JointState>>

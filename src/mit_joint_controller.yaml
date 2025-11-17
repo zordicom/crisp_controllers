@@ -3,6 +3,14 @@ mit_joint_controller:
     type: string_array
     description: "Names of the joints to control"
 
+  end_effector_frame:
+    type: string
+    description: "Name of the end-effector frame for target pose publishing"
+
+  base_frame:
+    type: string
+    description: "Name of the base frame for target pose publishing"
+
   control_mode:
     type: string
     default_value: "gravity"
