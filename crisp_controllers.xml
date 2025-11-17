@@ -32,4 +32,10 @@
             Simplified Cartesian impedance controller for MIT mode motors. Sends goal positions, velocities, and feedforward torques to leverage high-frequency motor control.
         </description>
     </class>
+    <class name="crisp_controllers/MITJointController"
+           type="crisp_controllers::MITJointController" base_class_type="controller_interface::ControllerInterface">
+        <description>
+            Joint-space impedance controller for MIT mode motors. Provides compliant joint-space control with per-joint stiffness and damping for waypoint tracking.
+        </description>
+    </class>
 </library>

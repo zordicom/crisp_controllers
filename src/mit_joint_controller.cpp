@@ -178,15 +178,26 @@ MITJointController::update(const rclcpp::Time &time,
     log_data.timestamp =
         (time - csv_log_start_time_).nanoseconds() * 1e-9; // seconds
 
-    // Log joint states
-    for (size_t i = 0; i < num_joints && i < 7; ++i) {
-      log_data.q[i] = q_[i];
-      log_data.dq[i] = dq_[i];
-      log_data.q_goal[i] = q_goal_[i];
-      log_data.dq_goal[i] = dq_goal_[i];
-      log_data.tau_ff[i] = tau_ff_[i];
-      log_data.q_error[i] = q_error_[i];
-    }
+    // Set control mode
+    log_data.control_mode = params_.control_mode;
+
+    // Log joint states (vectors)
+    log_data.q = q_;
+    log_data.dq = dq_;
+    log_data.dq_filtered = dq_filtered_;
+    log_data.q_goal = q_goal_;
+    log_data.dq_goal = dq_goal_;
+    log_data.tau_ff = tau_ff_;
+    log_data.mot_K_p = mot_K_p_;
+    log_data.mot_K_d = mot_K_d_;
+
+    // For joint controller, we don't have Cartesian data, so set dummy values
+    log_data.current_pose = pinocchio::SE3::Identity();
+    log_data.target_pose = pinocchio::SE3::Identity();
+    log_data.error = Eigen::Vector<double, 6>::Zero();
+    log_data.stiffness_diag = Eigen::Vector<double, 6>::Zero();
+    log_data.damping_diag = Eigen::Vector<double, 6>::Zero();
+    log_data.alpha = params_.alpha;
 
     auto loop_end_time = get_node()->get_clock()->now();
     log_data.loop_duration_ms =
@@ -334,18 +345,35 @@ CallbackReturn MITJointController::on_activate(
   if (params_.log.enabled) {
     csv_log_start_time_ = get_node()->now();
 
-    std::string log_dir = "/tmp/mit_joint_controller_logs";
-    std::string node_name = get_node()->get_name();
+    std::string controller_name = get_node()->get_name();
 
     if (params_.log.use_async_logging) {
-      csv_logger_ = std::make_unique<AsyncCSVLogger>(log_dir, node_name);
+      csv_logger_ = std::make_unique<AsyncCSVLogger>(controller_name, get_node()->get_logger());
       RCLCPP_INFO(get_node()->get_logger(),
-                  "Initialized async CSV logger at: %s", log_dir.c_str());
+                  "Initialized async CSV logger for controller: %s", controller_name.c_str());
     } else {
-      csv_logger_ = std::make_unique<CSVLogger>(log_dir, node_name);
+      csv_logger_ = std::make_unique<ControllerCSVLogger>(controller_name, get_node()->get_logger());
       RCLCPP_INFO(get_node()->get_logger(),
-                  "Initialized sync CSV logger at: %s", log_dir.c_str());
+                  "Initialized sync CSV logger for controller: %s", controller_name.c_str());
     }
+
+    // Initialize the logger with dummy data for header generation
+    MITControllerLogData dummy_data;
+    dummy_data.q = q_;
+    dummy_data.dq = dq_;
+    dummy_data.dq_filtered = dq_filtered_;
+    dummy_data.q_goal = q_goal_;
+    dummy_data.dq_goal = dq_goal_;
+    dummy_data.tau_ff = tau_ff_;
+    dummy_data.mot_K_p = mot_K_p_;
+    dummy_data.mot_K_d = mot_K_d_;
+    dummy_data.current_pose = pinocchio::SE3::Identity();
+    dummy_data.target_pose = pinocchio::SE3::Identity();
+    dummy_data.error = Eigen::Vector<double, 6>::Zero();
+    dummy_data.stiffness_diag = Eigen::Vector<double, 6>::Zero();
+    dummy_data.damping_diag = Eigen::Vector<double, 6>::Zero();
+
+    csv_logger_->initialize(csv_log_start_time_, dummy_data);
   }
 
   return CallbackReturn::SUCCESS;

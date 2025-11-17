@@ -83,6 +83,11 @@ generate_parameter_library(
   src/mit_cartesian_controller.yaml
 )
 
+generate_parameter_library(
+  mit_joint_controller_parameters
+  src/mit_joint_controller.yaml
+)
+
 add_library(
         ${PROJECT_NAME}
         SHARED
@@ -92,6 +97,7 @@ add_library(
         # src/cartesian_controller.cpp
         src/pose_broadcaster.cpp
         src/mit_cartesian_controller.cpp
+        src/mit_joint_controller.cpp
         src/utils/csv_logger.cpp
         src/utils/async_csv_logger.cpp
 )
@@ -127,6 +133,7 @@ target_link_libraries(${PROJECT_NAME}
     # torque_feedback_controller_parameters
     # twist_broadcaster_parameters
     mit_cartesian_controller_parameters
+    mit_joint_controller_parameters
 )
 
 
