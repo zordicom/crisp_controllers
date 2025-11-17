@@ -194,31 +194,34 @@ MITCartesianController::update(const rclcpp::Time &time,
         "stop_commands is TRUE - not sending commands to hardware!");
   }
 
-  // Debug logging
+  // Debug logging and parameter refresh (throttled to avoid performance impact)
   if (params_.log.enabled) {
-    RCLCPP_INFO_STREAM_THROTTLE(get_node()->get_logger(),
-                                *get_node()->get_clock(), DEBUG_LOG_THROTTLE_MS,
-                                "Mode: " << params_.control_mode);
-    RCLCPP_INFO_STREAM_THROTTLE(get_node()->get_logger(),
-                                *get_node()->get_clock(), DEBUG_LOG_THROTTLE_MS,
-                                "Error: pos=" << x_error_.head(3).transpose()
-                                              << " ori="
-                                              << x_error_.tail(3).transpose());
-    RCLCPP_INFO_STREAM_THROTTLE(get_node()->get_logger(),
-                                *get_node()->get_clock(), DEBUG_LOG_THROTTLE_MS,
-                                "q_goal: " << q_goal_.transpose());
-    RCLCPP_INFO_STREAM_THROTTLE(get_node()->get_logger(),
-                                *get_node()->get_clock(), DEBUG_LOG_THROTTLE_MS,
-                                "dq_goal: " << dq_goal_.transpose());
-    RCLCPP_INFO_STREAM_THROTTLE(get_node()->get_logger(),
-                                *get_node()->get_clock(), DEBUG_LOG_THROTTLE_MS,
-                                "mot_K_p: " << mot_K_p_.transpose());
-    RCLCPP_INFO_STREAM_THROTTLE(get_node()->get_logger(),
-                                *get_node()->get_clock(), DEBUG_LOG_THROTTLE_MS,
-                                "mot_K_d: " << mot_K_d_.transpose());
-    RCLCPP_INFO_STREAM_THROTTLE(get_node()->get_logger(),
-                                *get_node()->get_clock(), DEBUG_LOG_THROTTLE_MS,
-                                "tau_ff: " << tau_ff_.transpose());
+    static auto last_param_refresh = get_node()->get_clock()->now();
+    auto now = get_node()->get_clock()->now();
+    if ((now - last_param_refresh).seconds() * 1000.0 >= DEBUG_LOG_THROTTLE_MS) {
+      // Refresh dynamic parameters
+      params_listener_->refresh_dynamic_parameters();
+      params_ = params_listener_->get_params();
+      last_param_refresh = now;
+
+      // Debug logging
+      RCLCPP_INFO_STREAM(get_node()->get_logger(),
+                        "Mode: " << params_.control_mode);
+      RCLCPP_INFO_STREAM(get_node()->get_logger(),
+                        "Error: pos=" << x_error_.head(3).transpose()
+                                      << " ori="
+                                      << x_error_.tail(3).transpose());
+      RCLCPP_INFO_STREAM(get_node()->get_logger(),
+                        "q_goal: " << q_goal_.transpose());
+      RCLCPP_INFO_STREAM(get_node()->get_logger(),
+                        "dq_goal: " << dq_goal_.transpose());
+      RCLCPP_INFO_STREAM(get_node()->get_logger(),
+                        "mot_K_p: " << mot_K_p_.transpose());
+      RCLCPP_INFO_STREAM(get_node()->get_logger(),
+                        "mot_K_d: " << mot_K_d_.transpose());
+      RCLCPP_INFO_STREAM(get_node()->get_logger(),
+                        "tau_ff: " << tau_ff_.transpose());
+    }
   }
 
   // Write CSV data if logging is enabled
@@ -267,9 +270,6 @@ MITCartesianController::update(const rclcpp::Time &time,
     // Log the data using the interface
     csv_logger_->logData(log_data);
   }
-
-  params_listener_->refresh_dynamic_parameters();
-  params_ = params_listener_->get_params();
 
   return controller_interface::return_type::OK;
 }
