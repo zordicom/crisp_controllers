@@ -514,6 +514,10 @@ void MITJointController::compute_gravity_() {
   q_goal_ = q_; // Current position
   dq_goal_.setZero();
 
+  // Update target to track current position so mode switches are smooth
+  q_target_ = q_;
+  dq_target_.setZero();
+
   // Only gravity compensation
   tau_ff_.setZero();
   if (params_.use_gravity_compensation) {
@@ -528,6 +532,10 @@ void MITJointController::compute_gravity_coriolis_() {
   // Set position and velocity goals
   q_goal_ = q_; // Current position
   dq_goal_.setZero();
+
+  // Update target to track current position so mode switches are smooth
+  q_target_ = q_;
+  dq_target_.setZero();
 
   // Gravity + Coriolis compensation
   tau_ff_.setZero();
@@ -546,6 +554,10 @@ void MITJointController::compute_gravity_velocity_() {
   // Set position and velocity goals
   q_goal_ = q_; // Current position
   dq_goal_.setZero();
+
+  // Update target to track current position so mode switches are smooth
+  q_target_ = q_;
+  dq_target_.setZero();
 
   // Gravity compensation
   tau_ff_.setZero();
