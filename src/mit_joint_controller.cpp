@@ -80,10 +80,6 @@ MITJointController::update(const rclcpp::Time &time,
     parse_target_joint_();
   }
 
-  // Compute forward kinematics (needed for gravity/dynamics)
-  pinocchio::forwardKinematics(model_, data_, q_pin_, dq_filtered_);
-  pinocchio::updateFramePlacements(model_, data_);
-
   // Compute joint error
   q_error_ = q_target_ - q_;
 
@@ -137,16 +133,11 @@ MITJointController::update(const rclcpp::Time &time,
 
   // Apply joint limits with safety buffer if enabled
   if (params_.limit_commands) {
-    double buffer = params_.joint_limit_buffer;
-    Eigen::VectorXd lower_limit = model_.lowerPositionLimit.array() + buffer;
-    Eigen::VectorXd upper_limit = model_.upperPositionLimit.array() - buffer;
-    q_goal_ = q_goal_.cwiseMax(lower_limit).cwiseMin(upper_limit);
+    q_goal_ = q_goal_.cwiseMax(joint_lower_limit_).cwiseMin(joint_upper_limit_);
   }
 
   // Apply torque safety limits
-  Eigen::VectorXd tau_limits =
-      params_.torque_safety_factor * model_.effortLimit;
-  tau_ff_ = tau_ff_.cwiseMax(-tau_limits).cwiseMin(tau_limits);
+  tau_ff_ = tau_ff_.cwiseMax(-tau_limits_).cwiseMin(tau_limits_);
 
   // Write commands to hardware
   for (size_t i = 0; i < num_joints; i++) {
@@ -299,6 +290,24 @@ CallbackReturn MITJointController::on_configure(
       // Critical damping: 2*sqrt(k)
       D_joint_[i] = 2.0 * std::sqrt(K_joint_[i]);
     }
+  }
+
+  // Preallocate limit vectors to avoid heap allocations in update loop
+  joint_lower_limit_ = model_.lowerPositionLimit.array() + params_.joint_limit_buffer;
+  joint_upper_limit_ = model_.upperPositionLimit.array() - params_.joint_limit_buffer;
+  tau_limits_ = params_.torque_safety_factor * model_.effortLimit;
+
+  // Set motor gains once (they're constant for each control mode)
+  // These will be written to hardware on every cycle but not recomputed
+  if (params_.control_mode == "gravity" || params_.control_mode == "gravity_coriolis") {
+    mot_K_p_.setZero();
+    mot_K_d_.setZero();
+  } else if (params_.control_mode == "gravity_velocity") {
+    mot_K_p_.setZero();
+    mot_K_d_ = D_joint_;
+  } else if (params_.control_mode == "impedance_posvel") {
+    mot_K_p_ = K_joint_;
+    mot_K_d_ = D_joint_;
   }
 
   // Initialize target to zero (will be set to current position on activate)
@@ -501,13 +510,9 @@ void MITJointController::parse_target_joint_() {
 }
 
 void MITJointController::compute_gravity_() {
-  size_t num_joints = params_.joints.size();
-
-  // Set position, velocity, kp, and kd to zero
+  // Set position and velocity goals
   q_goal_ = q_; // Current position
   dq_goal_.setZero();
-  mot_K_p_ = Eigen::VectorXd::Zero(num_joints);
-  mot_K_d_ = Eigen::VectorXd::Zero(num_joints);
 
   // Only gravity compensation
   tau_ff_.setZero();
@@ -520,13 +525,9 @@ void MITJointController::compute_gravity_() {
 }
 
 void MITJointController::compute_gravity_coriolis_() {
-  size_t num_joints = params_.joints.size();
-
-  // Set position, velocity, kp, and kd to zero
+  // Set position and velocity goals
   q_goal_ = q_; // Current position
   dq_goal_.setZero();
-  mot_K_p_ = Eigen::VectorXd::Zero(num_joints);
-  mot_K_d_ = Eigen::VectorXd::Zero(num_joints);
 
   // Gravity + Coriolis compensation
   tau_ff_.setZero();
@@ -542,15 +543,9 @@ void MITJointController::compute_gravity_coriolis_() {
 }
 
 void MITJointController::compute_gravity_velocity_() {
-  size_t num_joints = params_.joints.size();
-
   // Set position and velocity goals
   q_goal_ = q_; // Current position
   dq_goal_.setZero();
-
-  // Use joint damping for velocity damping
-  mot_K_p_ = Eigen::VectorXd::Zero(num_joints);
-  mot_K_d_ = D_joint_;
 
   // Gravity compensation
   tau_ff_.setZero();
@@ -579,10 +574,6 @@ void MITJointController::compute_impedance_posvel_() {
     dq_goal_ += dq_target_;
     dq_goal_ = dq_goal_.cwiseMax(-max_vel).cwiseMin(max_vel);
   }
-
-  // Use joint impedance parameters
-  mot_K_p_ = K_joint_;
-  mot_K_d_ = D_joint_;
 
   // Full dynamics compensation
   tau_ff_.setZero();

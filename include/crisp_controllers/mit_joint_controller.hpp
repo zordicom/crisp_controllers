@@ -156,6 +156,11 @@ private:
   /** @brief Joint position error */
   Eigen::VectorXd q_error_;
 
+  /** @brief Preallocated joint limit vectors (to avoid heap allocations) */
+  Eigen::VectorXd joint_lower_limit_;
+  Eigen::VectorXd joint_upper_limit_;
+  Eigen::VectorXd tau_limits_;
+
   /**
    * @brief Parse target joint state from realtime buffer
    */
