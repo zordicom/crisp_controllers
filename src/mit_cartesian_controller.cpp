@@ -4,9 +4,10 @@
 #include <crisp_controllers/utils/csv_logger.hpp>
 #include <crisp_controllers/utils/mit_controller_log_data.hpp>
 #include <crisp_controllers/utils/pseudo_inverse.hpp>
+#include <limits>
+#include <pinocchio/algorithm/compute-all-terms.hpp>
 #include <pinocchio/algorithm/frames.hxx>
 #include <pinocchio/algorithm/rnea.hpp>
-#include <pinocchio/algorithm/compute-all-terms.hpp>
 #include <pinocchio/parsers/urdf.hpp>
 #include <pinocchio/spatial/explog.hpp>
 #include <rclcpp/logging.hpp>
@@ -103,14 +104,17 @@ MITCartesianController::update(const rclcpp::Time &time,
 
   // Update error history for oscillation detection
   if (params_.oscillation_detection.enabled) {
-    double pos_error_magnitude = x_error_.head(3).norm();
-    error_history_[error_history_idx_] = pos_error_magnitude;
+    // Store per-joint position errors in history
+    for (size_t i = 0; i < static_cast<size_t>(q_.size()) && i < MAX_JOINTS;
+         ++i) {
+      joint_error_history_[i][error_history_idx_] = q_goal_(i) - q_(i);
+    }
     error_history_idx_ = (error_history_idx_ + 1) % MAX_ERROR_HISTORY;
     if (error_history_count_ < MAX_ERROR_HISTORY) {
       error_history_count_++;
     }
 
-    // Check for oscillations
+    // Check for oscillations in any joint
     if (detect_oscillation_(period.seconds())) {
       oscillation_detected_ = true;
       RCLCPP_ERROR(get_node()->get_logger(),
@@ -260,6 +264,9 @@ MITCartesianController::update(const rclcpp::Time &time,
     csv_logger_->logData(log_data);
   }
 
+  params_listener_->refresh_dynamic_parameters();
+  params_ = params_listener_->get_params();
+
   return controller_interface::return_type::OK;
 }
 
@@ -376,7 +383,9 @@ CallbackReturn MITCartesianController::on_configure(
   x_error_ = Eigen::Vector<double, 6>::Zero();
 
   // Initialize oscillation detection
-  error_history_.fill(0.0);
+  for (size_t i = 0; i < MAX_JOINTS; ++i) {
+    joint_error_history_[i].fill(0.0);
+  }
   error_history_idx_ = 0;
   error_history_count_ = 0;
   oscillation_detected_ = false;
@@ -571,7 +580,8 @@ void MITCartesianController::compute_gravity_coriolis_() {
   // Coriolis compensation
   pinocchio::computeAllTerms(model_, data_, q_pin_, dq_filtered_);
   Eigen::VectorXd tau_coriolis =
-      pinocchio::computeCoriolisMatrix(model_, data_, q_pin_, dq_filtered_) * dq_filtered_;
+      pinocchio::computeCoriolisMatrix(model_, data_, q_pin_, dq_filtered_) *
+      dq_filtered_;
 
   tau_ff_ = tau_gravity + tau_coriolis;
 }
@@ -664,48 +674,68 @@ bool MITCartesianController::detect_oscillation_(double dt) {
     return false; // Not enough data
   }
 
-  // Count zero crossings in the error signal (around the mean)
-  // This detects oscillations around any offset, not just zero
-  int zero_crossings = 0;
-  double mean = 0.0;
+  // Check each joint for oscillation
+  size_t num_joints = static_cast<size_t>(q_.size());
+  for (size_t joint_idx = 0; joint_idx < num_joints && joint_idx < MAX_JOINTS;
+       ++joint_idx) {
+    // Count zero crossings in the error signal (around the mean)
+    // This detects oscillations around any offset, not just zero
+    int zero_crossings = 0;
+    double mean = 0.0;
+    double min_val = std::numeric_limits<double>::max();
+    double max_val = std::numeric_limits<double>::lowest();
 
-  // Calculate mean of the window
-  for (size_t i = 0; i < window_size; ++i) {
-    size_t idx = (error_history_idx_ + MAX_ERROR_HISTORY - window_size + i) %
-                 MAX_ERROR_HISTORY;
-    mean += error_history_[idx];
-  }
-  mean /= window_size;
-
-  // Count zero crossings relative to mean
-  for (size_t i = 1; i < window_size; ++i) {
-    size_t idx_prev =
-        (error_history_idx_ + MAX_ERROR_HISTORY - window_size + i - 1) %
-        MAX_ERROR_HISTORY;
-    size_t idx_curr =
-        (error_history_idx_ + MAX_ERROR_HISTORY - window_size + i) %
-        MAX_ERROR_HISTORY;
-
-    double val_prev = error_history_[idx_prev] - mean;
-    double val_curr = error_history_[idx_curr] - mean;
-
-    if ((val_prev < 0 && val_curr >= 0) || (val_prev >= 0 && val_curr < 0)) {
-      zero_crossings++;
+    // Calculate mean and min/max of the window
+    for (size_t i = 0; i < window_size; ++i) {
+      size_t idx = (error_history_idx_ + MAX_ERROR_HISTORY - window_size + i) %
+                   MAX_ERROR_HISTORY;
+      double val = joint_error_history_[joint_idx][idx];
+      mean += val;
+      min_val = std::min(min_val, val);
+      max_val = std::max(max_val, val);
     }
-  }
+    mean /= window_size;
 
-  // Calculate the frequency of oscillation using actual control period
-  double window_duration_sec = window_size * dt;
-  double oscillation_freq = (zero_crossings / 2.0) / window_duration_sec;
+    // Calculate peak-to-peak amplitude
+    double amplitude = max_val - min_val;
 
-  // Oscillation detected if frequency exceeds threshold
-  if (oscillation_freq >= params_.oscillation_detection.frequency) {
-    RCLCPP_WARN(get_node()->get_logger(),
-                "Detected oscillation at %.2f Hz (threshold: %.2f Hz, zero "
-                "crossings: %d, dt: %.6f)",
-                oscillation_freq, params_.oscillation_detection.frequency,
-                zero_crossings, dt);
-    return true;
+    // Skip this joint if amplitude is below threshold (filtering noise)
+    if (amplitude < params_.oscillation_detection.min_amplitude) {
+      continue;
+    }
+
+    // Count zero crossings around the mean
+    for (size_t i = 1; i < window_size; ++i) {
+      size_t idx_prev =
+          (error_history_idx_ + MAX_ERROR_HISTORY - window_size + i - 1) %
+          MAX_ERROR_HISTORY;
+      size_t idx_curr =
+          (error_history_idx_ + MAX_ERROR_HISTORY - window_size + i) %
+          MAX_ERROR_HISTORY;
+
+      double val_prev = joint_error_history_[joint_idx][idx_prev] - mean;
+      double val_curr = joint_error_history_[joint_idx][idx_curr] - mean;
+
+      if ((val_prev < 0 && val_curr >= 0) || (val_prev >= 0 && val_curr < 0)) {
+        zero_crossings++;
+      }
+    }
+
+    // Calculate the frequency of oscillation using actual control period
+    double window_duration_sec = window_size * dt;
+    double oscillation_freq = (zero_crossings / 2.0) / window_duration_sec;
+
+    // Oscillation detected if frequency exceeds threshold
+    if (oscillation_freq >= params_.oscillation_detection.frequency) {
+      RCLCPP_WARN(
+          get_node()->get_logger(),
+          "Joint %zu oscillating at %.2f Hz (threshold: %.2f Hz) with "
+          "amplitude %.4f rad (threshold: %.4f rad, zero crossings: %d)",
+          joint_idx, oscillation_freq, params_.oscillation_detection.frequency,
+          amplitude, params_.oscillation_detection.min_amplitude,
+          zero_crossings);
+      return true;
+    }
   }
 
   return false;

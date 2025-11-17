@@ -239,6 +239,12 @@ mit_cartesian_controller:
       description: "Minimum oscillation frequency to detect (Hz)"
       validation:
         bounds<>: [0.5, 20.0]
+    min_amplitude:
+      type: double
+      default_value: 0.05
+      description: "Minimum peak-to-peak oscillation amplitude to detect (radians). Filters out small noise oscillations."
+      validation:
+        bounds<>: [0.0, 1.0]
 
   log:
     enabled:

@@ -195,9 +195,11 @@ private:
   /** @brief Cartesian error for use across control modes */
   Eigen::Vector<double, 6> x_error_;
 
-  /** @brief Circular buffer for position error magnitude history (for oscillation detection) */
+  /** @brief Circular buffer for per-joint position error history (for oscillation detection)
+   * Matrix where each row is a joint and each column is a time sample */
   static constexpr size_t MAX_ERROR_HISTORY = 500;
-  std::array<double, MAX_ERROR_HISTORY> error_history_;
+  static constexpr size_t MAX_JOINTS = 7;
+  std::array<std::array<double, MAX_ERROR_HISTORY>, MAX_JOINTS> joint_error_history_;
   /** @brief Current index in error history buffer */
   size_t error_history_idx_;
   /** @brief Number of valid samples in error history */
