@@ -126,8 +126,6 @@ MITJointController::update(const rclcpp::Time &time,
     compute_gravity_coriolis_();
   } else if (params_.control_mode == "gravity_velocity") {
     compute_gravity_velocity_();
-  } else if (params_.control_mode == "gravity_impedance") {
-    compute_gravity_impedance_();
   } else if (params_.control_mode == "impedance_posvel") {
     compute_impedance_posvel_();
   } else {
@@ -323,9 +321,18 @@ CallbackReturn MITJointController::on_configure(
     return CallbackReturn::ERROR;
   }
 
+  // Find base frame index
+  pinocchio::FrameIndex base_frame_id = model_.getFrameId(params_.base_frame);
+  if (base_frame_id >= static_cast<pinocchio::FrameIndex>(model_.nframes)) {
+    RCLCPP_ERROR_STREAM(get_node()->get_logger(),
+                       "Base frame '" << params_.base_frame
+                       << "' not found in model!");
+    return CallbackReturn::ERROR;
+  }
+
   // Setup target joint state subscription with FK publishing
   auto target_joint_callback =
-      [this, ee_frame_id](const std::shared_ptr<sensor_msgs::msg::JointState> msg) -> void {
+      [this, ee_frame_id, base_frame_id](const std::shared_ptr<sensor_msgs::msg::JointState> msg) -> void {
     target_joint_buffer_.writeFromNonRT(msg);
     new_target_ = true;
 
@@ -342,8 +349,12 @@ CallbackReturn MITJointController::on_configure(
       pinocchio::forwardKinematics(model_, data_temp, q_temp);
       pinocchio::updateFramePlacements(model_, data_temp);
 
-      // Get end-effector frame placement
-      const auto &ee_placement = data_temp.oMf[ee_frame_id];
+      // Get poses in world frame
+      pinocchio::SE3 ee_pose_world = data_temp.oMf[ee_frame_id];       // World -> EE
+      pinocchio::SE3 base_pose_world = data_temp.oMf[base_frame_id];   // World -> Base
+
+      // Transform to base frame: Base -> EE = (World -> Base)^-1 * (World -> EE)
+      pinocchio::SE3 ee_pose_base = base_pose_world.inverse() * ee_pose_world;
 
       // Create and publish pose message
       geometry_msgs::msg::PoseStamped pose_msg;
@@ -351,12 +362,12 @@ CallbackReturn MITJointController::on_configure(
       pose_msg.header.frame_id = params_.base_frame;
 
       // Position
-      pose_msg.pose.position.x = ee_placement.translation()[0];
-      pose_msg.pose.position.y = ee_placement.translation()[1];
-      pose_msg.pose.position.z = ee_placement.translation()[2];
+      pose_msg.pose.position.x = ee_pose_base.translation()[0];
+      pose_msg.pose.position.y = ee_pose_base.translation()[1];
+      pose_msg.pose.position.z = ee_pose_base.translation()[2];
 
       // Orientation (convert rotation matrix to quaternion)
-      Eigen::Quaterniond quat(ee_placement.rotation());
+      Eigen::Quaterniond quat(ee_pose_base.rotation());
       pose_msg.pose.orientation.x = quat.x();
       pose_msg.pose.orientation.y = quat.y();
       pose_msg.pose.orientation.z = quat.z();
@@ -543,23 +554,6 @@ void MITJointController::compute_gravity_velocity_() {
 
   // Use joint damping for velocity damping
   mot_K_p_ = Eigen::VectorXd::Zero(num_joints);
-  mot_K_d_ = D_joint_;
-
-  // Gravity compensation
-  tau_ff_.setZero();
-  if (params_.use_gravity_compensation) {
-    Eigen::VectorXd tau_gravity =
-        params_.gravity_scale *
-        pinocchio::computeGeneralizedGravity(model_, data_, q_pin_);
-    tau_ff_ = tau_gravity;
-  }
-}
-
-void MITJointController::compute_gravity_impedance_() {
-  // MIT Mode control: K (q_target - q) + D (dq_target - dq) + tau_ff
-  q_goal_ = q_target_;
-  dq_goal_.setZero();
-  mot_K_p_ = K_joint_;
   mot_K_d_ = D_joint_;
 
   // Gravity compensation

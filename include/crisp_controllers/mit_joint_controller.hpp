@@ -177,12 +177,6 @@ private:
   void compute_gravity_velocity_();
 
   /**
-   * @brief Gravity compensation + joint impedance control
-   * Uses feedforward torques: tau = K*(q_target - q) - D*dq
-   */
-  void compute_gravity_impedance_();
-
-  /**
    * @brief Full impedance with position/velocity commands
    * Sends position and velocity goals to motors with dynamics compensation
    */

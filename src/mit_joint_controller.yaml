@@ -13,10 +13,10 @@ mit_joint_controller:
 
   control_mode:
     type: string
-    default_value: "gravity"
-    description: "Control mode: gravity, gravity_coriolis, gravity_velocity, gravity_impedance, or impedance_posvel"
+    default_value: "impedance_posvel"
+    description: "Control mode: gravity, gravity_coriolis, gravity_velocity, or impedance_posvel"
     validation:
-      one_of<>: [["gravity", "gravity_coriolis", "gravity_velocity", "gravity_impedance", "impedance_posvel"]]
+      one_of<>: [["gravity", "gravity_coriolis", "gravity_velocity", "impedance_posvel"]]
 
   joint_stiffness:
     type: double_array
