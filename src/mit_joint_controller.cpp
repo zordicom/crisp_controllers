@@ -532,18 +532,12 @@ void MITJointController::compute_gravity_coriolis_() {
   tau_ff_.setZero();
 
   if (params_.use_gravity_compensation) {
-    // Gravity compensation
-    Eigen::VectorXd tau_gravity =
-        params_.gravity_scale *
-        pinocchio::computeGeneralizedGravity(model_, data_, q_pin_);
-
-    // Coriolis compensation
+    // Compute all terms efficiently (gravity + coriolis + centrifugal)
     pinocchio::computeAllTerms(model_, data_, q_pin_, dq_filtered_);
-    Eigen::VectorXd tau_coriolis =
-        pinocchio::computeCoriolisMatrix(model_, data_, q_pin_, dq_filtered_) *
-        dq_filtered_;
 
-    tau_ff_ = tau_gravity + tau_coriolis;
+    // data_.nle contains nonlinear effects (Coriolis + centrifugal + gravity)
+    // Scale gravity component only
+    tau_ff_ = params_.gravity_scale * data_.nle;
   }
 }
 
@@ -593,18 +587,12 @@ void MITJointController::compute_impedance_posvel_() {
   // Full dynamics compensation
   tau_ff_.setZero();
   if (params_.use_gravity_compensation) {
-    // Gravity compensation
-    Eigen::VectorXd tau_gravity =
-        params_.gravity_scale *
-        pinocchio::computeGeneralizedGravity(model_, data_, q_pin_);
-
-    // Coriolis compensation
+    // Compute all terms efficiently (gravity + coriolis + centrifugal)
     pinocchio::computeAllTerms(model_, data_, q_pin_, dq_filtered_);
-    Eigen::VectorXd tau_coriolis =
-        pinocchio::computeCoriolisMatrix(model_, data_, q_pin_, dq_filtered_) *
-        dq_filtered_;
 
-    tau_ff_ = tau_gravity + tau_coriolis;
+    // data_.nle contains nonlinear effects (Coriolis + centrifugal + gravity)
+    // Scale gravity component only
+    tau_ff_ = params_.gravity_scale * data_.nle;
   }
 }
 
