@@ -10,20 +10,6 @@ mit_joint_controller:
     validation:
       one_of<>: [["gravity", "gravity_coriolis", "gravity_velocity", "gravity_impedance", "impedance_posvel"]]
 
-  motor_kd:
-    type: double_array
-    default_value: [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0]
-    description: "Motor Kd gains for velocity damping (0-5 for each joint)"
-    validation:
-      element_bounds<>: [0.0, 5.0]
-
-  motor_kp:
-    type: double_array
-    default_value: [50.0, 50.0, 50.0, 50.0, 50.0, 50.0, 50.0]
-    description: "Motor Kp gains for position control (0-500 for each joint)"
-    validation:
-      element_bounds<>: [0.0, 500.0]
-
   joint_stiffness:
     type: double_array
     default_value: [10.0, 10.0, 10.0, 10.0, 10.0, 10.0, 10.0]

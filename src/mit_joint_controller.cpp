@@ -2,7 +2,7 @@
 #include <crisp_controllers/pch.hpp>
 #include <crisp_controllers/utils/async_csv_logger.hpp>
 #include <crisp_controllers/utils/csv_logger.hpp>
-#include <crisp_controllers/utils/mit_controller_log_data.hpp>
+#include <crisp_controllers/utils/mit_joint_controller_log_data.hpp>
 #include <limits>
 #include <pinocchio/algorithm/compute-all-terms.hpp>
 #include <pinocchio/algorithm/frames.hxx>
@@ -55,7 +55,7 @@ MITJointController::state_interface_configuration() const {
 
 controller_interface::return_type
 MITJointController::update(const rclcpp::Time &time,
-                            const rclcpp::Duration &period) {
+                           const rclcpp::Duration &period) {
   auto loop_start_time = get_node()->get_clock()->now();
 
   if (params_.stop_commands) {
@@ -174,30 +174,44 @@ MITJointController::update(const rclcpp::Time &time,
 
   // CSV logging if enabled
   if (params_.log.enabled && csv_logger_) {
-    MITControllerLogData log_data;
+    MITJointControllerLogData log_data;
     log_data.timestamp =
         (time - csv_log_start_time_).nanoseconds() * 1e-9; // seconds
 
     // Set control mode
     log_data.control_mode = params_.control_mode;
 
-    // Log joint states (vectors)
+    // Log joint states (current)
     log_data.q = q_;
     log_data.dq = dq_;
     log_data.dq_filtered = dq_filtered_;
+
+    // Log joint targets (from user)
+    log_data.q_target = q_target_;
+    log_data.dq_target = dq_target_;
+
+    // Log joint goals (sent to motors)
     log_data.q_goal = q_goal_;
     log_data.dq_goal = dq_goal_;
+
+    // Log joint errors
+    log_data.q_error = q_error_;
+
+    // Log feedforward torques
     log_data.tau_ff = tau_ff_;
+
+    // Log motor PD gains
     log_data.mot_K_p = mot_K_p_;
     log_data.mot_K_d = mot_K_d_;
 
-    // For joint controller, we don't have Cartesian data, so set dummy values
-    log_data.current_pose = pinocchio::SE3::Identity();
-    log_data.target_pose = pinocchio::SE3::Identity();
-    log_data.error = Eigen::Vector<double, 6>::Zero();
-    log_data.stiffness_diag = Eigen::Vector<double, 6>::Zero();
-    log_data.damping_diag = Eigen::Vector<double, 6>::Zero();
+    // Log joint impedance parameters
+    log_data.joint_stiffness = K_joint_;
+    log_data.joint_damping = D_joint_;
+
+    // Log control parameters
     log_data.alpha = params_.alpha;
+    log_data.max_position_error = params_.max_position_error;
+    log_data.max_velocity = params_.max_velocity;
 
     auto loop_end_time = get_node()->get_clock()->now();
     log_data.loop_duration_ms =
@@ -329,7 +343,7 @@ CallbackReturn MITJointController::on_activate(
 
   // Initialize targets to current state
   q_target_ = q_;
-  dq_target_ = dq_;
+  dq_target_.setZero(); // Start with zero velocity target
 
   // Initialize goals to current state
   q_goal_ = q_;
@@ -348,30 +362,37 @@ CallbackReturn MITJointController::on_activate(
     std::string controller_name = get_node()->get_name();
 
     if (params_.log.use_async_logging) {
-      csv_logger_ = std::make_unique<AsyncCSVLogger>(controller_name, get_node()->get_logger());
+      csv_logger_ = std::make_unique<AsyncCSVLogger>(controller_name,
+                                                     get_node()->get_logger());
       RCLCPP_INFO(get_node()->get_logger(),
-                  "Initialized async CSV logger for controller: %s", controller_name.c_str());
+                  "Initialized async CSV logger for controller: %s",
+                  controller_name.c_str());
     } else {
-      csv_logger_ = std::make_unique<ControllerCSVLogger>(controller_name, get_node()->get_logger());
+      csv_logger_ = std::make_unique<ControllerCSVLogger>(
+          controller_name, get_node()->get_logger());
       RCLCPP_INFO(get_node()->get_logger(),
-                  "Initialized sync CSV logger for controller: %s", controller_name.c_str());
+                  "Initialized sync CSV logger for controller: %s",
+                  controller_name.c_str());
     }
 
     // Initialize the logger with dummy data for header generation
-    MITControllerLogData dummy_data;
+    MITJointControllerLogData dummy_data;
     dummy_data.q = q_;
     dummy_data.dq = dq_;
     dummy_data.dq_filtered = dq_filtered_;
+    dummy_data.q_target = q_target_;
+    dummy_data.dq_target = dq_target_;
     dummy_data.q_goal = q_goal_;
     dummy_data.dq_goal = dq_goal_;
+    dummy_data.q_error = q_error_;
     dummy_data.tau_ff = tau_ff_;
     dummy_data.mot_K_p = mot_K_p_;
     dummy_data.mot_K_d = mot_K_d_;
-    dummy_data.current_pose = pinocchio::SE3::Identity();
-    dummy_data.target_pose = pinocchio::SE3::Identity();
-    dummy_data.error = Eigen::Vector<double, 6>::Zero();
-    dummy_data.stiffness_diag = Eigen::Vector<double, 6>::Zero();
-    dummy_data.damping_diag = Eigen::Vector<double, 6>::Zero();
+    dummy_data.joint_stiffness = K_joint_;
+    dummy_data.joint_damping = D_joint_;
+    dummy_data.alpha = params_.alpha;
+    dummy_data.max_position_error = params_.max_position_error;
+    dummy_data.max_velocity = params_.max_velocity;
 
     csv_logger_->initialize(csv_log_start_time_, dummy_data);
   }
@@ -466,11 +487,9 @@ void MITJointController::compute_gravity_velocity_() {
   q_goal_ = q_; // Current position
   dq_goal_.setZero();
 
-  // Use motor gains for velocity damping
+  // Use joint damping for velocity damping
   mot_K_p_ = Eigen::VectorXd::Zero(num_joints);
-  for (size_t i = 0; i < num_joints; ++i) {
-    mot_K_d_[i] = params_.motor_kd[i];
-  }
+  mot_K_d_ = D_joint_;
 
   // Gravity compensation
   tau_ff_.setZero();
@@ -483,17 +502,11 @@ void MITJointController::compute_gravity_velocity_() {
 }
 
 void MITJointController::compute_gravity_impedance_() {
-  size_t num_joints = params_.joints.size();
-
-  // Set motor gains to zero (we'll control via feedforward torques)
-  q_goal_ = q_; // Current position
+  // MIT Mode control: K (q_target - q) + D (dq_target - dq) + tau_ff
+  q_goal_ = q_target_;
   dq_goal_.setZero();
-  mot_K_p_ = Eigen::VectorXd::Zero(num_joints);
-  mot_K_d_ = Eigen::VectorXd::Zero(num_joints);
-
-  // Compute impedance torques: tau = K*(q_target - q) - D*dq
-  Eigen::VectorXd tau_impedance =
-      K_joint_.cwiseProduct(q_error_) - D_joint_.cwiseProduct(dq_filtered_);
+  mot_K_p_ = K_joint_;
+  mot_K_d_ = D_joint_;
 
   // Gravity compensation
   tau_ff_.setZero();
@@ -503,14 +516,9 @@ void MITJointController::compute_gravity_impedance_() {
         pinocchio::computeGeneralizedGravity(model_, data_, q_pin_);
     tau_ff_ = tau_gravity;
   }
-
-  // Add impedance torques
-  tau_ff_ += tau_impedance;
 }
 
 void MITJointController::compute_impedance_posvel_() {
-  size_t num_joints = params_.joints.size();
-
   // Send position goal to motors
   q_goal_ = q_target_;
 
@@ -528,11 +536,9 @@ void MITJointController::compute_impedance_posvel_() {
     dq_goal_ = dq_goal_.cwiseMax(-max_vel).cwiseMin(max_vel);
   }
 
-  // Use motor gains from parameters
-  for (size_t i = 0; i < num_joints; ++i) {
-    mot_K_p_[i] = params_.motor_kp[i];
-    mot_K_d_[i] = params_.motor_kd[i];
-  }
+  // Use joint impedance parameters
+  mot_K_p_ = K_joint_;
+  mot_K_d_ = D_joint_;
 
   // Full dynamics compensation
   tau_ff_.setZero();
