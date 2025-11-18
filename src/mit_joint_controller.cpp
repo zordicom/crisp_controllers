@@ -80,6 +80,28 @@ MITJointController::update(const rclcpp::Time &time,
     parse_target_joint_();
   }
 
+  // Apply target smoothing if enabled
+  if (params_.target_smoothing.enabled) {
+    if (smoothing_active_) {
+      // Update smoothing
+      smoothing_time_ += period.seconds();
+      double blend_ratio =
+          std::min(1.0, smoothing_time_ / params_.target_smoothing.blend_time);
+
+      // Smooth blend using cubic interpolation for smoother velocity profile
+      double t = blend_ratio;
+      double blend = t * t * (3.0 - 2.0 * t); // Smoothstep function
+
+      q_target_ = (1.0 - blend) * q_target_start_ + blend * q_target_end_;
+
+      // Finish smoothing when complete
+      if (blend_ratio >= 1.0) {
+        smoothing_active_ = false;
+        q_target_ = q_target_end_;
+      }
+    }
+  }
+
   // Compute joint error
   q_error_ = q_target_ - q_;
 
@@ -118,10 +140,6 @@ MITJointController::update(const rclcpp::Time &time,
   // Call the appropriate control mode function
   if (params_.control_mode == "gravity") {
     compute_gravity_();
-  } else if (params_.control_mode == "gravity_coriolis") {
-    compute_gravity_coriolis_();
-  } else if (params_.control_mode == "gravity_velocity") {
-    compute_gravity_velocity_();
   } else if (params_.control_mode == "impedance_posvel") {
     compute_impedance_posvel_();
   } else {
@@ -142,18 +160,10 @@ MITJointController::update(const rclcpp::Time &time,
   // Write commands to hardware
   for (size_t i = 0; i < num_joints; i++) {
     // Position command
-    if (params_.use_position_command) {
-      command_interfaces_[i].set_value(q_goal_[i]);
-    } else {
-      command_interfaces_[i].set_value(q_[i]);
-    }
+    command_interfaces_[i].set_value(q_goal_[i]);
 
     // Velocity command
-    if (params_.use_velocity_command) {
-      command_interfaces_[num_joints + i].set_value(dq_goal_[i]);
-    } else {
-      command_interfaces_[num_joints + i].set_value(0.0);
-    }
+    command_interfaces_[num_joints + i].set_value(dq_goal_[i]);
 
     // Feedforward torque
     command_interfaces_[2 * num_joints + i].set_value(tau_ff_[i]);
@@ -270,6 +280,12 @@ CallbackReturn MITJointController::on_configure(
   q_target_ = Eigen::VectorXd::Zero(num_joints);
   dq_target_ = Eigen::VectorXd::Zero(num_joints);
 
+  // Initialize target smoothing
+  smoothing_active_ = false;
+  q_target_start_ = Eigen::VectorXd::Zero(num_joints);
+  q_target_end_ = Eigen::VectorXd::Zero(num_joints);
+  smoothing_time_ = 0.0;
+
   // Initialize oscillation detection
   for (size_t i = 0; i < MAX_JOINTS; ++i) {
     joint_error_history_[i].fill(0.0);
@@ -293,18 +309,17 @@ CallbackReturn MITJointController::on_configure(
   }
 
   // Preallocate limit vectors to avoid heap allocations in update loop
-  joint_lower_limit_ = model_.lowerPositionLimit.array() + params_.joint_limit_buffer;
-  joint_upper_limit_ = model_.upperPositionLimit.array() - params_.joint_limit_buffer;
+  joint_lower_limit_ =
+      model_.lowerPositionLimit.array() + params_.joint_limit_buffer;
+  joint_upper_limit_ =
+      model_.upperPositionLimit.array() - params_.joint_limit_buffer;
   tau_limits_ = params_.torque_safety_factor * model_.effortLimit;
 
   // Set motor gains once (they're constant for each control mode)
   // These will be written to hardware on every cycle but not recomputed
-  if (params_.control_mode == "gravity" || params_.control_mode == "gravity_coriolis") {
+  if (params_.control_mode == "gravity") {
     mot_K_p_.setZero();
     mot_K_d_.setZero();
-  } else if (params_.control_mode == "gravity_velocity") {
-    mot_K_p_.setZero();
-    mot_K_d_ = D_joint_;
   } else if (params_.control_mode == "impedance_posvel") {
     mot_K_p_ = K_joint_;
     mot_K_d_ = D_joint_;
@@ -324,11 +339,12 @@ CallbackReturn MITJointController::on_configure(
                      "Publishing target pose to: " << pose_topic);
 
   // Find end-effector frame index
-  pinocchio::FrameIndex ee_frame_id = model_.getFrameId(params_.end_effector_frame);
+  pinocchio::FrameIndex ee_frame_id =
+      model_.getFrameId(params_.end_effector_frame);
   if (ee_frame_id >= static_cast<pinocchio::FrameIndex>(model_.nframes)) {
     RCLCPP_ERROR_STREAM(get_node()->get_logger(),
-                       "End-effector frame '" << params_.end_effector_frame
-                       << "' not found in model!");
+                        "End-effector frame '" << params_.end_effector_frame
+                                               << "' not found in model!");
     return CallbackReturn::ERROR;
   }
 
@@ -336,14 +352,15 @@ CallbackReturn MITJointController::on_configure(
   pinocchio::FrameIndex base_frame_id = model_.getFrameId(params_.base_frame);
   if (base_frame_id >= static_cast<pinocchio::FrameIndex>(model_.nframes)) {
     RCLCPP_ERROR_STREAM(get_node()->get_logger(),
-                       "Base frame '" << params_.base_frame
-                       << "' not found in model!");
+                        "Base frame '" << params_.base_frame
+                                       << "' not found in model!");
     return CallbackReturn::ERROR;
   }
 
   // Setup target joint state subscription with FK publishing
   auto target_joint_callback =
-      [this, ee_frame_id, base_frame_id](const std::shared_ptr<sensor_msgs::msg::JointState> msg) -> void {
+      [this, ee_frame_id, base_frame_id](
+          const std::shared_ptr<sensor_msgs::msg::JointState> msg) -> void {
     target_joint_buffer_.writeFromNonRT(msg);
     new_target_ = true;
 
@@ -361,10 +378,12 @@ CallbackReturn MITJointController::on_configure(
       pinocchio::updateFramePlacements(model_, data_temp);
 
       // Get poses in world frame
-      pinocchio::SE3 ee_pose_world = data_temp.oMf[ee_frame_id];       // World -> EE
-      pinocchio::SE3 base_pose_world = data_temp.oMf[base_frame_id];   // World -> Base
+      pinocchio::SE3 ee_pose_world = data_temp.oMf[ee_frame_id]; // World -> EE
+      pinocchio::SE3 base_pose_world =
+          data_temp.oMf[base_frame_id]; // World -> Base
 
-      // Transform to base frame: Base -> EE = (World -> Base)^-1 * (World -> EE)
+      // Transform to base frame: Base -> EE = (World -> Base)^-1 * (World ->
+      // EE)
       pinocchio::SE3 ee_pose_base = base_pose_world.inverse() * ee_pose_world;
 
       // Create and publish pose message
@@ -492,8 +511,29 @@ void MITJointController::parse_target_joint_() {
 
   // Update target positions
   if (msg->position.size() == params_.joints.size()) {
+    Eigen::VectorXd q_target_new(params_.joints.size());
     for (size_t i = 0; i < msg->position.size(); ++i) {
-      q_target_[i] = msg->position[i];
+      q_target_new[i] = msg->position[i];
+    }
+
+    // Check if smoothing should be triggered
+    if (params_.target_smoothing.enabled) {
+      double max_jump = (q_target_new - q_target_).cwiseAbs().maxCoeff();
+
+      if (max_jump > params_.target_smoothing.jump_threshold) {
+        // Large jump detected - start smoothing
+        smoothing_active_ = true;
+        q_target_start_ = q_target_;
+        q_target_end_ = q_target_new;
+        smoothing_time_ = 0.0;
+        // q_target_ will be interpolated in update loop
+      } else {
+        // Small change - apply directly
+        q_target_ = q_target_new;
+      }
+    } else {
+      // Smoothing disabled - apply directly
+      q_target_ = q_target_new;
     }
   }
 
@@ -518,55 +558,10 @@ void MITJointController::compute_gravity_() {
   q_target_ = q_;
   dq_target_.setZero();
 
-  // Only gravity compensation
   tau_ff_.setZero();
-  if (params_.use_gravity_compensation) {
-    Eigen::VectorXd tau_gravity =
-        params_.gravity_scale *
-        pinocchio::computeGeneralizedGravity(model_, data_, q_pin_);
-    tau_ff_ = tau_gravity;
-  }
-}
-
-void MITJointController::compute_gravity_coriolis_() {
-  // Set position and velocity goals
-  q_goal_ = q_; // Current position
-  dq_goal_.setZero();
-
-  // Update target to track current position so mode switches are smooth
-  q_target_ = q_;
-  dq_target_.setZero();
-
-  // Gravity + Coriolis compensation
-  tau_ff_.setZero();
-
-  if (params_.use_gravity_compensation) {
-    // Compute all terms efficiently (gravity + coriolis + centrifugal)
-    pinocchio::computeAllTerms(model_, data_, q_pin_, dq_filtered_);
-
-    // data_.nle contains nonlinear effects (Coriolis + centrifugal + gravity)
-    // Scale gravity component only
-    tau_ff_ = params_.gravity_scale * data_.nle;
-  }
-}
-
-void MITJointController::compute_gravity_velocity_() {
-  // Set position and velocity goals
-  q_goal_ = q_; // Current position
-  dq_goal_.setZero();
-
-  // Update target to track current position so mode switches are smooth
-  q_target_ = q_;
-  dq_target_.setZero();
-
-  // Gravity compensation
-  tau_ff_.setZero();
-  if (params_.use_gravity_compensation) {
-    Eigen::VectorXd tau_gravity =
-        params_.gravity_scale *
-        pinocchio::computeGeneralizedGravity(model_, data_, q_pin_);
-    tau_ff_ = tau_gravity;
-  }
+  pinocchio::computeAllTerms(model_, data_, q_pin_, dq_filtered_);
+  // data_.nle contains nonlinear effects (Coriolis + centrifugal + gravity)
+  tau_ff_ = params_.gravity_scale * data_.nle;
 }
 
 void MITJointController::compute_impedance_posvel_() {
@@ -589,14 +584,9 @@ void MITJointController::compute_impedance_posvel_() {
 
   // Full dynamics compensation
   tau_ff_.setZero();
-  if (params_.use_gravity_compensation) {
-    // Compute all terms efficiently (gravity + coriolis + centrifugal)
-    pinocchio::computeAllTerms(model_, data_, q_pin_, dq_filtered_);
-
-    // data_.nle contains nonlinear effects (Coriolis + centrifugal + gravity)
-    // Scale gravity component only
-    tau_ff_ = params_.gravity_scale * data_.nle;
-  }
+  pinocchio::computeAllTerms(model_, data_, q_pin_, dq_filtered_);
+  // data_.nle contains nonlinear effects (Coriolis + centrifugal + gravity)
+  tau_ff_ = params_.gravity_scale * data_.nle;
 }
 
 bool MITJointController::detect_oscillation_(double dt) {

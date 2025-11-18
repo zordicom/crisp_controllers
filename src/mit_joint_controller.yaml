@@ -14,9 +14,9 @@ mit_joint_controller:
   control_mode:
     type: string
     default_value: "impedance_posvel"
-    description: "Control mode: gravity, gravity_coriolis, gravity_velocity, or impedance_posvel"
+    description: "Control mode: gravity or impedance_posvel"
     validation:
-      one_of<>: [["gravity", "gravity_coriolis", "gravity_velocity", "impedance_posvel"]]
+      one_of<>: [["gravity", "impedance_posvel"]]
 
   joint_stiffness:
     type: double_array
@@ -38,13 +38,6 @@ mit_joint_controller:
     description: "Velocity gain for computing desired joint velocities from position error in impedance_posvel mode. Higher values make the controller more aggressive."
     validation:
       bounds<>: [0.0, 10.0]
-
-  dt_goal:
-    type: double
-    default_value: 0.01
-    description: "Time step for computing goal position from goal velocity (seconds). Should be small since MIT mode runs at high frequency."
-    validation:
-      bounds<>: [0.001, 0.1]
 
   limit_commands:
     type: bool
@@ -70,27 +63,12 @@ mit_joint_controller:
     default_value: false
     description: "If true, stop sending commands to hardware (for debugging)"
 
-  use_gravity_compensation:
-    type: bool
-    default_value: true
-    description: "Add gravity compensation to feedforward torques"
-
   gravity_scale:
     type: double
     default_value: 1.0
     description: "Scale factor for gravity compensation torques. Use this to tune gravity compensation if URDF masses are not perfectly accurate."
     validation:
       bounds<>: [0.0, 2.0]
-
-  use_position_command:
-    type: bool
-    default_value: true
-    description: "Send position commands (q_goal) to motors. If false, q_goal will be set to current position."
-
-  use_velocity_command:
-    type: bool
-    default_value: false
-    description: "Send velocity commands (dq_goal) to motors. If false, dq_goal will be set to zero."
 
   dq_filter_alpha:
     type: double
@@ -113,12 +91,23 @@ mit_joint_controller:
     validation:
       bounds<>: [0.0, 10.0]
 
-  target_timeout:
-    type: double
-    default_value: 1.0
-    description: "Timeout for target joint state messages (seconds). If no target received within this time, holds last target."
-    validation:
-      bounds<>: [0.1, 10.0]
+  target_smoothing:
+    enabled:
+      type: bool
+      default_value: true
+      description: "Enable smooth interpolation when target jumps by a large amount to prevent velocity spikes"
+    jump_threshold:
+      type: double
+      default_value: 0.3
+      description: "Target position jump threshold (radians). If any joint target changes by more than this, smoothing is triggered."
+      validation:
+        bounds<>: [0.0, 3.14159]
+    blend_time:
+      type: double
+      default_value: 0.5
+      description: "Time to blend from current target to new target when a large jump is detected (seconds)"
+      validation:
+        bounds<>: [0.1, 5.0]
 
   oscillation_detection:
     enabled:

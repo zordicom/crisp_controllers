@@ -117,6 +117,12 @@ private:
   /** @brief Target joint velocities */
   Eigen::VectorXd dq_target_;
 
+  /** @brief Target smoothing state */
+  bool smoothing_active_;
+  Eigen::VectorXd q_target_start_;  // Start of blend
+  Eigen::VectorXd q_target_end_;    // End of blend (final target)
+  double smoothing_time_;           // Elapsed time in current blend
+
   /** @brief Parameter listener for dynamic parameter updates */
   std::shared_ptr<mit_joint_controller::ParamListener> params_listener_;
   /** @brief Current parameter values */
@@ -172,16 +178,6 @@ private:
   void compute_gravity_();
 
   /**
-   * @brief Gravity + Coriolis compensation
-   */
-  void compute_gravity_coriolis_();
-
-  /**
-   * @brief Gravity compensation + joint velocity damping
-   */
-  void compute_gravity_velocity_();
-
-  /**
    * @brief Full impedance with position/velocity commands
    * Sends position and velocity goals to motors with dynamics compensation
    */
@@ -212,9 +208,6 @@ private:
    * @return true if oscillation detected
    */
   bool detect_oscillation_(double dt);
-
-  // Throttle debug logs
-  static constexpr int DEBUG_LOG_THROTTLE_MS = 1000;
 };
 
 } // namespace crisp_controllers
