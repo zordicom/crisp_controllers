@@ -6,6 +6,7 @@
 #include <limits>
 #include <pinocchio/algorithm/compute-all-terms.hpp>
 #include <pinocchio/algorithm/frames.hxx>
+#include <pinocchio/algorithm/model.hpp>
 #include <pinocchio/algorithm/rnea.hpp>
 #include <pinocchio/parsers/urdf.hpp>
 #include <rclcpp/logging.hpp>
@@ -248,23 +249,78 @@ CallbackReturn MITJointController::on_configure(
     return CallbackReturn::ERROR;
   }
 
-  pinocchio::urdf::buildModelFromXML(robot_description, model_);
-  data_ = pinocchio::Data(model_);
+  // Load full robot model from URDF
+  pinocchio::Model full_model;
+  pinocchio::urdf::buildModelFromXML(robot_description, full_model);
 
   RCLCPP_INFO_STREAM(get_node()->get_logger(),
-                     "Loaded robot model with " << model_.njoints
-                                                << " joints (nv=" << model_.nv
-                                                << ", nq=" << model_.nq << ")");
+                     "Loaded full robot model with " << full_model.njoints
+                                                << " joints (nv=" << full_model.nv
+                                                << ", nq=" << full_model.nq << ")");
 
-  // Validate joint count
   size_t num_joints = params_.joints.size();
-  if (num_joints != static_cast<size_t>(model_.nv)) {
+
+  // If the number of controlled joints matches the full model, use it directly
+  if (num_joints == static_cast<size_t>(full_model.nv)) {
+    model_ = full_model;
+    RCLCPP_INFO(get_node()->get_logger(),
+                "All joints in model will be controlled");
+  } else if (num_joints < static_cast<size_t>(full_model.nv)) {
+    // Build a reduced model containing only the controlled joints
+    RCLCPP_INFO_STREAM(get_node()->get_logger(),
+                       "Building reduced model with " << num_joints
+                       << " controlled joints out of " << full_model.nv);
+
+    // Create list of joint IDs to keep
+    std::vector<pinocchio::JointIndex> joints_to_lock;
+    for (pinocchio::JointIndex joint_id = 1; joint_id < full_model.joints.size(); ++joint_id) {
+      const std::string& joint_name = full_model.names[joint_id];
+
+      // Check if this joint is in the controlled joints list
+      bool is_controlled = false;
+      for (const auto& controlled_joint : params_.joints) {
+        if (joint_name == controlled_joint) {
+          is_controlled = true;
+          break;
+        }
+      }
+
+      // Lock joints that are not controlled
+      if (!is_controlled) {
+        joints_to_lock.push_back(joint_id);
+      }
+    }
+
+    RCLCPP_INFO_STREAM(get_node()->get_logger(),
+                       "Locking " << joints_to_lock.size()
+                       << " uncontrolled joints");
+
+    // Build reduced model with locked joints at their zero configuration
+    Eigen::VectorXd reference_config = Eigen::VectorXd::Zero(full_model.nq);
+    pinocchio::buildReducedModel(full_model, joints_to_lock, reference_config, model_);
+
+    RCLCPP_INFO_STREAM(get_node()->get_logger(),
+                       "Reduced model has " << model_.njoints
+                                            << " joints (nv=" << model_.nv
+                                            << ", nq=" << model_.nq << ")");
+
+    // Validate the reduced model has the correct number of DOF
+    if (static_cast<size_t>(model_.nv) != num_joints) {
+      RCLCPP_ERROR(get_node()->get_logger(),
+                   "Reduced model nv (%d) does not match number of controlled joints (%zu). "
+                   "Check that all joint names in params exist in the URDF.",
+                   model_.nv, num_joints);
+      return CallbackReturn::ERROR;
+    }
+  } else {
     RCLCPP_ERROR(get_node()->get_logger(),
-                 "Number of joints in params (%zu) does not match model nv "
-                 "(%d)",
-                 num_joints, model_.nv);
+                 "Number of joints in params (%zu) is greater than model nv (%d). "
+                 "Check your joint configuration.",
+                 num_joints, full_model.nv);
     return CallbackReturn::ERROR;
   }
+
+  data_ = pinocchio::Data(model_);
 
   // Initialize vectors
   q_ = Eigen::VectorXd::Zero(num_joints);
