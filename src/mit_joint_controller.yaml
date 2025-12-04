@@ -142,3 +142,8 @@ mit_joint_controller:
       type: bool
       default_value: true
       description: "If true, use asynchronous CSV logging in a background thread for better real-time performance. If false, use synchronous logging (may impact control loop timing)."
+
+  robot_description_topic:
+    type: string
+    default_value: "/robot_description"
+    description: "Name of the robot_description topic to subscribe to if parameter is not found on controller node"

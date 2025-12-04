@@ -3,6 +3,7 @@
 #include <crisp_controllers/utils/async_csv_logger.hpp>
 #include <crisp_controllers/utils/csv_logger.hpp>
 #include <crisp_controllers/utils/mit_joint_controller_log_data.hpp>
+#include <future>
 #include <limits>
 #include <pinocchio/algorithm/compute-all-terms.hpp>
 #include <pinocchio/algorithm/frames.hxx>
@@ -10,6 +11,7 @@
 #include <pinocchio/algorithm/rnea.hpp>
 #include <pinocchio/parsers/urdf.hpp>
 #include <rclcpp/logging.hpp>
+#include <std_msgs/msg/string.hpp>
 
 namespace crisp_controllers {
 
@@ -240,13 +242,53 @@ CallbackReturn MITJointController::on_init() {
 CallbackReturn MITJointController::on_configure(
     const rclcpp_lifecycle::State & /*previous_state*/) {
   // Load robot model from URDF
-  auto robot_description =
-      get_node()->get_parameter("robot_description").as_string();
+  std::string robot_description;
 
+  // Try to read robot_description from this controller's node parameters first
+  if (get_node()->has_parameter("robot_description")) {
+    robot_description = get_node()->get_parameter("robot_description").as_string();
+    if (!robot_description.empty()) {
+      RCLCPP_INFO(get_node()->get_logger(),
+                  "Got robot_description parameter from controller node (length: %zu bytes)",
+                  robot_description.size());
+    }
+  }
+
+  // Fallback: subscribe to robot_description topic if not found on controller node
   if (robot_description.empty()) {
-    RCLCPP_ERROR(get_node()->get_logger(),
-                 "robot_description parameter is empty!");
-    return CallbackReturn::ERROR;
+    RCLCPP_WARN(get_node()->get_logger(),
+                "robot_description not found on controller node, waiting for %s topic",
+                params_.robot_description_topic.c_str());
+
+    std::promise<std::string> urdf_promise;
+    auto urdf_future = urdf_promise.get_future();
+    bool received = false;
+
+    auto sub = get_node()->create_subscription<std_msgs::msg::String>(
+        params_.robot_description_topic, rclcpp::QoS(rclcpp::KeepLast(1)).transient_local(),
+        [&](const std_msgs::msg::String::SharedPtr msg) {
+          if (!received) {
+            urdf_promise.set_value(msg->data);
+            received = true;
+          }
+        });
+
+    // Wait for message with timeout
+    if (urdf_future.wait_for(std::chrono::seconds(5)) == std::future_status::timeout) {
+      RCLCPP_ERROR(get_node()->get_logger(),
+                   "Timeout waiting for %s topic", params_.robot_description_topic.c_str());
+      return CallbackReturn::ERROR;
+    }
+
+    robot_description = urdf_future.get();
+    if (robot_description.empty()) {
+      RCLCPP_ERROR(get_node()->get_logger(), "robot_description from topic is empty");
+      return CallbackReturn::ERROR;
+    }
+
+    RCLCPP_INFO(get_node()->get_logger(),
+                "Got robot_description from %s topic (length: %zu bytes)",
+                params_.robot_description_topic.c_str(), robot_description.size());
   }
 
   // Load full robot model from URDF
