@@ -620,10 +620,10 @@ CallbackReturn CartesianController::on_configure(
   RCLCPP_INFO_STREAM(get_node()->get_logger(), "  Wrench: " << wrench_topic);
 
   pose_sub_ = get_node()->create_subscription<geometry_msgs::msg::PoseStamped>(
-      pose_topic, rclcpp::QoS(1), target_pose_callback);
+      pose_topic, rclcpp::SensorDataQoS(), target_pose_callback);
 
   joint_sub_ = get_node()->create_subscription<sensor_msgs::msg::JointState>(
-      joint_topic, rclcpp::QoS(1), target_joint_callback);
+      joint_topic, rclcpp::SensorDataQoS(), target_joint_callback);
 
   wrench_sub_ =
       get_node()->create_subscription<geometry_msgs::msg::WrenchStamped>(

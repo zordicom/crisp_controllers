@@ -512,7 +512,7 @@ CallbackReturn MITJointController::on_configure(
 
   joint_target_sub_ =
       get_node()->create_subscription<sensor_msgs::msg::JointState>(
-          joint_topic, rclcpp::QoS(1), target_joint_callback);
+          joint_topic, rclcpp::SensorDataQoS(), target_joint_callback);
 
   RCLCPP_INFO(get_node()->get_logger(),
               "MITJointController configuration completed successfully!");
