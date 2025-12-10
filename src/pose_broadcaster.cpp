@@ -132,19 +132,46 @@ CallbackReturn PoseBroadcaster::on_init() {
 CallbackReturn PoseBroadcaster::on_configure(
     const rclcpp_lifecycle::State & /*previous_state*/) {
 
-  auto parameters_client = std::make_shared<rclcpp::AsyncParametersClient>(
-      get_node(), "robot_state_publisher");
-  parameters_client->wait_for_service();
-
-  auto future = parameters_client->get_parameters({"robot_description"});
-  auto result = future.get();
-
+  // Get robot_description from controller node (provided by controller_manager)
+  // This avoids blocking on robot_state_publisher which may have timing issues
   std::string robot_description_;
-  if (!result.empty()) {
-    robot_description_ = result[0].value_to_string();
-  } else {
+
+  try {
+    robot_description_ = get_node()->get_parameter("robot_description").as_string();
+    RCLCPP_INFO(get_node()->get_logger(),
+                "Got robot_description from controller node (%zu bytes)",
+                robot_description_.size());
+  } catch (const rclcpp::exceptions::ParameterUninitializedException &) {
+    RCLCPP_WARN(get_node()->get_logger(),
+                "robot_description not available from controller node, "
+                "falling back to robot_state_publisher...");
+
+    // Fall back to robot_state_publisher with timeout
+    auto parameters_client = std::make_shared<rclcpp::AsyncParametersClient>(
+        get_node(), "robot_state_publisher");
+
+    if (!parameters_client->wait_for_service(std::chrono::seconds(5))) {
+      RCLCPP_ERROR(get_node()->get_logger(),
+                   "robot_state_publisher service not available after 5 seconds. "
+                   "Ensure robot_state_publisher is running.");
+      return CallbackReturn::ERROR;
+    }
+
+    auto future = parameters_client->get_parameters({"robot_description"});
+    auto result = future.get();
+
+    if (!result.empty()) {
+      robot_description_ = result[0].value_to_string();
+    } else {
+      RCLCPP_ERROR(get_node()->get_logger(),
+                   "Failed to get robot_description parameter.");
+      return CallbackReturn::ERROR;
+    }
+  }
+
+  if (robot_description_.empty()) {
     RCLCPP_ERROR(get_node()->get_logger(),
-                 "Failed to get robot_description parameter.");
+                 "robot_description is empty!");
     return CallbackReturn::ERROR;
   }
 
