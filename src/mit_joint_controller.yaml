@@ -11,13 +11,6 @@ mit_joint_controller:
     type: string
     description: "Name of the base frame for target pose publishing"
 
-  control_mode:
-    type: string
-    default_value: "impedance_posvel"
-    description: "Control mode: gravity or impedance_posvel"
-    validation:
-      one_of<>: [["gravity", "impedance_posvel"]]
-
   joint_stiffness:
     type: double_array
     default_value: [10.0, 10.0, 10.0, 10.0, 10.0, 10.0, 10.0]

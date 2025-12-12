@@ -173,17 +173,6 @@ private:
    */
   void parse_target_joint_();
 
-  /**
-   * @brief Gravity compensation only
-   */
-  void compute_gravity_();
-
-  /**
-   * @brief Full impedance with position/velocity commands
-   * Sends position and velocity goals to motors with dynamics compensation
-   */
-  void compute_impedance_posvel_();
-
   /** @brief CSV logger for controller data */
   std::unique_ptr<CSVLoggerInterface> csv_logger_;
   /** @brief Start time for CSV logging timestamp calculations */

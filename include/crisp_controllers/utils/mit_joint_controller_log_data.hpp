@@ -25,9 +25,6 @@ public:
   // Timestamp
   double timestamp;
 
-  // Control mode
-  std::string control_mode;
-
   // Joint states (current)
   Eigen::VectorXd q;           // Current position
   Eigen::VectorXd dq;          // Current velocity
@@ -71,7 +68,7 @@ public:
     size_t num_joints = q.size();
 
     // Basic info
-    ss << "timestamp,control_mode";
+    ss << "timestamp";
 
     // Current joint states
     for (size_t i = 0; i < num_joints; ++i) {
@@ -139,8 +136,8 @@ public:
     std::stringstream ss;
     ss << std::fixed << std::setprecision(6);
 
-    // Timestamp and mode
-    ss << timestamp << "," << control_mode;
+    // Timestamp
+    ss << timestamp;
 
     // Current joint states
     for (int i = 0; i < q.size(); ++i) {

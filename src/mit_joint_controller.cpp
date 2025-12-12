@@ -156,19 +156,33 @@ MITJointController::update(const rclcpp::Time &time,
     return controller_interface::return_type::ERROR;
   }
 
-  // 5. Control computation
+  // 5. Control computation (impedance_posvel mode)
   clock_gettime(CLOCK_MONOTONIC, &section_start);
-  // Call the appropriate control mode function
-  if (params_.control_mode == "gravity") {
-    compute_gravity_();
-  } else if (params_.control_mode == "impedance_posvel") {
-    compute_impedance_posvel_();
-  } else {
-    RCLCPP_ERROR_THROTTLE(get_node()->get_logger(), *get_node()->get_clock(),
-                          1000, "Unknown control mode: %s",
-                          params_.control_mode.c_str());
-    return controller_interface::return_type::ERROR;
+
+  // Send position goal to motors
+  q_goal_ = q_target_;
+
+  // Compute velocity goal from position error for smooth approach
+  // This provides natural deceleration as the arm approaches the target
+  dq_goal_ = params_.alpha * q_error_;
+
+  // Clip velocity to max_velocity for safety
+  double max_vel = params_.max_velocity;
+  dq_goal_ = dq_goal_.cwiseMax(-max_vel).cwiseMin(max_vel);
+
+  // If target velocity is provided, add it to the velocity goal
+  if (dq_target_.norm() > 1e-6) {
+    dq_goal_ += dq_target_;
+    dq_goal_ = dq_goal_.cwiseMax(-max_vel).cwiseMin(max_vel);
   }
+
+  // Compute feedforward torques (gravity + Coriolis compensation)
+  // Use nonLinearEffects() instead of computeAllTerms() for 10-100x speedup
+  tau_ff_.setZero();
+  pinocchio::nonLinearEffects(model_, data_, q_pin_, dq_filtered_);
+  // data_.nle contains nonlinear effects (Coriolis + centrifugal + gravity)
+  tau_ff_ = params_.gravity_scale * data_.nle;
+
   clock_gettime(CLOCK_MONOTONIC, &section_end);
   timing_stats_.control_compute.add_sample(timespec_diff_us(section_start, section_end));
 
@@ -206,9 +220,6 @@ MITJointController::update(const rclcpp::Time &time,
     MITJointControllerLogData log_data;
     log_data.timestamp =
         (time - csv_log_start_time_).nanoseconds() * 1e-9; // seconds
-
-    // Set control mode
-    log_data.control_mode = params_.control_mode;
 
     // Log joint states (current)
     log_data.q = q_;
@@ -456,14 +467,10 @@ CallbackReturn MITJointController::on_configure(
   tau_limits_ = params_.torque_safety_factor * model_.effortLimit;
 
   // Set motor gains once (they're constant for each control mode)
+  // Set motor gains for impedance_posvel mode
   // These will be written to hardware on every cycle but not recomputed
-  if (params_.control_mode == "gravity") {
-    mot_K_p_.setZero();
-    mot_K_d_.setZero();
-  } else if (params_.control_mode == "impedance_posvel") {
-    mot_K_p_ = K_joint_;
-    mot_K_d_ = D_joint_;
-  }
+  mot_K_p_ = K_joint_;
+  mot_K_d_ = D_joint_;
 
   // Initialize target to zero (will be set to current position on activate)
   new_target_ = false;
@@ -691,46 +698,6 @@ void MITJointController::parse_target_joint_() {
   }
 
   new_target_ = false;
-}
-
-void MITJointController::compute_gravity_() {
-  // Set position and velocity goals
-  q_goal_ = q_; // Current position
-  dq_goal_.setZero();
-
-  // Update target to track current position so mode switches are smooth
-  q_target_ = q_;
-  dq_target_.setZero();
-
-  tau_ff_.setZero();
-  pinocchio::computeAllTerms(model_, data_, q_pin_, dq_filtered_);
-  // data_.nle contains nonlinear effects (Coriolis + centrifugal + gravity)
-  tau_ff_ = params_.gravity_scale * data_.nle;
-}
-
-void MITJointController::compute_impedance_posvel_() {
-  // Send position goal to motors
-  q_goal_ = q_target_;
-
-  // Compute velocity goal from position error for smooth approach
-  // This provides natural deceleration as the arm approaches the target
-  dq_goal_ = params_.alpha * q_error_;
-
-  // Clip velocity to max_velocity for safety
-  double max_vel = params_.max_velocity;
-  dq_goal_ = dq_goal_.cwiseMax(-max_vel).cwiseMin(max_vel);
-
-  // If target velocity is provided, add it to the velocity goal
-  if (dq_target_.norm() > 1e-6) {
-    dq_goal_ += dq_target_;
-    dq_goal_ = dq_goal_.cwiseMax(-max_vel).cwiseMin(max_vel);
-  }
-
-  // Full dynamics compensation
-  tau_ff_.setZero();
-  pinocchio::computeAllTerms(model_, data_, q_pin_, dq_filtered_);
-  // data_.nle contains nonlinear effects (Coriolis + centrifugal + gravity)
-  tau_ff_ = params_.gravity_scale * data_.nle;
 }
 
 bool MITJointController::detect_oscillation_(double dt) {
