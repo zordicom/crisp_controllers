@@ -12,13 +12,13 @@
 #include <array>
 #include <controller_interface/controller_interface.hpp>
 #include <crisp_controllers/mit_joint_controller_parameters.hpp>
-#include <geometry_msgs/msg/pose_stamped.hpp>
 #include <memory>
 #include <pinocchio/algorithm/kinematics.hpp>
 #include <pinocchio/multibody/fwd.hpp>
 #include <rclcpp/rclcpp.hpp>
 #include <sensor_msgs/msg/joint_state.hpp>
 #include <string>
+#include <unordered_map>
 
 #include "crisp_controllers/utils/csv_logger_interface.hpp"
 #include "crisp_controllers/utils/rt_timing_stats.hpp"
@@ -102,10 +102,6 @@ private:
   rclcpp::Subscription<sensor_msgs::msg::JointState>::SharedPtr
       joint_target_sub_;
 
-  /** @brief Publisher for target end-effector pose (for visualization) */
-  rclcpp::Publisher<geometry_msgs::msg::PoseStamped>::SharedPtr
-      target_pose_pub_;
-
   /** @brief Realtime buffer for target joint state */
   realtime_tools::RealtimeBuffer<std::shared_ptr<sensor_msgs::msg::JointState>>
       target_joint_buffer_;
@@ -120,9 +116,9 @@ private:
 
   /** @brief Target smoothing state */
   bool smoothing_active_;
-  Eigen::VectorXd q_target_start_;  // Start of blend
-  Eigen::VectorXd q_target_end_;    // End of blend (final target)
-  double smoothing_time_;           // Elapsed time in current blend
+  Eigen::VectorXd q_target_start_; // Start of blend
+  Eigen::VectorXd q_target_end_;   // End of blend (final target)
+  double smoothing_time_;          // Elapsed time in current blend
 
   /** @brief Parameter listener for dynamic parameter updates */
   std::shared_ptr<mit_joint_controller::ParamListener> params_listener_;
@@ -167,6 +163,9 @@ private:
   Eigen::VectorXd joint_lower_limit_;
   Eigen::VectorXd joint_upper_limit_;
   Eigen::VectorXd tau_limits_;
+
+  /** @brief Joint name to controller index mapping. */
+  std::unordered_map<std::string, size_t> joint_name_to_index_;
 
   /**
    * @brief Parse target joint state from realtime buffer
