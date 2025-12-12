@@ -59,7 +59,8 @@ MITJointController::state_interface_configuration() const {
 controller_interface::return_type
 MITJointController::update(const rclcpp::Time &time,
                            const rclcpp::Duration &period) {
-  auto loop_start_time = get_node()->get_clock()->now();
+  struct timespec loop_start, section_start, section_end;
+  clock_gettime(CLOCK_MONOTONIC, &loop_start);
 
   if (params_.stop_commands) {
     return controller_interface::return_type::OK;
@@ -67,17 +68,25 @@ MITJointController::update(const rclcpp::Time &time,
 
   size_t num_joints = params_.joints.size();
 
-  // Read current state
+  // 1. Read current state
+  clock_gettime(CLOCK_MONOTONIC, &section_start);
   for (size_t i = 0; i < num_joints; i++) {
     q_[i] = state_interfaces_[i].get_value();
     q_pin_[i] = q_[i];
     dq_[i] = state_interfaces_[num_joints + i].get_value();
   }
+  clock_gettime(CLOCK_MONOTONIC, &section_end);
+  timing_stats_.state_read.add_sample(timespec_diff_us(section_start, section_end));
 
-  // Apply velocity filtering to reduce quantization noise
+  // 2. Apply velocity filtering to reduce quantization noise
+  clock_gettime(CLOCK_MONOTONIC, &section_start);
   dq_filtered_ = params_.dq_filter_alpha * dq_ +
                  (1.0 - params_.dq_filter_alpha) * dq_filtered_;
+  clock_gettime(CLOCK_MONOTONIC, &section_end);
+  timing_stats_.velocity_filter.add_sample(timespec_diff_us(section_start, section_end));
 
+  // 3. Parse target and apply smoothing
+  clock_gettime(CLOCK_MONOTONIC, &section_start);
   // Parse target if new one available
   if (new_target_) {
     parse_target_joint_();
@@ -104,6 +113,8 @@ MITJointController::update(const rclcpp::Time &time,
       }
     }
   }
+  clock_gettime(CLOCK_MONOTONIC, &section_end);
+  timing_stats_.target_parse.add_sample(timespec_diff_us(section_start, section_end));
 
   // Compute joint error
   q_error_ = q_target_ - q_;
@@ -112,8 +123,10 @@ MITJointController::update(const rclcpp::Time &time,
   double max_error = params_.max_position_error;
   q_error_ = q_error_.cwiseMax(-max_error).cwiseMin(max_error);
 
-  // Update error history for oscillation detection
+  // 4. Oscillation detection (if enabled)
   if (params_.oscillation_detection.enabled) {
+    clock_gettime(CLOCK_MONOTONIC, &section_start);
+
     // Store per-joint position errors in history
     for (size_t i = 0; i < num_joints && i < MAX_JOINTS; ++i) {
       joint_error_history_[i][error_history_idx_] = q_error_(i);
@@ -130,6 +143,9 @@ MITJointController::update(const rclcpp::Time &time,
                    "Oscillation detected! Setting stop_commands=true.");
       params_.stop_commands = true;
     }
+
+    clock_gettime(CLOCK_MONOTONIC, &section_end);
+    timing_stats_.oscillation_detect.add_sample(timespec_diff_us(section_start, section_end));
   }
 
   // Stop sending commands if oscillation detected
@@ -140,6 +156,8 @@ MITJointController::update(const rclcpp::Time &time,
     return controller_interface::return_type::ERROR;
   }
 
+  // 5. Control computation
+  clock_gettime(CLOCK_MONOTONIC, &section_start);
   // Call the appropriate control mode function
   if (params_.control_mode == "gravity") {
     compute_gravity_();
@@ -151,6 +169,8 @@ MITJointController::update(const rclcpp::Time &time,
                           params_.control_mode.c_str());
     return controller_interface::return_type::ERROR;
   }
+  clock_gettime(CLOCK_MONOTONIC, &section_end);
+  timing_stats_.control_compute.add_sample(timespec_diff_us(section_start, section_end));
 
   // Apply joint limits with safety buffer if enabled
   if (params_.limit_commands) {
@@ -160,7 +180,8 @@ MITJointController::update(const rclcpp::Time &time,
   // Apply torque safety limits
   tau_ff_ = tau_ff_.cwiseMax(-tau_limits_).cwiseMin(tau_limits_);
 
-  // Write commands to hardware
+  // 6. Write commands to hardware
+  clock_gettime(CLOCK_MONOTONIC, &section_start);
   for (size_t i = 0; i < num_joints; i++) {
     // Position command
     command_interfaces_[i].set_value(q_goal_[i]);
@@ -175,9 +196,13 @@ MITJointController::update(const rclcpp::Time &time,
     command_interfaces_[3 * num_joints + i].set_value(mot_K_p_[i]);
     command_interfaces_[4 * num_joints + i].set_value(mot_K_d_[i]);
   }
+  clock_gettime(CLOCK_MONOTONIC, &section_end);
+  timing_stats_.command_write.add_sample(timespec_diff_us(section_start, section_end));
 
-  // CSV logging if enabled
+  // 7. CSV logging if enabled
   if (params_.log.enabled && csv_logger_) {
+    clock_gettime(CLOCK_MONOTONIC, &section_start);
+
     MITJointControllerLogData log_data;
     log_data.timestamp =
         (time - csv_log_start_time_).nanoseconds() * 1e-9; // seconds
@@ -217,15 +242,32 @@ MITJointController::update(const rclcpp::Time &time,
     log_data.max_position_error = params_.max_position_error;
     log_data.max_velocity = params_.max_velocity;
 
-    auto loop_end_time = get_node()->get_clock()->now();
-    log_data.loop_duration_ms =
-        (loop_end_time - loop_start_time).nanoseconds() * 1e-6;
+    // Compute loop duration for CSV log
+    struct timespec loop_end_for_csv;
+    clock_gettime(CLOCK_MONOTONIC, &loop_end_for_csv);
+    log_data.loop_duration_ms = timespec_diff_us(loop_start, loop_end_for_csv) * 0.001;
 
     csv_logger_->logData(log_data);
+
+    clock_gettime(CLOCK_MONOTONIC, &section_end);
+    timing_stats_.csv_logging.add_sample(timespec_diff_us(section_start, section_end));
   }
 
   params_listener_->refresh_dynamic_parameters();
   params_ = params_listener_->get_params();
+
+  // 8. Record total loop time and log statistics
+  struct timespec loop_end;
+  clock_gettime(CLOCK_MONOTONIC, &loop_end);
+  timing_stats_.total_loop.add_sample(timespec_diff_us(loop_start, loop_end));
+
+  // Log timing statistics every 1 second
+  auto now_steady = std::chrono::steady_clock::now();
+  if (std::chrono::duration_cast<std::chrono::milliseconds>(now_steady - last_timing_log_).count() > 1000) {
+    log_timing_statistics_();
+    timing_stats_.reset_all();
+    last_timing_log_ = now_steady;
+  }
 
   return controller_interface::return_type::OK;
 }
@@ -590,6 +632,10 @@ CallbackReturn MITJointController::on_activate(
     csv_logger_->initialize(csv_log_start_time_, dummy_data);
   }
 
+  // Initialize timing statistics
+  timing_stats_.reset_all();
+  last_timing_log_ = std::chrono::steady_clock::now();
+
   return CallbackReturn::SUCCESS;
 }
 
@@ -759,6 +805,28 @@ bool MITJointController::detect_oscillation_(double dt) {
   }
 
   return false;
+}
+
+void MITJointController::log_timing_statistics_() {
+  RCLCPP_INFO(get_node()->get_logger(),
+              "Control loop timing: "
+              "total.avg=%ldus total.std=%ldus total.max=%ldus | "
+              "state_read.avg=%ldus | velocity_filter.avg=%ldus | "
+              "target_parse.avg=%ldus | control_compute.avg=%ldus control_compute.max=%ldus | "
+              "oscillation.avg=%ldus | command_write.avg=%ldus | "
+              "csv_log.avg=%ldus | cycles=%zu",
+              timing_stats_.total_loop.avg_us(),
+              timing_stats_.total_loop.std_us(),
+              timing_stats_.total_loop.max_us,
+              timing_stats_.state_read.avg_us(),
+              timing_stats_.velocity_filter.avg_us(),
+              timing_stats_.target_parse.avg_us(),
+              timing_stats_.control_compute.avg_us(),
+              timing_stats_.control_compute.max_us,
+              timing_stats_.oscillation_detect.avg_us(),
+              timing_stats_.command_write.avg_us(),
+              timing_stats_.csv_logging.avg_us(),
+              timing_stats_.total_loop.count);
 }
 
 } // namespace crisp_controllers

@@ -21,6 +21,7 @@
 #include <string>
 
 #include "crisp_controllers/utils/csv_logger_interface.hpp"
+#include "crisp_controllers/utils/rt_timing_stats.hpp"
 #include "realtime_tools/realtime_buffer.hpp"
 
 using CallbackReturn =
@@ -208,6 +209,37 @@ private:
    * @return true if oscillation detected
    */
   bool detect_oscillation_(double dt);
+
+  // ===== Diagnostic Timing =====
+
+  /** @brief Timing statistics for main control loop operations */
+  struct ControlLoopTimingStats {
+    RTTimingStats state_read{"state_read"};
+    RTTimingStats velocity_filter{"velocity_filter"};
+    RTTimingStats target_parse{"target_parse"};
+    RTTimingStats control_compute{"control_compute"};
+    RTTimingStats oscillation_detect{"oscillation_detect"};
+    RTTimingStats command_write{"command_write"};
+    RTTimingStats csv_logging{"csv_logging"};
+    RTTimingStats total_loop{"total_loop"};
+
+    void reset_all() {
+      state_read.reset();
+      velocity_filter.reset();
+      target_parse.reset();
+      control_compute.reset();
+      oscillation_detect.reset();
+      command_write.reset();
+      csv_logging.reset();
+      total_loop.reset();
+    }
+  };
+
+  ControlLoopTimingStats timing_stats_;
+  std::chrono::steady_clock::time_point last_timing_log_;
+
+  /** @brief Log timing statistics (called every 1 second) */
+  void log_timing_statistics_();
 };
 
 } // namespace crisp_controllers

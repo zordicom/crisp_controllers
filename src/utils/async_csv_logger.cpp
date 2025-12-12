@@ -1,4 +1,5 @@
 #include "crisp_controllers/utils/async_csv_logger.hpp"
+#include "crisp_controllers/utils/rt_timing_stats.hpp"
 #include <iomanip>
 #include <iostream>
 #include <chrono>
@@ -136,6 +137,9 @@ void AsyncCSVLogger::writerThread() {
   size_t flush_counter = 0;
   constexpr size_t FLUSH_INTERVAL = 100;
 
+  // Initialize timing statistics
+  writer_stats_.last_stats_log = std::chrono::steady_clock::now();
+
   while (!shutdown_requested_.load()) {
     // Check if data is available (acquire semantics to see writer's data)
     size_t read_idx = read_index_.load(std::memory_order_relaxed);
@@ -147,12 +151,18 @@ void AsyncCSVLogger::writerThread() {
       continue;
     }
 
+    // Time the write operations
+    struct timespec write_start, write_end;
+    clock_gettime(CLOCK_MONOTONIC, &write_start);
+
+    size_t items_written = 0;
     // Process available data
     while (read_idx != write_idx) {
       csv_file_ << ring_buffer_[read_idx] << '\n';
 
       // Move to next item
       read_idx = (read_idx + 1) & (RING_BUFFER_SIZE - 1);
+      items_written++;
 
       // Periodic flush for data safety
       if (++flush_counter >= FLUSH_INTERVAL) {
@@ -161,8 +171,44 @@ void AsyncCSVLogger::writerThread() {
       }
     }
 
+    clock_gettime(CLOCK_MONOTONIC, &write_end);
+    long write_duration_us = timespec_diff_us(write_start, write_end);
+
+    // Update statistics atomically
+    writer_stats_.write_count.fetch_add(items_written, std::memory_order_relaxed);
+    writer_stats_.total_write_us.fetch_add(write_duration_us, std::memory_order_relaxed);
+
+    long current_max = writer_stats_.max_write_us.load(std::memory_order_relaxed);
+    while (write_duration_us > current_max &&
+           !writer_stats_.max_write_us.compare_exchange_weak(current_max, write_duration_us)) {
+      // Retry if another thread updated max
+    }
+
     // Update read index (release semantics to signal space available)
     read_index_.store(read_idx, std::memory_order_release);
+
+    // Log statistics every 5 seconds (less frequent than main loop)
+    auto now = std::chrono::steady_clock::now();
+    if (std::chrono::duration_cast<std::chrono::milliseconds>(
+            now - writer_stats_.last_stats_log).count() > 5000) {
+
+      size_t count = writer_stats_.write_count.load();
+      long total = writer_stats_.total_write_us.load();
+      long max_write = writer_stats_.max_write_us.load();
+
+      if (count > 0) {
+        long avg = total / static_cast<long>(count);
+        RCLCPP_INFO(logger_,
+                    "CSV writer: avg=%ldus max=%ldus items=%zu queue_size=%zu dropped=%zu",
+                    avg, max_write, count, getQueueSize(), dropped_samples_.load());
+      }
+
+      // Reset stats
+      writer_stats_.write_count.store(0);
+      writer_stats_.total_write_us.store(0);
+      writer_stats_.max_write_us.store(0);
+      writer_stats_.last_stats_log = now;
+    }
   }
 
   // Process any remaining data before shutdown

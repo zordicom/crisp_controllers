@@ -89,6 +89,14 @@ private:
   // Configuration parameters
   static constexpr int WRITER_THREAD_PRIORITY = 10; // Lower priority than control thread
   static constexpr int WRITER_SLEEP_US = 100; // Sleep time when buffer is empty (microseconds)
+
+  // Background thread timing statistics
+  struct {
+    std::atomic<size_t> write_count{0};
+    std::atomic<long> total_write_us{0};
+    std::atomic<long> max_write_us{0};
+    std::chrono::steady_clock::time_point last_stats_log;
+  } writer_stats_;
 };
 
 } // namespace crisp_controllers
