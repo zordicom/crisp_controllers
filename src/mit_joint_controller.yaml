@@ -76,6 +76,13 @@ mit_joint_controller:
     validation:
       bounds<>: [0.0, 10.0]
 
+  max_acceleration:
+    type: double
+    default_value: 10.0
+    description: "Maximum allowed acceleration for velocity ramping (rad/s^2). Prevents jerky motion by smoothly ramping velocity commands. Set to a high value (e.g., 100.0) to effectively disable."
+    validation:
+      bounds<>: [0.1, 100.0]
+
   target_smoothing:
     enabled:
       type: bool

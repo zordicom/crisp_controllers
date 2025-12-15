@@ -166,19 +166,34 @@ MITJointController::update(const rclcpp::Time &time,
   // Send position goal to motors
   q_goal_ = q_target_;
 
-  // Compute velocity goal from position error for smooth approach
+  // Compute desired velocity from position error for smooth approach
   // This provides natural deceleration as the arm approaches the target
-  dq_goal_ = params_.alpha * q_error_;
+  Eigen::VectorXd dq_goal_desired = params_.alpha * q_error_;
 
-  // Clip velocity to max_velocity for safety
-  double max_vel = params_.max_velocity;
-  dq_goal_ = dq_goal_.cwiseMax(-max_vel).cwiseMin(max_vel);
-
-  // If target velocity is provided, add it to the velocity goal
+  // If target velocity is provided, add it to the desired velocity
   if (dq_target_.norm() > 1e-6) {
-    dq_goal_ += dq_target_;
-    dq_goal_ = dq_goal_.cwiseMax(-max_vel).cwiseMin(max_vel);
+    dq_goal_desired += dq_target_;
   }
+
+  // Clip desired velocity to max_velocity for safety
+  double max_vel = params_.max_velocity;
+  dq_goal_desired = dq_goal_desired.cwiseMax(-max_vel).cwiseMin(max_vel);
+
+  // Apply acceleration limiting to prevent jerky motion
+  // Limit the rate of change of velocity (acceleration)
+  double max_accel = params_.max_acceleration;
+  double dt = period.seconds();
+  Eigen::VectorXd dq_delta = dq_goal_desired - dq_goal_previous_;
+
+  // Clamp acceleration: limit how much velocity can change per timestep
+  double max_dq_change = max_accel * dt;
+  dq_delta = dq_delta.cwiseMax(-max_dq_change).cwiseMin(max_dq_change);
+
+  // Apply acceleration-limited velocity change
+  dq_goal_ = dq_goal_previous_ + dq_delta;
+
+  // Store for next cycle
+  dq_goal_previous_ = dq_goal_;
 
   // Compute feedforward torques (gravity + Coriolis compensation)
   // Use nonLinearEffects() instead of computeAllTerms() for 10-100x speedup
@@ -447,6 +462,7 @@ CallbackReturn MITJointController::on_configure(
   dq_filtered_ = Eigen::VectorXd::Zero(num_joints);
   q_goal_ = Eigen::VectorXd::Zero(num_joints);
   dq_goal_ = Eigen::VectorXd::Zero(num_joints);
+  dq_goal_previous_ = Eigen::VectorXd::Zero(num_joints);
   tau_ff_ = Eigen::VectorXd::Zero(num_joints);
   mot_K_p_ = Eigen::VectorXd::Ones(num_joints);
   mot_K_d_ = Eigen::VectorXd::Ones(num_joints);
@@ -545,6 +561,7 @@ CallbackReturn MITJointController::on_activate(
   // Initialize goals to current state
   q_goal_ = q_;
   dq_goal_ = dq_;
+  dq_goal_previous_ = dq_;
   tau_ff_.setZero();
 
   RCLCPP_INFO(get_node()->get_logger(),

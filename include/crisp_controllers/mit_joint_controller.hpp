@@ -148,6 +148,8 @@ private:
   Eigen::VectorXd q_goal_;
   /** @brief Goal joint velocities to send to motors (nv) */
   Eigen::VectorXd dq_goal_;
+  /** @brief Previous goal joint velocities (for acceleration limiting) */
+  Eigen::VectorXd dq_goal_previous_;
   /** @brief Feedforward torques to send to motors (nv) */
   Eigen::VectorXd tau_ff_;
 
