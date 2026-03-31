@@ -2,23 +2,21 @@
 #include <Eigen/Dense>
 
 #include <controller_interface/controller_interface.hpp>
-#include <geometry_msgs/msg/pose_stamped.hpp>
 #include <crisp_controllers/pose_broadcaster_parameters.hpp>
-#include <pinocchio/multibody/fwd.hpp>
+#include <geometry_msgs/msg/pose_stamped.hpp>
 #include <pinocchio/algorithm/kinematics.hpp>
+#include <pinocchio/multibody/fwd.hpp>
 
-#include <rclcpp/rclcpp.hpp>
 #include <rclcpp/publisher.hpp>
+#include <rclcpp/rclcpp.hpp>
 #include <realtime_tools/realtime_publisher.hpp>
-
 
 using CallbackReturn =
     rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn;
 
 namespace crisp_controllers {
 
-class PoseBroadcaster
-    : public controller_interface::ControllerInterface {
+class PoseBroadcaster : public controller_interface::ControllerInterface {
 public:
   [[nodiscard]] controller_interface::InterfaceConfiguration
   command_interface_configuration() const override;
@@ -39,9 +37,15 @@ private:
   pose_broadcaster::Params params_;
 
   rclcpp::Publisher<geometry_msgs::msg::PoseStamped>::SharedPtr pose_publisher_;
-  std::shared_ptr<realtime_tools::RealtimePublisher<geometry_msgs::msg::PoseStamped>>
-    realtime_pose_publisher_;
+  rclcpp::Publisher<geometry_msgs::msg::PoseStamped>::SharedPtr
+      world_pose_publisher_;
 
+  std::shared_ptr<
+      realtime_tools::RealtimePublisher<geometry_msgs::msg::PoseStamped>>
+      rt_pose_publisher_;
+  std::shared_ptr<
+      realtime_tools::RealtimePublisher<geometry_msgs::msg::PoseStamped>>
+      rt_world_pose_publisher_;
 
   std::string end_effector_frame_;
   int end_effector_frame_id;
@@ -52,17 +56,14 @@ private:
 
   /** @brief Allowed type of joints **/
   const std::unordered_set<std::basic_string<char>> allowed_joint_types = {
-    "JointModelRX",
-    "JointModelRY",
-    "JointModelRZ",
-    "JointModelRevoluteUnaligned",
-    "JointModelRUBX",
-    "JointModelRUBY",
-    "JointModelRUBZ",
+      "JointModelRX",   "JointModelRY",
+      "JointModelRZ",   "JointModelRevoluteUnaligned",
+      "JointModelRUBX", "JointModelRUBY",
+      "JointModelRUBZ",
   };
   /** @brief Continous joint types that should be considered separetly. **/
-  const std::unordered_set<std::basic_string<char>> continous_joint_types =
-    {"JointModelRUBX", "JointModelRUBY", "JointModelRUBZ"};
+  const std::unordered_set<std::basic_string<char>> continous_joint_types = {
+      "JointModelRUBX", "JointModelRUBY", "JointModelRUBZ"};
 
   Eigen::VectorXd q;
   rclcpp::Time last_publish_time_;

@@ -13,3 +13,7 @@ pose_broadcaster:
     type: double
     default_value: 250.0
     description: "Publishing frequency in Hz (0.0 means no throttling)"
+  robot_description_topic:
+    type: string
+    default_value: "/robot_description"
+    description: "Name of the robot_description topic to subscribe to if parameter is not found on controller node"
